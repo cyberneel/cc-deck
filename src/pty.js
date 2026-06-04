@@ -1,6 +1,6 @@
 import pkg from 'node-pty';
 import { isRequestAuthed } from './auth.js';
-import { isManagedName } from './tmux.js';
+import { isManagedName, enableMouse } from './tmux.js';
 
 const { spawn } = pkg;
 
@@ -21,6 +21,10 @@ export function attachHandler(socket, req) {
 
   const cols = clampInt(url.searchParams.get('cols'), 80, 20, 500);
   const rows = clampInt(url.searchParams.get('rows'), 24, 5, 300);
+
+  // Ensure mouse mode is on so the browser wheel scrolls tmux history natively
+  // (covers sessions created before this was added). Fire-and-forget.
+  enableMouse(session).catch(() => {});
 
   let pty;
   try {

@@ -105,10 +105,20 @@ export async function createSession({ dir, title, resume }) {
   await tmux(['new-session', '-d', '-s', name, '-c', abs, '-x', '220', '-y', '50']);
   await tmux(['set-option', '-t', name, '@ccdeck_title', cleanTitle || abs.split('/').pop() || name]);
   await tmux(['set-option', '-t', name, '@ccdeck_dir', abs]);
+  await enableMouse(name);
   if (resume) await tmux(['set-option', '-t', name, '@ccdeck_resume', resume]);
   // Launch the CLI inside the login shell so the session survives if claude exits.
   await tmux(['send-keys', '-t', name, launch, 'Enter']);
   return name;
+}
+
+// Enable tmux mouse mode + larger scrollback so the browser wheel scrolls the
+// pane's history (native tmux copy-mode) instead of xterm.js translating the
+// wheel into arrow keys on the alt-screen. Idempotent; safe to call on attach.
+export async function enableMouse(name) {
+  if (!isManagedName(name)) return;
+  await tmux(['set-option', '-t', name, 'mouse', 'on']).catch(() => {});
+  await tmux(['set-option', '-t', name, 'history-limit', '50000']).catch(() => {});
 }
 
 export async function killSession(name) {
