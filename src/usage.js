@@ -105,44 +105,62 @@ function totalTokens(a) {
   return a.input + a.output + a.cacheWrite + a.cacheRead;
 }
 
-export async function getUsage() {
+// Bounds of the billing cycle containing `now`, for a monthly renewal on `billingDay`
+// (1–31, clamped to each month's length). Returns epoch ms for start (inclusive) and
+// end (exclusive = next renewal).
+function cycleBounds(now, billingDay) {
+  const d = new Date(now);
+  let y = d.getUTCFullYear();
+  let m = d.getUTCMonth();
+  const today = d.getUTCDate();
+  const dim = (yy, mm) => new Date(Date.UTC(yy, mm + 1, 0)).getUTCDate();
+  // If we haven't reached this month's renewal day yet, the cycle started last month.
+  if (today < Math.min(billingDay, dim(y, m))) {
+    m -= 1;
+    if (m < 0) { m = 11; y -= 1; }
+  }
+  const start = Date.UTC(y, m, Math.min(billingDay, dim(y, m)));
+  let ny = y, nm = m + 1;
+  if (nm > 11) { nm = 0; ny += 1; }
+  const end = Date.UTC(ny, nm, Math.min(billingDay, dim(ny, nm)));
+  return { start, end };
+}
+
+export async function getUsage(billingDay = 1) {
   const events = await collectEvents();
   const now = Date.now();
   const DAY = 86_400_000;
 
-  // Calendar month-to-date window.
-  const d = new Date(now);
-  const monthStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
-  const daysInMonth = new Date(d.getUTCFullYear(), d.getUTCMonth() + 1, 0).getUTCDate();
-  const dayOfMonth = d.getUTCDate();
+  const bd = Math.min(31, Math.max(1, Math.round(Number(billingDay) || 1)));
+  const { start: cycleStart, end: cycleEnd } = cycleBounds(now, bd);
+  const daysInCycle = Math.max(1, Math.round((cycleEnd - cycleStart) / DAY));
+  const daysElapsed = Math.max(1, Math.min(daysInCycle, Math.ceil((now - cycleStart) / DAY)));
 
   const windows = {
     last24h: { since: now - DAY, agg: emptyAgg() },
     last7d: { since: now - 7 * DAY, agg: emptyAgg() },
     last30d: { since: now - 30 * DAY, agg: emptyAgg() },
-    monthToDate: { since: monthStart, agg: emptyAgg() },
+    cycle: { since: cycleStart, agg: emptyAgg() },
   };
-  const byModelMTD = { opus: emptyAgg(), sonnet: emptyAgg(), haiku: emptyAgg() };
+  const byModelCycle = { opus: emptyAgg(), sonnet: emptyAgg(), haiku: emptyAgg() };
 
   // Daily cost for the last 30 days.
   const daily = new Map(); // 'YYYY-MM-DD' -> cost
   for (let i = 29; i >= 0; i--) {
-    const key = new Date(now - i * DAY).toISOString().slice(0, 10);
-    daily.set(key, 0);
+    daily.set(new Date(now - i * DAY).toISOString().slice(0, 10), 0);
   }
 
   for (const e of events) {
     for (const w of Object.values(windows)) if (e.t >= w.since) addInto(w.agg, e);
-    if (e.t >= monthStart) addInto(byModelMTD[e.fam], e);
+    if (e.t >= cycleStart) addInto(byModelCycle[e.fam], e);
     if (e.t >= now - 30 * DAY) {
       const key = new Date(e.t).toISOString().slice(0, 10);
       if (daily.has(key)) daily.set(key, daily.get(key) + costOf(e.fam, e));
     }
   }
 
-  const mtdCost = windows.monthToDate.agg.cost;
-  const projectedMonthCost = dayOfMonth > 0 ? (mtdCost / dayOfMonth) * daysInMonth : mtdCost;
-
+  const cycleCost = windows.cycle.agg.cost;
+  const projectedCost = (cycleCost / daysElapsed) * daysInCycle;
   const fmtWindow = (w) => ({ ...w.agg, totalTokens: totalTokens(w.agg) });
 
   return {
@@ -152,10 +170,17 @@ export async function getUsage() {
       last24h: fmtWindow(windows.last24h),
       last7d: fmtWindow(windows.last7d),
       last30d: fmtWindow(windows.last30d),
-      monthToDate: fmtWindow(windows.monthToDate),
+      cycle: fmtWindow(windows.cycle),
     },
-    month: { dayOfMonth, daysInMonth, projectedCost: projectedMonthCost },
-    byModel: Object.entries(byModelMTD)
+    cycle: {
+      billingDay: bd,
+      start: cycleStart,
+      end: cycleEnd,
+      daysElapsed,
+      daysInCycle,
+      projectedCost,
+    },
+    byModel: Object.entries(byModelCycle)
       .map(([model, agg]) => ({ model, ...agg, totalTokens: totalTokens(agg) }))
       .filter((m) => m.messages > 0)
       .sort((a, b) => b.cost - a.cost),

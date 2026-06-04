@@ -27,6 +27,7 @@ const PLANS = [
 ];
 let planId = localStorage.getItem('ccdeck.plan') || 'max5';
 let customPrice = Number(localStorage.getItem('ccdeck.customPrice') || '100');
+let billingDay = Math.min(31, Math.max(1, Number(localStorage.getItem('ccdeck.billingDay') || '1')));
 function planPrice() {
   if (planId === 'custom') return customPrice || 1;
   return PLANS.find((p) => p.id === planId)?.price ?? 100;
@@ -436,7 +437,7 @@ async function loadUsage() {
   await Promise.all([loadUsageData(), loadBurn()]);
 }
 async function loadUsageData() {
-  try { usageData = await api('/api/usage'); usageFetchedAt = Date.now(); } catch { /* */ }
+  try { usageData = await api(`/api/usage?billingDay=${billingDay}`); usageFetchedAt = Date.now(); } catch { /* */ }
   if (tab === 'usage') renderUsage();
 }
 async function loadBurn() {
@@ -457,6 +458,8 @@ function renderUsage() {
         <label class="faint">Plan</label>
         <select id="plan-select">${planOpts}</select>
         ${planId === 'custom' ? `<input id="custom-price" type="number" min="1" value="${customPrice}" /> <span class="faint">$/mo</span>` : ''}
+        <label class="faint" style="margin-left:8px">Renews on day</label>
+        <input id="billing-day" type="number" min="1" max="31" value="${billingDay}" title="Day of month your plan renews" />
       </div>
       <button id="usage-refresh" class="icon" title="Refresh">↻</button>
     </div>`;
@@ -468,32 +471,33 @@ function renderUsage() {
     return;
   }
 
-  const mtd = u.windows.monthToDate.cost;
-  const multiple = mtd / price;
+  const cyc = u.windows.cycle.cost;
+  const multiple = cyc / price;
   const pct = Math.min(100, multiple * 100);
   const broke = multiple >= 1;
+  const cycEnd = new Date(u.cycle.end).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
   html += `<div class="roi ${broke ? 'good' : ''}">
-    <div class="roi-label">API-equivalent value used this month</div>
-    <div class="roi-value">${money(mtd)} <span class="roi-of">/ ${money(price)} plan</span></div>
+    <div class="roi-label">API-equivalent value used this billing cycle</div>
+    <div class="roi-value">${money(cyc)} <span class="roi-of">/ ${money(price)} plan</span></div>
     <div class="roi-bar"><div class="roi-fill ${broke ? 'good' : ''}" style="width:${pct}%"></div></div>
     <div class="roi-verdict ${broke ? 'good' : ''}">${broke
-      ? `✓ Broken even — you've returned <strong>${multiple.toFixed(1)}×</strong> the subscription so far`
-      : `<strong>${pct.toFixed(0)}%</strong> to break-even — ${money(price - mtd)} more value needed`}</div>
-    <div class="faint">On pace for ${money(u.month.projectedCost)} this month (day ${u.month.dayOfMonth}/${u.month.daysInMonth})</div>
+      ? `✓ Broken even — you've returned <strong>${multiple.toFixed(1)}×</strong> the subscription this cycle`
+      : `<strong>${pct.toFixed(0)}%</strong> to break-even — ${money(price - cyc)} more value needed`}</div>
+    <div class="faint">On pace for ${money(u.cycle.projectedCost)} this cycle · day ${u.cycle.daysElapsed}/${u.cycle.daysInCycle}, renews ${cycEnd}</div>
   </div>`;
 
   html += `<div class="usage-tiles">
     ${usageTile('Last 24h', money(u.windows.last24h.cost))}
     ${usageTile('Last 7 days', money(u.windows.last7d.cost))}
     ${usageTile('Last 30 days', money(u.windows.last30d.cost))}
-    ${usageTile('Total messages', u.windows.monthToDate.messages.toLocaleString() + ' mo')}
+    ${usageTile('Messages this cycle', u.windows.cycle.messages.toLocaleString())}
   </div>`;
 
   html += renderBurnCards();
   html += renderDailyBars(u.daily);
 
-  html += `<div class="panel"><h3>By model <span class="faint">(month to date)</span></h3>
+  html += `<div class="panel"><h3>By model <span class="faint">(this billing cycle)</span></h3>
     <table class="mtable"><thead><tr><th>Model</th><th>Messages</th><th>Tokens</th><th>API value</th></tr></thead>
     <tbody>${u.byModel.map((m) =>
       `<tr><td>${esc(m.model)}</td><td>${m.messages.toLocaleString()}</td><td>${tokensFmt(m.totalTokens)}</td><td>${money(m.cost)}</td></tr>`).join('')}</tbody></table>
@@ -553,6 +557,12 @@ function wireUsage() {
     customPrice = Number(cp.value) || 1;
     localStorage.setItem('ccdeck.customPrice', String(customPrice));
     renderUsage();
+  });
+  const bdEl = document.getElementById('billing-day');
+  bdEl?.addEventListener('change', () => {
+    billingDay = Math.min(31, Math.max(1, Number(bdEl.value) || 1));
+    localStorage.setItem('ccdeck.billingDay', String(billingDay));
+    loadUsageData(); // recompute the cycle window server-side
   });
   document.getElementById('usage-refresh')?.addEventListener('click', () => {
     usageData = null; burnData = null;

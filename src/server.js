@@ -141,7 +141,7 @@ app.get('/api/burn', async () => {
 
 app.get('/api/usage', async (req, reply) => {
   try {
-    return await getUsage();
+    return await getUsage(req.query.billingDay);
   } catch (err) {
     return reply.code(500).send({ error: err.message });
   }
