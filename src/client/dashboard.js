@@ -7,13 +7,33 @@ document.head.appendChild(styleEl);
 
 const app = document.getElementById('app');
 let view = localStorage.getItem('ccdeck.view') || 'grid'; // grid | list | group
-let tab = localStorage.getItem('ccdeck.tab') || 'active'; // active | history
+let tab = localStorage.getItem('ccdeck.tab') || 'active'; // active | history | usage
 let query = '';
 let sessions = [];
 let history = [];
 let historyTotal = 0;
 let historyLoaded = false;
 let cfg = { roots: [], launchCommand: 'claude' };
+
+// Collapsed directory groups (collapsed by default in grouped view).
+const expandedGroups = new Set();
+
+// Usage / ROI state.
+const PLANS = [
+  { id: 'pro', label: 'Pro — $20/mo', price: 20 },
+  { id: 'max5', label: 'Max 5× — $100/mo', price: 100 },
+  { id: 'max20', label: 'Max 20× — $200/mo', price: 200 },
+  { id: 'custom', label: 'Custom…', price: null },
+];
+let planId = localStorage.getItem('ccdeck.plan') || 'max5';
+let customPrice = Number(localStorage.getItem('ccdeck.customPrice') || '100');
+function planPrice() {
+  if (planId === 'custom') return customPrice || 1;
+  return PLANS.find((p) => p.id === planId)?.price ?? 100;
+}
+let usageData = null;
+let burnData = null;
+let usageFetchedAt = 0;
 
 async function api(path, opts = {}) {
   const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
@@ -91,6 +111,30 @@ function groupByDir(items, dirOf) {
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }
 
+// Collapsible directory group — collapsed unless the user has expanded it.
+function groupHtml(dir, items, cardFn, gridClass) {
+  const key = dir || 'unknown';
+  const open = expandedGroups.has(key);
+  return `<div class="group ${open ? 'open' : ''}">
+    <div class="group-head" data-dir="${esc(key)}">
+      <span class="chev">${open ? '▾' : '▸'}</span>
+      <span class="group-dir">${esc(shortDir(dir))}</span>
+      <span class="group-count">${items.length}</span>
+    </div>
+    ${open ? `<div class="${gridClass}">${items.map(cardFn).join('')}</div>` : ''}
+  </div>`;
+}
+function wireGroupToggles(container) {
+  container.querySelectorAll('.group-head').forEach((h) =>
+    h.addEventListener('click', () => {
+      const key = h.dataset.dir;
+      if (expandedGroups.has(key)) expandedGroups.delete(key);
+      else expandedGroups.add(key);
+      renderBody();
+    }),
+  );
+}
+
 // ---- shell ----
 function render() {
   app.innerHTML = `
@@ -99,14 +143,15 @@ function render() {
       <div class="toggle tabs">
         <button data-tab="active" class="${tab === 'active' ? 'active' : ''}">Active</button>
         <button data-tab="history" class="${tab === 'history' ? 'active' : ''}">History</button>
+        <button data-tab="usage" class="${tab === 'usage' ? 'active' : ''}">Usage</button>
       </div>
       <div class="spacer"></div>
       <button class="primary" id="new-btn">+ New session</button>
       <button id="logout-btn" title="Log out">⏻</button>
     </div>
     <div class="wrap">
-      <div class="stats" id="stats"></div>
-      <div class="subbar">
+      <div class="stats" id="stats" style="${tab === 'usage' ? 'display:none' : ''}"></div>
+      <div class="subbar" style="${tab === 'usage' ? 'display:none' : ''}">
         <div class="search">
           <span class="search-ico">⌕</span>
           <input id="search" type="text" spellcheck="false" autocomplete="off"
@@ -128,6 +173,7 @@ function render() {
       localStorage.setItem('ccdeck.tab', tab);
       render();
       if (tab === 'history' && !historyLoaded) refreshHistory();
+      if (tab === 'usage') loadUsage();
     }),
   );
   app.querySelectorAll('#view-toggle button').forEach((b) =>
@@ -186,6 +232,7 @@ function renderStats() {
 
 // ---- body dispatch ----
 function renderBody() {
+  if (tab === 'usage') return renderUsage();
   renderStats();
   if (tab === 'history') renderHistory();
   else renderActive();
@@ -206,18 +253,14 @@ function renderActive() {
   if (!filtered.length) return emptySearch(container);
 
   if (view === 'group') {
-    container.innerHTML = groupByDir(filtered, (s) => s.dir)
-      .map(([dir, items]) =>
-        `<div class="group">
-          <div class="group-head"><span class="group-dir">${esc(shortDir(dir))}</span><span class="group-count">${items.length}</span></div>
-          <div class="grid">${items.map(cardHtml).join('')}</div>
-        </div>`)
-      .join('');
+    const groups = groupByDir(filtered, (s) => s.dir);
+    container.innerHTML = groups.map(([dir, items]) => groupHtml(dir, items, cardHtml, 'grid')).join('');
+    wireGroupToggles(container);
   } else {
     container.innerHTML = `<div class="grid ${view === 'list' ? 'list' : ''}">${filtered.map(cardHtml).join('')}</div>`;
   }
   wireActiveCards(container);
-  loadPreviews(filtered);
+  loadPreviews(view === 'group' ? filtered.filter((s) => expandedGroups.has(s.dir || 'unknown')) : filtered);
 }
 
 function wireActiveCards(container) {
@@ -277,11 +320,14 @@ async function refresh() {
   try {
     const { sessions: list } = await api('/api/sessions');
     sessions = list;
-    if (tab === 'active') renderBody();
-    else renderStats();
   } catch (e) {
     /* transient */
   }
+  if (tab === 'active') renderBody();
+  else if (tab === 'usage') {
+    if (Date.now() - usageFetchedAt > 60_000) loadUsageData();
+    loadBurn(); // server-cached ~15s
+  } else renderStats();
 }
 
 // ---- history ----
@@ -314,13 +360,9 @@ function renderHistory() {
   if (!filtered.length) return emptySearch(container);
 
   if (view === 'group') {
-    container.innerHTML = groupByDir(filtered, (s) => s.cwd)
-      .map(([dir, items]) =>
-        `<div class="group">
-          <div class="group-head"><span class="group-dir">${esc(shortDir(dir))}</span><span class="group-count">${items.length}</span></div>
-          <div class="grid list">${items.map(historyCardHtml).join('')}</div>
-        </div>`)
-      .join('');
+    const groups = groupByDir(filtered, (s) => s.cwd);
+    container.innerHTML = groups.map(([dir, items]) => groupHtml(dir, items, historyCardHtml, 'grid list')).join('');
+    wireGroupToggles(container);
   } else {
     container.innerHTML = `<div class="grid ${view === 'grid' ? '' : 'list'}">${filtered.map(historyCardHtml).join('')}</div>`;
   }
@@ -372,6 +414,152 @@ function historyCardHtml(s) {
 
 function emptySearch(container) {
   container.innerHTML = `<div class="empty"><p class="muted">No matches for “${esc(query)}”.</p></div>`;
+}
+
+// ---- usage / ROI ----
+function money(n) {
+  if (!isFinite(n)) return '$0';
+  if (n >= 1000) return '$' + (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k';
+  return '$' + n.toFixed(2);
+}
+function tokensFmt(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(n);
+}
+function paceEmoji(s) {
+  return s === 'ahead_pace' ? '🚨' : s === 'on_pace' ? '🔥' : '🧊';
+}
+
+async function loadUsage() {
+  await Promise.all([loadUsageData(), loadBurn()]);
+}
+async function loadUsageData() {
+  try { usageData = await api('/api/usage'); usageFetchedAt = Date.now(); } catch { /* */ }
+  if (tab === 'usage') renderUsage();
+}
+async function loadBurn() {
+  try { burnData = await api('/api/burn'); } catch { /* */ }
+  if (tab === 'usage') renderUsage();
+}
+
+function renderUsage() {
+  const c = document.getElementById('cards');
+  if (!c) return;
+  const u = usageData;
+  const price = planPrice();
+  const planOpts = PLANS.map((p) => `<option value="${p.id}" ${p.id === planId ? 'selected' : ''}>${p.label}</option>`).join('');
+
+  let html = `<div class="usage">
+    <div class="usage-head">
+      <div class="plan-pick">
+        <label class="faint">Plan</label>
+        <select id="plan-select">${planOpts}</select>
+        ${planId === 'custom' ? `<input id="custom-price" type="number" min="1" value="${customPrice}" /> <span class="faint">$/mo</span>` : ''}
+      </div>
+      <button id="usage-refresh" class="icon" title="Refresh">↻</button>
+    </div>`;
+
+  if (!u) {
+    html += `<div class="empty"><p class="muted">Crunching your transcripts…</p></div></div>`;
+    c.innerHTML = html;
+    wireUsage();
+    return;
+  }
+
+  const mtd = u.windows.monthToDate.cost;
+  const multiple = mtd / price;
+  const pct = Math.min(100, multiple * 100);
+  const broke = multiple >= 1;
+
+  html += `<div class="roi ${broke ? 'good' : ''}">
+    <div class="roi-label">API-equivalent value used this month</div>
+    <div class="roi-value">${money(mtd)} <span class="roi-of">/ ${money(price)} plan</span></div>
+    <div class="roi-bar"><div class="roi-fill ${broke ? 'good' : ''}" style="width:${pct}%"></div></div>
+    <div class="roi-verdict ${broke ? 'good' : ''}">${broke
+      ? `✓ Broken even — you've returned <strong>${multiple.toFixed(1)}×</strong> the subscription so far`
+      : `<strong>${pct.toFixed(0)}%</strong> to break-even — ${money(price - mtd)} more value needed`}</div>
+    <div class="faint">On pace for ${money(u.month.projectedCost)} this month (day ${u.month.dayOfMonth}/${u.month.daysInMonth})</div>
+  </div>`;
+
+  html += `<div class="usage-tiles">
+    ${usageTile('Last 24h', money(u.windows.last24h.cost))}
+    ${usageTile('Last 7 days', money(u.windows.last7d.cost))}
+    ${usageTile('Last 30 days', money(u.windows.last30d.cost))}
+    ${usageTile('Total messages', u.windows.monthToDate.messages.toLocaleString() + ' mo')}
+  </div>`;
+
+  html += renderBurnCards();
+  html += renderDailyBars(u.daily);
+
+  html += `<div class="panel"><h3>By model <span class="faint">(month to date)</span></h3>
+    <table class="mtable"><thead><tr><th>Model</th><th>Messages</th><th>Tokens</th><th>API value</th></tr></thead>
+    <tbody>${u.byModel.map((m) =>
+      `<tr><td>${esc(m.model)}</td><td>${m.messages.toLocaleString()}</td><td>${tokensFmt(m.totalTokens)}</td><td>${money(m.cost)}</td></tr>`).join('')}</tbody></table>
+    <p class="faint">Estimated by applying Anthropic API list prices (including cache read/write rates) to your actual token usage. Your subscription isn't billed per token — this is what the same usage would cost on the pay-as-you-go API.</p>
+  </div></div>`;
+
+  c.innerHTML = html;
+  wireUsage();
+}
+
+function usageTile(label, val) {
+  return `<div class="tile"><div class="tile-val">${val}</div><div class="tile-label">${label}</div></div>`;
+}
+
+function renderBurnCards() {
+  const b = burnData;
+  if (!b) return `<div class="panel"><h3>Plan limits — live</h3><p class="muted">Loading ccburn…</p></div>`;
+  if (!b.available) {
+    return `<div class="panel"><h3>Plan limits — live <span class="faint">(ccburn)</span></h3>
+      <p class="muted">ccburn unavailable: ${esc(b.error || 'unknown')}</p></div>`;
+  }
+  const lim = b.limits || {};
+  const card = (name, l) => {
+    if (!l) return '';
+    const pct = (l.utilization || 0) * 100;
+    const resets = l.resets_in_minutes != null ? `${l.resets_in_minutes}m`
+      : l.resets_in_hours != null ? `${l.resets_in_hours.toFixed(0)}h` : '—';
+    return `<div class="limit">
+      <div class="limit-top"><span>${name}</span><span>${paceEmoji(l.status)} ${pct.toFixed(0)}%</span></div>
+      <div class="limit-bar"><div class="limit-fill" style="width:${Math.min(100, pct)}%"></div></div>
+      <div class="faint">resets in ${resets} · budget pace ${((l.budget_pace || 0) * 100).toFixed(0)}%</div>
+    </div>`;
+  };
+  return `<div class="panel"><h3>Plan limits — live <span class="faint">(ccburn)</span></h3>
+    <div class="limits">${card('Session (5h)', lim.session)}${card('Weekly', lim.weekly)}${lim.monthly ? card('Monthly', lim.monthly) : ''}</div>
+    ${b.recommendation ? `<p class="faint">recommendation: ${esc(b.recommendation)}</p>` : ''}</div>`;
+}
+
+function renderDailyBars(daily) {
+  const max = Math.max(0.01, ...daily.map((d) => d.cost));
+  const bars = daily.map((d) => {
+    const h = Math.max(2, Math.round((d.cost / max) * 100));
+    return `<div class="bar" title="${d.date}: ${money(d.cost)}"><div class="bar-fill" style="height:${h}%"></div></div>`;
+  }).join('');
+  return `<div class="panel"><h3>Daily API value <span class="faint">(last 30 days)</span></h3><div class="bars">${bars}</div></div>`;
+}
+
+function wireUsage() {
+  const sel = document.getElementById('plan-select');
+  sel?.addEventListener('change', () => {
+    planId = sel.value;
+    localStorage.setItem('ccdeck.plan', planId);
+    renderUsage();
+  });
+  const cp = document.getElementById('custom-price');
+  cp?.addEventListener('change', () => {
+    customPrice = Number(cp.value) || 1;
+    localStorage.setItem('ccdeck.customPrice', String(customPrice));
+    renderUsage();
+  });
+  document.getElementById('usage-refresh')?.addEventListener('click', () => {
+    usageData = null; burnData = null;
+    renderUsage();
+    loadUsageData();
+    loadBurn();
+  });
 }
 
 // ---- new session modal ----
@@ -443,5 +631,6 @@ function openNewModal() {
   await refresh();
   render();
   refreshHistory(); // populate the "Past sessions" stat + history tab data
+  if (tab === 'usage') loadUsage();
   setInterval(refresh, 4000);
 })();

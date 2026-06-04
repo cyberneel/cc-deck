@@ -45,6 +45,20 @@ npm install
 bold "Building frontend…"
 npm run build
 
+# ---- optional: ccburn for live plan-limit charts in the Usage tab ----
+if ! command -v ccburn >/dev/null 2>&1; then
+  inst="n"
+  if [ -t 0 ]; then
+    printf "Install ccburn (live plan-limit usage in the Usage tab)? [y/N] "
+    read -r inst
+  fi
+  if [ "$inst" = "y" ] || [ "$inst" = "Y" ]; then
+    npm install -g ccburn || warn "ccburn install failed — the Usage tab still works (ROI from transcripts); just no live limits."
+  fi
+else
+  ok "ccburn already installed ($(command -v ccburn))."
+fi
+
 # ---- 3. .env ----
 if [ -f .env ]; then
   ok ".env already exists — leaving it untouched."

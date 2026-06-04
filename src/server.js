@@ -16,6 +16,8 @@ import {
 } from './tmux.js';
 import { attachHandler } from './pty.js';
 import { listHistory } from './history.js';
+import { getBurn } from './burn.js';
+import { getUsage } from './usage.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, '..', 'public');
@@ -130,6 +132,19 @@ app.get('/api/fs', async (req, reply) => {
 
 app.get('/api/config', async () => {
   return { roots: config.roots, launchCommand: config.launchCommand, home: process.env.HOME || '' };
+});
+
+// ---- Usage / ROI ----
+app.get('/api/burn', async () => {
+  return await getBurn();
+});
+
+app.get('/api/usage', async (req, reply) => {
+  try {
+    return await getUsage();
+  } catch (err) {
+    return reply.code(500).send({ error: err.message });
+  }
 });
 
 // ---- WebSocket: terminal attach ----

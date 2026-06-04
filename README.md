@@ -26,6 +26,13 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
 - **History tab** — lists past Claude sessions from `~/.claude/projects` with directory,
   branch, time, and opening prompt. "▶ Resume" runs `claude --resume <id>` in the original
   directory as a fresh live session — a backend equivalent of `claude --resume`.
+- **Usage tab** — token-spend and **ROI on your plan**: pick your plan (Pro / Max 5× /
+  Max 20× / custom) and see the API-equivalent dollar value of your usage this month vs the
+  subscription price ("are you breaking even?"), a daily-spend chart, a per-model breakdown,
+  and — if [`ccburn`](https://github.com/JuanjoFuchs/ccburn) is installed — live session (5h)
+  and weekly plan-limit utilization with pace indicators.
+- **Collapsible grouped view** — group sessions by directory; groups start collapsed so you
+  can scan many directories quickly, then expand the ones you want.
 - **Auth** — password login with a signed cookie. Binds to loopback; exposed via
   Tailscale or Cloudflare. Safe to put on a public hostname.
 
@@ -34,6 +41,8 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
 - **Node.js ≥ 18**, **tmux**, and the **Claude CLI** (`claude`) on `PATH`.
 - A C toolchain (`gcc`/`clang`, `make`, `python3`) is needed once to build `node-pty`.
 - Linux or macOS. The optional background service uses systemd (Linux).
+- *Optional:* [`ccburn`](https://github.com/JuanjoFuchs/ccburn) (`npm i -g ccburn`) for the
+  live plan-limit charts in the Usage tab. The Usage tab's ROI/cost numbers work without it.
 
 ## Quick start
 
@@ -125,6 +134,8 @@ src/server.js      Fastify app: static, REST API, auth gate, ws route
 src/auth.js        password check + HMAC-signed cookie
 src/tmux.js        list/create/kill/rename/preview/fs — wraps tmux (create supports --resume)
 src/history.js     scans ~/.claude/projects for resumable past sessions
+src/usage.js       token usage + API-equivalent cost from transcripts (ROI)
+src/burn.js        shells out to `ccburn --json` for live plan-limit utilization
 src/pty.js         websocket ⇄ node-pty(`tmux attach`) bridge
 src/config.js      env config
 src/client/*.js    dashboard + terminal (bundled by esbuild into public/)
