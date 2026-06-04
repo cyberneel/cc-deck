@@ -7,10 +7,15 @@ import { config } from './config.js';
 
 const exec = promisify(execFile);
 
+// All tmux commands target cc-deck's dedicated socket (`-L <socket>`), so its
+// sessions live on their own server — isolated from your personal tmux, and
+// safe from "server exits when the last session closes" wiping everything.
+export const TMUX_ARGS = ['-L', config.tmuxSocket];
+
 // Run tmux with an argv array (never a shell string — no injection surface).
 async function tmux(args) {
   try {
-    const { stdout } = await exec('tmux', args, { maxBuffer: 4 * 1024 * 1024 });
+    const { stdout } = await exec('tmux', [...TMUX_ARGS, ...args], { maxBuffer: 4 * 1024 * 1024 });
     return stdout;
   } catch (err) {
     // tmux exits non-zero with "no server running" when there are no sessions.
@@ -19,6 +24,13 @@ async function tmux(args) {
     if (/no server running|no sessions|can.?t find|error connecting|no such file/i.test(msg)) return '';
     throw err;
   }
+}
+
+// Keep the dedicated server alive even with zero sessions, so removing the last
+// session never tears the server (and everyone's sessions) down. Server options
+// reset when the server restarts, so this is (re)applied on startup and on create.
+export async function initServer() {
+  await tmux(['set-option', '-s', 'exit-empty', 'off']).catch(() => {});
 }
 
 export function isManagedName(name) {
@@ -103,6 +115,7 @@ export async function createSession({ dir, title, resume }) {
   }
 
   await tmux(['new-session', '-d', '-s', name, '-c', abs, '-x', '220', '-y', '50']);
+  await initServer(); // server is up now — make sure it won't exit when emptied
   await tmux(['set-option', '-t', name, '@ccdeck_title', cleanTitle || abs.split('/').pop() || name]);
   await tmux(['set-option', '-t', name, '@ccdeck_dir', abs]);
   if (resume) await tmux(['set-option', '-t', name, '@ccdeck_resume', resume]);
@@ -120,6 +133,10 @@ export async function setMouse(name, on) {
   if (!isManagedName(name)) return;
   await tmux(['set-option', '-t', name, 'mouse', on ? 'on' : 'off']).catch(() => {});
   await tmux(['set-option', '-t', name, 'history-limit', '50000']).catch(() => {});
+  // When the same session is open on multiple devices, size the window to the
+  // LARGEST client instead of the latest/smallest — so opening it on a phone
+  // doesn't shrink/reflow the view on your laptop.
+  await tmux(['set-option', '-w', '-t', name, 'window-size', 'largest']).catch(() => {});
 }
 
 export async function killSession(name) {

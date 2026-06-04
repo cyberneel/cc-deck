@@ -15,6 +15,7 @@ import {
   listDirs,
 } from './tmux.js';
 import { attachHandler } from './pty.js';
+import { initServer } from './tmux.js';
 import { listHistory } from './history.js';
 import { getBurn } from './burn.js';
 import { getUsage } from './usage.js';
@@ -157,6 +158,9 @@ app.register(async (instance) => {
 
 const address = await app.listen({ port: config.port, host: config.bind });
 app.log.info(`cc-deck listening on ${address} (roots: ${config.roots.join(', ')})`);
+
+// Keep cc-deck's dedicated tmux server alive even when it has no sessions.
+initServer().catch(() => {});
 
 // Warm the pricing cache in the background so the first Usage load is instant.
 getPricing()

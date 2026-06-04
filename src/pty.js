@@ -1,6 +1,6 @@
 import pkg from 'node-pty';
 import { isRequestAuthed } from './auth.js';
-import { isManagedName, setMouse } from './tmux.js';
+import { isManagedName, setMouse, TMUX_ARGS } from './tmux.js';
 
 const { spawn } = pkg;
 
@@ -38,7 +38,7 @@ export function attachHandler(socket, req) {
 
   let pty;
   try {
-    pty = spawn('tmux', ['attach', '-t', session], {
+    pty = spawn('tmux', [...TMUX_ARGS, 'attach', '-t', session], {
       name: 'xterm-256color',
       cols,
       rows,

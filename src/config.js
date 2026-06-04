@@ -22,6 +22,9 @@ export const config = {
   roots: parseRoots(process.env.CCDECK_ROOTS),
   // tmux session name prefix for sessions this app manages.
   prefix: 'ccdeck-',
+  // Dedicated tmux socket so cc-deck's sessions live on their own server,
+  // isolated from your personal `tmux` (and protected with exit-empty off).
+  tmuxSocket: process.env.CCDECK_TMUX_SOCKET || 'ccdeck',
   // Command launched inside each new session.
   launchCommand: process.env.CCDECK_LAUNCH || 'claude',
   cookieName: 'ccdeck',

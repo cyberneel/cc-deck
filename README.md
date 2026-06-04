@@ -4,8 +4,11 @@ A self-hosted web dashboard for your **Claude CLI** sessions. See every running 
 in a grid/list/grouped view, launch a new `claude` in any directory, resume past
 conversations, and click into a fast, smooth in-browser terminal — the real CLI, no wrapper.
 
-Each session is a **tmux** session running `claude`, so sessions survive tab-closes and
-server restarts, and you can still `tmux attach` to any of them from a normal shell.
+Each session is a **tmux** session running `claude`, so sessions persist through tab-closes,
+no connected client, and restarts of the cc-deck app/tunnel. cc-deck runs them on its **own
+dedicated tmux server** (`tmux -L ccdeck`, kept alive with `exit-empty off`) — isolated from
+your personal `tmux`, and immune to the "server exits when the last session closes" trap.
+Attach from a shell with `tmux -L ccdeck attach`. (Sessions still don't survive a host reboot.)
 
 ```
 browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tmux attach -t ccdeck-…  ──▶  claude
