@@ -1,6 +1,7 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
+import { CanvasAddon } from '@xterm/addon-canvas';
 import css from './styles.css';
 
 const styleEl = document.createElement('style');
@@ -47,10 +48,17 @@ const term = new Terminal({
 const fit = new FitAddon();
 term.loadAddon(fit);
 term.open(document.getElementById('terminal'));
+// Prefer the GPU (WebGL) renderer; fall back to canvas (still much faster than
+// the default DOM renderer) if WebGL is unavailable or its context is lost.
+function useCanvas() {
+  try { term.loadAddon(new CanvasAddon()); } catch { /* DOM renderer */ }
+}
 try {
-  term.loadAddon(new WebglAddon());
+  const webgl = new WebglAddon();
+  webgl.onContextLoss(() => { webgl.dispose(); useCanvas(); });
+  term.loadAddon(webgl);
 } catch {
-  /* WebGL unavailable — falls back to canvas/DOM renderer */
+  useCanvas();
 }
 fit.fit();
 
