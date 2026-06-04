@@ -17,12 +17,21 @@ import {
 import { attachHandler } from './pty.js';
 import { initServer } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
-import { listHistory } from './history.js';
+import { listHistory, claudeTitleFor } from './history.js';
 
-// Active sessions enriched with each one's live Claude status (busy/idle/waiting).
+// Active sessions enriched with each one's live Claude status (busy/idle/waiting)
+// and Claude's own session name (custom /rename title, else its auto-title).
 async function enrichedSessions() {
   const sessions = await listSessions();
-  try { matchAgents(sessions, await getAgents()); } catch { /* degrade */ }
+  try {
+    matchAgents(sessions, await getAgents());
+    await Promise.all(sessions.map(async (s) => {
+      if (s.liveSessionId) {
+        const t = await claudeTitleFor(s.dir, s.liveSessionId);
+        if (t) s.title = t;
+      }
+    }));
+  } catch { /* degrade */ }
   return sessions;
 }
 import { getBurn } from './burn.js';
