@@ -284,6 +284,34 @@ async function openNewModal() {
 // Tapping the terminal focuses the active session (raises the iOS keyboard).
 termHost.addEventListener('click', () => { panes.get(currentSession)?.term.focus(); });
 
+// Touch scrolling in tmux mode: xterm only sends mouse *drag* on touch over the
+// alt-screen, so tmux copy-mode never scrolls (desktop uses the wheel). Translate
+// one-finger vertical swipes into tmux mouse-wheel events. (Fast mode scrolls the
+// xterm buffer natively, so we leave touch alone there.)
+let touchY = null, touchAccum = 0;
+const TOUCH_STEP = 22; // px per wheel "tick"
+const wheelSeq = (up) => `\x1b[<${up ? 64 : 65};1;1M`; // SGR mouse wheel up/down
+termHost.addEventListener('touchstart', (e) => {
+  if (scrollMode === 'tmux' && e.touches.length === 1) { touchY = e.touches[0].clientY; touchAccum = 0; }
+  else touchY = null;
+}, { capture: true, passive: true });
+termHost.addEventListener('touchmove', (e) => {
+  if (touchY === null || scrollMode !== 'tmux' || e.touches.length !== 1) return;
+  const ws = activeWs();
+  if (!ws) return;
+  const y = e.touches[0].clientY;
+  touchAccum += y - touchY; // finger down (dy>0) -> scroll up (older content)
+  touchY = y;
+  while (Math.abs(touchAccum) >= TOUCH_STEP) {
+    const up = touchAccum > 0;
+    ws.send(wheelSeq(up));
+    touchAccum += up ? -TOUCH_STEP : TOUCH_STEP;
+  }
+  e.preventDefault();
+  e.stopPropagation();
+}, { capture: true, passive: false });
+termHost.addEventListener('touchend', () => { touchY = null; }, { capture: true, passive: true });
+
 // ---- on-screen key bar (mobile) ----
 function activeWs() { const p = panes.get(currentSession); return p?.ws?.readyState === WebSocket.OPEN ? p.ws : null; }
 function sendKey(seq) { activeWs()?.send(seq); panes.get(currentSession)?.term.focus(); }
