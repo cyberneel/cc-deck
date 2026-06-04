@@ -34,28 +34,34 @@ async function readTailTitles(file, size, bytes = 49152) {
   }
   let customTitle = null;
   let aiTitle = null;
+  let permissionMode = null;
   for (const line of text.split('\n')) {
     if (line.includes('"customTitle"')) {
       try { const v = JSON.parse(line).customTitle; if (v) customTitle = v; } catch { /* partial line */ }
     } else if (line.includes('"aiTitle"')) {
       try { const v = JSON.parse(line).aiTitle; if (v) aiTitle = v; } catch { /* */ }
     }
+    // permissionMode appears on many line types; cheap regex grabs the latest.
+    const pm = line.match(/"permissionMode":"([a-zA-Z]+)"/);
+    if (pm) permissionMode = pm[1];
   }
-  return { customTitle, aiTitle };
+  return { customTitle, aiTitle, permissionMode };
 }
 
 // Read cwd, git branch, first user prompt, and any title lines from the head.
 function readHead(file) {
   return new Promise((resolve) => {
-    let cwd = '', gitBranch = '', firstPrompt = '', customTitle = null, aiTitle = null, lines = 0;
+    let cwd = '', gitBranch = '', firstPrompt = '', customTitle = null, aiTitle = null, permissionMode = null, lines = 0;
+    const r = () => resolve({ cwd, gitBranch, firstPrompt, customTitle, aiTitle, permissionMode });
     const rl = createInterface({ input: createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
-    const finish = () => { rl.close(); resolve({ cwd, gitBranch, firstPrompt, customTitle, aiTitle }); };
+    const finish = () => { rl.close(); r(); };
     rl.on('line', (line) => {
       if (!line) return;
       if (++lines > 400) return finish(); // head only, but scan all 400 (titles appear early)
       let o; try { o = JSON.parse(line); } catch { return; }
       if (!cwd && o.cwd) cwd = o.cwd;
       if (!gitBranch && o.gitBranch) gitBranch = o.gitBranch;
+      if (o.permissionMode) permissionMode = o.permissionMode;
       if (o.type === 'custom-title' && o.customTitle) customTitle = o.customTitle;
       else if (o.type === 'ai-title' && o.aiTitle) aiTitle = o.aiTitle;
       if (!firstPrompt && o.type === 'user' && o.isSidechain !== true && o.message) {
@@ -63,8 +69,8 @@ function readHead(file) {
         if (text && !isNoise(text)) firstPrompt = text.replace(/\s+/g, ' ').trim().slice(0, 140);
       }
     });
-    rl.on('close', () => resolve({ cwd, gitBranch, firstPrompt, customTitle, aiTitle }));
-    rl.on('error', () => resolve({ cwd, gitBranch, firstPrompt, customTitle, aiTitle }));
+    rl.on('close', r);
+    rl.on('error', r);
   });
 }
 
@@ -75,7 +81,7 @@ async function extractMeta(file, size) {
   // Prefer the latest title (tail) over an early one (head); custom over ai.
   const name =
     tail.customTitle || head.customTitle || tail.aiTitle || head.aiTitle || head.firstPrompt || '';
-  return { cwd: head.cwd, gitBranch: head.gitBranch, title: name };
+  return { cwd: head.cwd, gitBranch: head.gitBranch, title: name, mode: tail.permissionMode || head.permissionMode || null };
 }
 
 function contentToText(content) {
@@ -95,21 +101,21 @@ function isNoise(text) {
   );
 }
 
-// Live display name for an active session: latest custom/ai title from its
+// Live name + permission mode for an active session, from the latest lines of its
 // transcript (path derived from cwd + id). Cached by mtime so polling is cheap.
-const liveTitleCache = new Map();
-export async function claudeTitleFor(cwd, sessionId) {
-  if (!cwd || !isSessionId(sessionId)) return null;
+const liveMetaCache = new Map();
+export async function claudeLiveMeta(cwd, sessionId) {
+  if (!cwd || !isSessionId(sessionId)) return {};
   const file = join(PROJECTS_DIR, cwd.replace(/\//g, '-'), `${sessionId}.jsonl`);
   let s;
-  try { s = await stat(file); } catch { return null; }
+  try { s = await stat(file); } catch { return {}; }
   const key = `${s.mtimeMs}:${s.size}`;
-  const cached = liveTitleCache.get(file);
-  if (cached && cached.key === key) return cached.title;
-  const { customTitle, aiTitle } = await readTailTitles(file, s.size);
-  const title = customTitle || aiTitle || null;
-  liveTitleCache.set(file, { key, title });
-  return title;
+  const cached = liveMetaCache.get(file);
+  if (cached && cached.key === key) return cached.meta;
+  const { customTitle, aiTitle, permissionMode } = await readTailTitles(file, s.size);
+  const meta = { title: customTitle || aiTitle || null, mode: permissionMode || null };
+  liveMetaCache.set(file, { key, meta });
+  return meta;
 }
 
 export async function listHistory() {
@@ -155,6 +161,7 @@ export async function listHistory() {
         cwd: meta.cwd || '',
         gitBranch: meta.gitBranch || '',
         title: meta.title || '(untitled session)',
+        mode: meta.mode || null,
         lastModified: f.mtime,
         sizeKb: Math.round(f.size / 1024),
       };

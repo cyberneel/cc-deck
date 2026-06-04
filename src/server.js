@@ -17,19 +17,20 @@ import {
 import { attachHandler } from './pty.js';
 import { initServer } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
-import { listHistory, claudeTitleFor } from './history.js';
+import { listHistory, claudeLiveMeta } from './history.js';
 
-// Active sessions enriched with each one's live Claude status (busy/idle/waiting)
-// and Claude's own session name (custom /rename title, else its auto-title).
+// Active sessions enriched with each one's live Claude status (busy/idle/waiting),
+// Claude's own session name (custom /rename title, else its auto-title), and the
+// current permission mode (auto/plan/acceptEdits/default).
 async function enrichedSessions() {
   const sessions = await listSessions();
   try {
     matchAgents(sessions, await getAgents());
     await Promise.all(sessions.map(async (s) => {
-      if (s.liveSessionId) {
-        const t = await claudeTitleFor(s.dir, s.liveSessionId);
-        if (t) s.title = t;
-      }
+      if (!s.liveSessionId) return;
+      const m = await claudeLiveMeta(s.dir, s.liveSessionId);
+      if (m.title) s.title = m.title;
+      if (m.mode) s.mode = m.mode;
     }));
   } catch { /* degrade */ }
   return sessions;

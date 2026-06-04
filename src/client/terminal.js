@@ -36,6 +36,7 @@ document.body.innerHTML = `
   <div id="app-term" class="${sidebarOpen ? '' : 'collapsed'}">
     <aside id="sidebar">
       <div class="sb-head"><span>Sessions</span><button id="sb-collapse" class="icon" title="Collapse">«</button></div>
+      <button id="sb-new" class="sb-new">+ New session</button>
       <div id="sb-list"></div>
       <div class="sb-foot faint">Alt+\` to cycle · Alt+1–9 to jump</div>
     </aside>
@@ -220,6 +221,65 @@ document.getElementById('sb-collapse').addEventListener('click', () => {
 document.getElementById('sb-backdrop').addEventListener('click', () => {
   sidebarOpen = false; localStorage.setItem('ccdeck.sidebar', 'closed'); applySidebar();
 });
+document.getElementById('sb-new').addEventListener('click', openNewModal);
+
+// ---- new session modal (launch + switch to it) ----
+let cfg = null;
+async function openNewModal() {
+  if (!cfg) { try { cfg = await api('/api/config'); } catch { cfg = { roots: [] }; } }
+  let currentPath = (cfg.roots && cfg.roots[0]) || cfg.home || '/';
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `
+    <div class="modal">
+      <h2>New Claude session</h2>
+      <div class="field">
+        <label>Directory</label>
+        <input id="dir-input" value="${esc(currentPath)}" spellcheck="false" />
+        <div class="browser" id="browser"></div>
+      </div>
+      <div class="field">
+        <label>Title <span class="faint">(optional)</span></label>
+        <input id="title-input" placeholder="defaults to the folder name" spellcheck="false" />
+      </div>
+      <div class="error" id="modal-error"></div>
+      <div class="modal-actions">
+        <button id="cancel-btn">Cancel</button>
+        <button class="primary" id="launch-btn">Launch claude</button>
+      </div>
+    </div>`;
+  document.body.appendChild(bg);
+  const dirInput = bg.querySelector('#dir-input');
+  const browser = bg.querySelector('#browser');
+  const errEl = bg.querySelector('#modal-error');
+  async function browse(path) {
+    try {
+      const { path: abs, dirs } = await api(`/api/fs?path=${encodeURIComponent(path)}`);
+      currentPath = abs; dirInput.value = abs;
+      const parent = abs.split('/').slice(0, -1).join('/') || '/';
+      browser.innerHTML = `<div class="row up" data-path="${esc(parent)}">⬆ ..</div>` +
+        dirs.map((d) => `<div class="row" data-path="${esc(d.path)}">📁 ${esc(d.name)}</div>`).join('');
+      browser.querySelectorAll('.row').forEach((r) => r.addEventListener('click', () => browse(r.dataset.path)));
+    } catch (e) { errEl.textContent = e.message; }
+  }
+  browse(currentPath);
+  dirInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') browse(dirInput.value); });
+  const close = () => bg.remove();
+  bg.querySelector('#cancel-btn').addEventListener('click', close);
+  bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
+  bg.querySelector('#launch-btn').addEventListener('click', async () => {
+    errEl.textContent = '';
+    try {
+      const { name } = await api('/api/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ dir: dirInput.value, title: bg.querySelector('#title-input').value }),
+      });
+      close();
+      await refreshSessions();
+      switchTo(name);
+    } catch (e) { errEl.textContent = e.message; }
+  });
+}
 
 // Tapping the terminal focuses the active session (raises the iOS keyboard).
 termHost.addEventListener('click', () => { panes.get(currentSession)?.term.focus(); });
@@ -263,7 +323,9 @@ async function api(path, opts = {}) {
   const headers = opts.body ? { 'Content-Type': 'application/json' } : {};
   const res = await fetch(path, { headers, ...opts });
   if (res.status === 401) { location.href = '/login.html'; throw new Error('unauthorized'); }
-  return res.json().catch(() => ({}));
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
 }
 function isLive(s) { return !!s.liveSessionId || /node|claude/i.test(s.paneCommand || '') || (s.lastActivity && Date.now() - s.lastActivity < 15000); }
 // Status dot color: accent=needs you, green=working, blue=ready/your turn, grey=idle.
@@ -392,7 +454,7 @@ function renderSwitcher() {
   swBox.innerHTML = swList.map((name, i) => {
     const s = sessions.find((x) => x.name === name) || {};
     return `<div class="sw-item ${i === swIdx ? 'sel' : ''}">
-      <span class="sb-dot ${isLive(s) ? 'live' : 'idle'}"></span>${esc(titleOf(name))}${needsAttention(s) ? ' <span class="sb-attn">●</span>' : ''}${panes.has(name) ? ' <span class="sb-warm">•</span>' : ''}
+      <span class="sb-dot ${statusDot(s)}"></span>${esc(titleOf(name))}${needsAttention(s) ? ' <span class="sb-attn">●</span>' : ''}${panes.has(name) ? ' <span class="sb-warm">•</span>' : ''}
     </div>`;
   }).join('');
 }

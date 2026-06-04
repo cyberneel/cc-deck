@@ -79,6 +79,11 @@ function statusOf(s) {
 function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
+const MODE_LABEL = { auto: 'auto', plan: 'plan', acceptEdits: 'edits', default: 'normal', bypassPermissions: 'bypass' };
+function modeChip(s) {
+  if (!s.mode) return '';
+  return `<span class="mode mode-${esc(s.mode)}" title="Permission mode">${esc(MODE_LABEL[s.mode] || s.mode)}</span>`;
+}
 function shortDir(d) {
   if (!d) return 'unknown';
   return cfg.home && d.startsWith(cfg.home) ? '~' + d.slice(cfg.home.length) : d;
@@ -308,6 +313,7 @@ function cardHtml(s) {
     <pre class="preview" data-preview="${esc(s.name)}">…</pre>
     <div class="card-foot">
       <span class="badge ${st.cls}"><span class="pulse"></span>${st.text}</span>
+      ${modeChip(s)}
       <span class="faint">${s.attached ? 'attached · ' : ''}${fmtTime(s.lastActivity)}</span>
       <div class="spacer"></div>
       <button class="icon rename-btn" title="Rename">✎</button>
@@ -424,7 +430,7 @@ function historyCardHtml(s) {
   const foot = runningName
     ? `<span class="badge live"><span class="pulse"></span>running</span><div class="spacer"></div>
        <button class="primary open-btn">▶ Open</button>`
-    : `<span class="faint">${fmtAbsTime(s.lastModified)} · ${s.sizeKb} KB</span><div class="spacer"></div>
+    : `${modeChip(s)}<span class="faint">${fmtAbsTime(s.lastModified)} · ${s.sizeKb} KB</span><div class="spacer"></div>
        <button class="primary resume-btn" ${noCwd ? 'disabled title="No recorded directory"' : ''}>▶ Resume</button>`;
   return `<div class="card hist ${runningName ? 'isrunning' : ''}" data-id="${esc(s.sessionId)}" ${runningName ? `data-open="${esc(runningName)}"` : ''}>
     <div class="card-head">
