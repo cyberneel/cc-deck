@@ -147,7 +147,7 @@ function render() {
         <button data-tab="usage" class="${tab === 'usage' ? 'active' : ''}">Usage</button>
       </div>
       <div class="spacer"></div>
-      <button class="primary" id="new-btn">+ New session</button>
+      <button class="primary" id="new-btn" title="New session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New session'}</button>
       <button id="logout-btn" title="Log out">⏻</button>
     </div>
     <div class="wrap">

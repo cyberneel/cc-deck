@@ -11,8 +11,11 @@ document.head.appendChild(styleEl);
 const params = new URLSearchParams(location.search);
 let currentSession = params.get('session');
 
+const isMobile = matchMedia('(max-width: 700px)').matches;
 let scrollMode = localStorage.getItem('ccdeck.scroll') || 'tmux';
-let sidebarOpen = localStorage.getItem('ccdeck.sidebar') !== 'closed';
+// On phones the sidebar is an overlay drawer — start it closed so the terminal is full-width.
+let sidebarOpen = isMobile ? false : localStorage.getItem('ccdeck.sidebar') !== 'closed';
+let ctrlArm = false; // sticky Ctrl for the on-screen key bar
 
 // How many sessions to keep warm (current + most-recent others).
 const WARM = 3;
@@ -36,6 +39,7 @@ document.body.innerHTML = `
       <div id="sb-list"></div>
       <div class="sb-foot faint">Alt+\` to cycle · Alt+1–9 to jump</div>
     </aside>
+    <div id="sb-backdrop"></div>
     <div id="main">
       <div class="term-bar">
         <button id="sb-toggle" class="icon" title="Toggle sidebar (sessions)">☰<span id="sb-badge" class="sb-badge" style="display:none"></span></button>
@@ -46,6 +50,7 @@ document.body.innerHTML = `
         <span class="status" id="status">connecting…</span>
       </div>
       <div id="terminal"></div>
+      <div class="keybar" id="keybar"></div>
     </div>
   </div>
   <div id="switcher" class="switcher" style="display:none"><div class="sw-box" id="sw-box"></div></div>`;
@@ -60,7 +65,7 @@ function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 
 const TERM_OPTS = {
   fontFamily: "'JetBrains Mono','SF Mono','Fira Code',ui-monospace,monospace",
-  fontSize: 13, lineHeight: 1.0, cursorBlink: true, scrollback: 10000, allowProposedApi: true,
+  fontSize: isMobile ? 12 : 13, lineHeight: 1.0, cursorBlink: true, scrollback: 10000, allowProposedApi: true,
   theme: {
     background: '#0a0d12', foreground: '#e6edf3', cursor: '#d97757', selectionBackground: '#2a3344',
     black: '#0a0d12', brightBlack: '#5c6877', red: '#ff8d85', brightRed: '#ff8d85',
@@ -102,7 +107,11 @@ function makePane(name) {
   term.resize(gCols, gRows);
 
   const pane = { name, wrap, term, fit, ws: null, dispose: false, manual: false, rc: null };
-  term.onData((d) => { if (pane.ws?.readyState === WebSocket.OPEN) pane.ws.send(d); });
+  term.onData((d) => {
+    // Sticky Ctrl (from the mobile key bar): fold the next typed char to a control code.
+    if (ctrlArm && d.length === 1) { d = String.fromCharCode(d.charCodeAt(0) & 0x1f); ctrlArm = false; updateCtrlBtn(); }
+    if (pane.ws?.readyState === WebSocket.OPEN) pane.ws.send(d);
+  });
   panes.set(name, pane);
   connectPaneWs(pane);
   return pane;
@@ -208,6 +217,46 @@ document.getElementById('sb-toggle').addEventListener('click', () => {
 document.getElementById('sb-collapse').addEventListener('click', () => {
   sidebarOpen = false; localStorage.setItem('ccdeck.sidebar', 'closed'); applySidebar();
 });
+document.getElementById('sb-backdrop').addEventListener('click', () => {
+  sidebarOpen = false; localStorage.setItem('ccdeck.sidebar', 'closed'); applySidebar();
+});
+
+// Tapping the terminal focuses the active session (raises the iOS keyboard).
+termHost.addEventListener('click', () => { panes.get(currentSession)?.term.focus(); });
+
+// ---- on-screen key bar (mobile) ----
+function activeWs() { const p = panes.get(currentSession); return p?.ws?.readyState === WebSocket.OPEN ? p.ws : null; }
+function sendKey(seq) { activeWs()?.send(seq); panes.get(currentSession)?.term.focus(); }
+function updateCtrlBtn() { document.getElementById('kb-ctrl')?.classList.toggle('armed', ctrlArm); }
+const KEYS = [
+  { label: 'esc', seq: '\x1b' },
+  { label: 'tab', seq: '\t' },
+  { label: 'ctrl', ctrl: true },
+  { label: '←', seq: '\x1b[D' },
+  { label: '↑', seq: '\x1b[A' },
+  { label: '↓', seq: '\x1b[B' },
+  { label: '→', seq: '\x1b[C' },
+  { label: '^C', seq: '\x03' },
+];
+const keybar = document.getElementById('keybar');
+keybar.innerHTML = KEYS.map((k, i) => `<button ${k.ctrl ? 'id="kb-ctrl"' : ''} data-i="${i}">${k.label}</button>`).join('');
+keybar.querySelectorAll('button').forEach((btn) => {
+  // Use pointerdown + preventDefault so tapping a key doesn't steal focus/raise-dismiss the keyboard.
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const k = KEYS[Number(btn.dataset.i)];
+    if (k.ctrl) { ctrlArm = !ctrlArm; updateCtrlBtn(); }
+    else sendKey(k.seq);
+  });
+});
+
+// Keep the layout (and key bar) above the iOS on-screen keyboard.
+if (isMobile && window.visualViewport) {
+  const vv = window.visualViewport;
+  const onVV = () => { appEl.style.height = `${vv.height}px`; fitActive(); };
+  vv.addEventListener('resize', onVV);
+  vv.addEventListener('scroll', onVV);
+}
 
 // ---- session list + sidebar ----
 async function api(path) {
@@ -268,6 +317,7 @@ function switchTo(name) {
   lastSeen[name] = Date.now();
   history.replaceState({}, '', `?session=${encodeURIComponent(name)}`);
   titleEl.textContent = titleOf(name);
+  if (isMobile && sidebarOpen) { sidebarOpen = false; applySidebar(); } // close the drawer
   showPane(name);
   renderSidebar();
   reconcileWarm();

@@ -59,6 +59,9 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
   can scan many directories quickly, then expand the ones you want.
 - **Auth** — password login with a signed cookie. Binds to loopback; exposed via
   Tailscale or Cloudflare. Safe to put on a public hostname.
+- **Mobile-friendly** — responsive layout (no overflow), iOS safe-area + dynamic-viewport
+  handling, the session sidebar becomes an off-canvas drawer, and the terminal gets an
+  on-screen key bar (Esc / Tab / Ctrl / arrows) since phone keyboards lack those keys.
 
 ## Requirements
 
