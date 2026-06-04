@@ -330,10 +330,10 @@ const KEYS = [
   { label: '⇧⇥', seq: '\x1b[Z', title: 'Shift+Tab — cycle permission mode' },
   { label: 'ctrl', ctrl: true },
   { label: 'meta', meta: true },
-  { label: '←', seq: '\x1b[D' },
-  { label: '↑', seq: '\x1b[A' },
-  { label: '↓', seq: '\x1b[B' },
-  { label: '→', seq: '\x1b[C' },
+  { label: '←', seq: '\x1b[D', repeat: true },
+  { label: '↑', seq: '\x1b[A', repeat: true },
+  { label: '↓', seq: '\x1b[B', repeat: true },
+  { label: '→', seq: '\x1b[C', repeat: true },
   { label: '^C', seq: '\x03' },
 ];
 const keybar = document.getElementById('keybar');
