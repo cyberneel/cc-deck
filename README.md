@@ -137,8 +137,14 @@ sudo loginctl enable-linger "$USER"     # keep running while logged out
 journalctl --user -u cc-deck -f         # logs
 ```
 
+The unit sets **`KillMode=process`** on purpose: cc-deck's dedicated tmux server runs in
+the service's cgroup, so the default `control-group` kill would destroy every session on
+each restart. `KillMode=process` stops only the node process and leaves tmux (and your
+sessions) running across restarts.
+
 **Remember:** changes to `.env` need `systemctl --user restart cc-deck`; changes to
-`src/client/*` need `npm run build` first.
+`src/client/*` need `npm run build` first. With `KillMode=process`, restarts no longer
+disturb running sessions.
 
 ## Exposing on your own domain via Cloudflare (access off-VPN)
 

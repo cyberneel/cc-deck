@@ -11,6 +11,10 @@ WorkingDirectory=__CCDECK_DIR__
 ExecStart=__NODE__ src/server.js
 Restart=on-failure
 RestartSec=2
+# Kill only the node process on stop/restart, NOT the whole cgroup — cc-deck's
+# dedicated tmux server lives in this cgroup, and a control-group kill would
+# destroy every session on each restart. This keeps tmux (and sessions) alive.
+KillMode=process
 Environment=PATH=__PATH__
 
 [Install]
