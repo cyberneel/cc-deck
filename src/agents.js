@@ -1,8 +1,18 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dirname } from 'node:path';
+import { readFileSync } from 'node:fs';
 
 const exec = promisify(execFile);
+
+// Direct child PIDs of a process (the pane shell's child is the claude process).
+function childPids(pid) {
+  try {
+    return readFileSync(`/proc/${pid}/task/${pid}/children`, 'utf8').trim().split(/\s+/).filter(Boolean).map(Number);
+  } catch {
+    return [];
+  }
+}
 // claude lives alongside node (nvm bin); ensure it's found under a minimal PATH.
 const PATH = `${dirname(process.execPath)}:${process.env.PATH || ''}`;
 
@@ -27,13 +37,16 @@ export async function getAgents() {
   return data;
 }
 
-// Attach each cc-deck session's live Claude status by matching it to an agent:
-// first by the resumed session id, then by working directory (one-to-one).
+// Attach each cc-deck session's live Claude status by matching it to an agent.
+// Match by the claude PID (the pane shell's child) first — unambiguous even when
+// several sessions share a directory — then by resumed id, then by cwd.
 export function matchAgents(sessions, agents) {
   const used = new Set();
   const take = (pred) => { const a = agents.find((x) => !used.has(x) && pred(x)); if (a) used.add(a); return a; };
   for (const s of sessions) {
+    const kids = s.panePid ? childPids(s.panePid) : [];
     const a =
+      take((x) => kids.includes(x.pid)) ||
       (s.resumedFrom && take((x) => x.sessionId === s.resumedFrom)) ||
       take((x) => x.cwd === s.dir);
     s.liveSessionId = a?.sessionId || null;

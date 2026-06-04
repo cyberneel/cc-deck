@@ -100,6 +100,7 @@ const FIELDS = [
   '#{@ccdeck_dir}',
   '#{pane_current_command}',
   '#{@ccdeck_resume}',
+  '#{pane_pid}',
 ].join('\t');
 
 export async function listSessions() {
@@ -107,7 +108,7 @@ export async function listSessions() {
   const sessions = [];
   for (const line of out.split('\n')) {
     if (!line.trim()) continue;
-    const [name, attached, activity, created, title, dir, paneCmd, resume] = line.split('\t');
+    const [name, attached, activity, created, title, dir, paneCmd, resume, panePid] = line.split('\t');
     if (!isManagedName(name)) continue;
     sessions.push({
       name,
@@ -119,6 +120,7 @@ export async function listSessions() {
       dir: dir || '',
       paneCommand: paneCmd || '',
       resumedFrom: resume || null,
+      panePid: Number(panePid) || null,
     });
   }
   sessions.sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0));
@@ -126,6 +128,24 @@ export async function listSessions() {
 }
 
 const RESUME_ID_RE = /^[0-9a-fA-F-]{36}$/;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// `claude --name` only sets a transient display name; the persisted title cc-deck
+// reads comes from the /rename slash command. So for a freshly-named session, wait
+// until Claude has booted to its prompt, then send /rename. Fire-and-forget.
+async function scheduleRename(name, title) {
+  for (let i = 0; i < 30; i++) {
+    await sleep(700);
+    let pane;
+    try { pane = await tmux(['capture-pane', '-p', '-t', name, '-S', '-25']); } catch { return; }
+    if (!pane) continue;
+    if (/\? for shortcuts|❯|esc to interrupt/.test(pane)) { // Claude's UI is up
+      await tmux(['send-keys', '-l', '-t', name, `/rename ${title}`]).catch(() => {});
+      await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
+      return;
+    }
+  }
+}
 
 export async function createSession({ dir, title, resume }) {
   const abs = await resolveAllowedDir(dir);
@@ -134,6 +154,8 @@ export async function createSession({ dir, title, resume }) {
   const cleanTitle = (title || '').toString().slice(0, 120).replace(/[\r\n\t]/g, ' ').trim();
 
   // Build the launch command; optionally resume a prior Claude session by id.
+  // For a fresh session with a custom title, pass it to Claude as --name so the
+  // Claude session itself is named (not just cc-deck's label).
   let launch = config.launchCommand;
   if (resume) {
     if (!RESUME_ID_RE.test(resume)) {
@@ -154,6 +176,9 @@ export async function createSession({ dir, title, resume }) {
   // Launch the CLI inside the login shell so the session survives if claude exits.
   // Prefix COLORTERM=truecolor so Claude emits 24-bit color (diffs, highlights).
   await tmux(['send-keys', '-t', name, `COLORTERM=truecolor ${launch}`, 'Enter']);
+  // For a fresh session with a custom title, name the Claude session too (once
+  // it's booted) so the name shows in Claude and `claude --resume`. Background.
+  if (!resume && cleanTitle) scheduleRename(name, cleanTitle).catch(() => {});
   return name;
 }
 
