@@ -177,7 +177,20 @@ export async function killSession(name) {
 export async function renameSession(name, title) {
   assertManaged(name);
   const cleanTitle = (title || '').toString().slice(0, 120).replace(/[\r\n\t]/g, ' ').trim();
+  // cc-deck's own display label.
   await tmux(['set-option', '-t', name, '@ccdeck_title', cleanTitle]);
+  // Also rename the underlying Claude session via its `/rename` slash command,
+  // so the new name shows in Claude itself and in `claude --resume`. Only do this
+  // when Claude is actually running in the pane (else it'd type into the shell).
+  if (cleanTitle) {
+    const cmd = (await tmux(['display-message', '-p', '-t', name, '#{pane_current_command}']).catch(() => '')).trim();
+    if (/claude|node/i.test(cmd)) {
+      // -l sends the text literally (so titles with key-like words aren't parsed),
+      // then a separate Enter submits the slash command.
+      await tmux(['send-keys', '-l', '-t', name, `/rename ${cleanTitle}`]).catch(() => {});
+      await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
+    }
+  }
 }
 
 export async function sessionExists(name) {
