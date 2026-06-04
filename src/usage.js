@@ -3,34 +3,19 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
+import { getPricing, rateForModel } from './pricing.js';
 
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 
-// API list prices in USD per *million* tokens, by model family. These are list
-// rates used only to estimate the dollar value of usage for the ROI view; edit
-// here if Anthropic's pricing changes.
-const PRICING = {
-  opus: { input: 15, output: 75, cacheWrite: 18.75, cacheRead: 1.5 },
-  sonnet: { input: 3, output: 15, cacheWrite: 3.75, cacheRead: 0.3 },
-  haiku: { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1 },
-};
-
-function family(model) {
-  if (!model) return null;
-  if (model.includes('opus')) return 'opus';
-  if (model.includes('sonnet')) return 'sonnet';
-  if (model.includes('haiku')) return 'haiku';
-  return null;
+function isBillableModel(model) {
+  return !!model && (model.includes('opus') || model.includes('sonnet') || model.includes('haiku'));
 }
 
-function costOf(fam, u) {
-  const p = PRICING[fam];
-  if (!p) return 0;
+// Dollar cost of one event given a per-million rate object (from pricing.js).
+function eventCost(e, rate) {
+  if (!rate) return 0;
   return (
-    ((u.input || 0) * p.input +
-      (u.output || 0) * p.output +
-      (u.cacheWrite || 0) * p.cacheWrite +
-      (u.cacheRead || 0) * p.cacheRead) /
+    (e.input * rate.input + e.output * rate.output + e.cacheWrite * rate.cacheWrite + e.cacheRead * rate.cacheRead) /
     1_000_000
   );
 }
@@ -74,11 +59,11 @@ function readFileEvents(file, events) {
       let o;
       try { o = JSON.parse(line); } catch { return; }
       const u = o.message?.usage;
-      const fam = family(o.message?.model);
-      if (!u || !fam || !o.timestamp) return;
+      const model = o.message?.model;
+      if (!u || !isBillableModel(model) || !o.timestamp) return;
       events.push({
         t: Date.parse(o.timestamp),
-        fam,
+        model,
         input: u.input_tokens || 0,
         output: u.output_tokens || 0,
         cacheWrite: u.cache_creation_input_tokens || 0,
@@ -93,12 +78,12 @@ function readFileEvents(file, events) {
 function emptyAgg() {
   return { input: 0, output: 0, cacheWrite: 0, cacheRead: 0, cost: 0, messages: 0 };
 }
-function addInto(agg, e) {
+function addInto(agg, e, cost) {
   agg.input += e.input;
   agg.output += e.output;
   agg.cacheWrite += e.cacheWrite;
   agg.cacheRead += e.cacheRead;
-  agg.cost += costOf(e.fam, e);
+  agg.cost += cost;
   agg.messages += 1;
 }
 function totalTokens(a) {
@@ -127,9 +112,16 @@ function cycleBounds(now, billingDay) {
 }
 
 export async function getUsage(billingDay = 1) {
-  const events = await collectEvents();
+  const [events, pricing] = await Promise.all([collectEvents(), getPricing()]);
   const now = Date.now();
   const DAY = 86_400_000;
+
+  // Pre-resolve a per-million rate for each distinct model id once.
+  const rateCache = new Map();
+  const rateOf = (model) => {
+    if (!rateCache.has(model)) rateCache.set(model, rateForModel(pricing, model));
+    return rateCache.get(model);
+  };
 
   const bd = Math.min(31, Math.max(1, Math.round(Number(billingDay) || 1)));
   const { start: cycleStart, end: cycleEnd } = cycleBounds(now, bd);
@@ -142,7 +134,7 @@ export async function getUsage(billingDay = 1) {
     last30d: { since: now - 30 * DAY, agg: emptyAgg() },
     cycle: { since: cycleStart, agg: emptyAgg() },
   };
-  const byModelCycle = { opus: emptyAgg(), sonnet: emptyAgg(), haiku: emptyAgg() };
+  const byModelCycle = new Map(); // model id -> agg
 
   // Daily cost for the last 30 days.
   const daily = new Map(); // 'YYYY-MM-DD' -> cost
@@ -151,11 +143,15 @@ export async function getUsage(billingDay = 1) {
   }
 
   for (const e of events) {
-    for (const w of Object.values(windows)) if (e.t >= w.since) addInto(w.agg, e);
-    if (e.t >= cycleStart) addInto(byModelCycle[e.fam], e);
+    const cost = eventCost(e, rateOf(e.model));
+    for (const w of Object.values(windows)) if (e.t >= w.since) addInto(w.agg, e, cost);
+    if (e.t >= cycleStart) {
+      if (!byModelCycle.has(e.model)) byModelCycle.set(e.model, emptyAgg());
+      addInto(byModelCycle.get(e.model), e, cost);
+    }
     if (e.t >= now - 30 * DAY) {
       const key = new Date(e.t).toISOString().slice(0, 10);
-      if (daily.has(key)) daily.set(key, daily.get(key) + costOf(e.fam, e));
+      if (daily.has(key)) daily.set(key, daily.get(key) + cost);
     }
   }
 
@@ -180,11 +176,16 @@ export async function getUsage(billingDay = 1) {
       daysInCycle,
       projectedCost,
     },
-    byModel: Object.entries(byModelCycle)
+    byModel: [...byModelCycle.entries()]
       .map(([model, agg]) => ({ model, ...agg, totalTokens: totalTokens(agg) }))
       .filter((m) => m.messages > 0)
       .sort((a, b) => b.cost - a.cost),
     daily: [...daily.entries()].map(([date, cost]) => ({ date, cost })),
-    pricing: PRICING,
+    pricing: {
+      source: pricing.source,
+      fetchedAt: pricing.fetchedAt,
+      stale: pricing.stale,
+      error: pricing.error || null,
+    },
   };
 }

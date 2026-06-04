@@ -501,7 +501,7 @@ function renderUsage() {
     <table class="mtable"><thead><tr><th>Model</th><th>Messages</th><th>Tokens</th><th>API value</th></tr></thead>
     <tbody>${u.byModel.map((m) =>
       `<tr><td>${esc(m.model)}</td><td>${m.messages.toLocaleString()}</td><td>${tokensFmt(m.totalTokens)}</td><td>${money(m.cost)}</td></tr>`).join('')}</tbody></table>
-    <p class="faint">Estimated by applying Anthropic API list prices (including cache read/write rates) to your actual token usage. Your subscription isn't billed per token — this is what the same usage would cost on the pay-as-you-go API.</p>
+    <p class="faint">Estimated by applying Anthropic API list prices (including cache read/write rates) to your actual token usage. Your subscription isn't billed per token — this is what the same usage would cost on the pay-as-you-go API.<br>${pricingNote(u.pricing)}</p>
   </div></div>`;
 
   c.innerHTML = html;
@@ -510,6 +510,15 @@ function renderUsage() {
 
 function usageTile(label, val) {
   return `<div class="tile"><div class="tile-val">${val}</div><div class="tile-label">${label}</div></div>`;
+}
+
+function pricingNote(p) {
+  if (!p) return '';
+  const isLive = p.source && p.source.startsWith('http');
+  const when = p.fetchedAt ? new Date(p.fetchedAt).toLocaleDateString() : 'n/a';
+  if (!isLive) return `Prices: built-in fallback${p.error ? ` (live fetch failed: ${esc(p.error)})` : ''}.`;
+  const host = (() => { try { return new URL(p.source).host; } catch { return p.source; } })();
+  return `Prices: live from ${esc(host)}, updated ${when}${p.stale ? ' (stale — using cached)' : ''}.`;
 }
 
 function renderBurnCards() {

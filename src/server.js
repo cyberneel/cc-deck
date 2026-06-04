@@ -18,6 +18,7 @@ import { attachHandler } from './pty.js';
 import { listHistory } from './history.js';
 import { getBurn } from './burn.js';
 import { getUsage } from './usage.js';
+import { getPricing } from './pricing.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(__dirname, '..', 'public');
@@ -156,3 +157,8 @@ app.register(async (instance) => {
 
 const address = await app.listen({ port: config.port, host: config.bind });
 app.log.info(`cc-deck listening on ${address} (roots: ${config.roots.join(', ')})`);
+
+// Warm the pricing cache in the background so the first Usage load is instant.
+getPricing()
+  .then((p) => app.log.info(`pricing: ${p.source}${p.stale ? ' (stale)' : ''}`))
+  .catch(() => {});

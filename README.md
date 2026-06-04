@@ -39,10 +39,13 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
   branch, time, and opening prompt. "▶ Resume" runs `claude --resume <id>` in the original
   directory as a fresh live session — a backend equivalent of `claude --resume`.
 - **Usage tab** — token-spend and **ROI on your plan**: pick your plan (Pro / Max 5× /
-  Max 20× / custom) and see the API-equivalent dollar value of your usage this month vs the
-  subscription price ("are you breaking even?"), a daily-spend chart, a per-model breakdown,
-  and — if [`ccburn`](https://github.com/JuanjoFuchs/ccburn) is installed — live session (5h)
-  and weekly plan-limit utilization with pace indicators.
+  Max 20× / custom) and billing-renewal day, then see the API-equivalent dollar value of
+  your usage this billing cycle vs the subscription price ("are you breaking even?"), a
+  daily-spend chart, and a per-model breakdown. Token prices are pulled **live** from the
+  [LiteLLM pricing dataset](https://github.com/BerriAI/litellm) (cached on disk, ~7-day
+  refresh, with a built-in fallback) so the numbers don't go stale as Anthropic's prices
+  change. If [`ccburn`](https://github.com/JuanjoFuchs/ccburn) is installed, it also shows
+  live session (5h) and weekly plan-limit utilization with pace indicators.
 - **Collapsible grouped view** — group sessions by directory; groups start collapsed so you
   can scan many directories quickly, then expand the ones you want.
 - **Auth** — password login with a signed cookie. Binds to loopback; exposed via
@@ -147,6 +150,7 @@ src/auth.js        password check + HMAC-signed cookie
 src/tmux.js        list/create/kill/rename/preview/fs — wraps tmux (create supports --resume)
 src/history.js     scans ~/.claude/projects for resumable past sessions
 src/usage.js       token usage + API-equivalent cost from transcripts (ROI)
+src/pricing.js     live Anthropic token pricing (LiteLLM dataset, disk-cached + fallback)
 src/burn.js        shells out to `ccburn --json` for live plan-limit utilization
 src/pty.js         websocket ⇄ node-pty(`tmux attach`) bridge
 src/config.js      env config
