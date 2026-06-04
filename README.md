@@ -42,6 +42,8 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
   Click to switch in place (no reload), **Alt+` / Alt+Shift+`** to cycle in
   most-recently-used order (Zen-style overlay; hold Alt, tap backtick, release to commit),
   or **Alt+1–9** to jump directly. (Ctrl+Tab also works where the browser doesn't reserve it.)
+  The current + 2 most-recent sessions are kept **warm** (attached in the background, marked
+  with a green dot), so switching between them is instant — no reconnect/repaint delay.
 - **History tab** — lists past Claude sessions from `~/.claude/projects` with directory,
   branch, time, and opening prompt. "▶ Resume" runs `claude --resume <id>` in the original
   directory as a fresh live session — a backend equivalent of `claude --resume`.
