@@ -325,6 +325,7 @@ function updateCtrlBtn() { document.getElementById('kb-ctrl')?.classList.toggle(
 function updateMetaBtn() { document.getElementById('kb-meta')?.classList.toggle('armed', metaArm); }
 const KEYS = [
   { label: 'esc', seq: '\x1b' },
+  { label: '⌫', seq: '\x7f', repeat: true, title: 'Backspace (hold to repeat)' },
   { label: 'tab', seq: '\t' },
   { label: '⇧⇥', seq: '\x1b[Z', title: 'Shift+Tab — cycle permission mode' },
   { label: 'ctrl', ctrl: true },
@@ -339,10 +340,22 @@ const keybar = document.getElementById('keybar');
 keybar.innerHTML = KEYS.map((k, i) =>
   `<button ${k.ctrl ? 'id="kb-ctrl"' : ''}${k.meta ? 'id="kb-meta"' : ''} data-i="${i}" title="${k.title || ''}">${k.label}</button>`).join('');
 keybar.querySelectorAll('button').forEach((btn) => {
+  const k = KEYS[Number(btn.dataset.i)];
+  if (k.repeat) {
+    // iOS soft keyboards don't auto-repeat on hold, so do it ourselves.
+    let delay, iv;
+    const stop = () => { clearTimeout(delay); clearInterval(iv); };
+    btn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      sendKey(k.seq);
+      delay = setTimeout(() => { iv = setInterval(() => activeWs()?.send(k.seq), 55); }, 400);
+    });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) btn.addEventListener(ev, stop);
+    return;
+  }
   // Use pointerdown + preventDefault so tapping a key doesn't steal focus/raise-dismiss the keyboard.
   btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    const k = KEYS[Number(btn.dataset.i)];
     if (k.ctrl) { ctrlArm = !ctrlArm; updateCtrlBtn(); }
     else if (k.meta) { metaArm = !metaArm; updateMetaBtn(); }
     else sendKey(k.seq);
