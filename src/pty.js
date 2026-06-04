@@ -43,7 +43,7 @@ export function attachHandler(socket, req) {
       cols,
       rows,
       cwd: process.env.HOME,
-      env: { ...process.env, TERM: 'xterm-256color' },
+      env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
     });
   } catch (err) {
     socket.send(`\r\n[cc-deck] failed to attach: ${err.message}\r\n`);

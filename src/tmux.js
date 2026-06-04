@@ -27,10 +27,38 @@ async function tmux(args) {
 }
 
 // Keep the dedicated server alive even with zero sessions, so removing the last
-// session never tears the server (and everyone's sessions) down. Server options
-// reset when the server restarts, so this is (re)applied on startup and on create.
+// session never tears the server (and everyone's sessions) down. Also advertise
+// truecolor so Claude's 24-bit colors (diff backgrounds, highlights) pass through
+// to xterm.js instead of being downsampled to 256. Server options reset when the
+// server restarts, so this is (re)applied on startup and on create.
 export async function initServer() {
   await tmux(['set-option', '-s', 'exit-empty', 'off']).catch(() => {});
+  // Tell tmux the xterm-256color client supports RGB (24-bit) — the key bit.
+  await tmux(['set-option', '-as', 'terminal-features', ',xterm-256color:RGB']).catch(() => {});
+  await tmux(['set-option', '-g', 'default-terminal', 'tmux-256color']).catch(() => {});
+  await tmux(['set-environment', '-g', 'COLORTERM', 'truecolor']).catch(() => {});
+}
+
+// cc-deck color palette (kept in sync with src/client/styles.css).
+const C = {
+  barBg: '#151a23', dim: '#8b98ab', faint: '#5c6877', text: '#e6edf3',
+  accent: '#d97757', accentInk: '#1a0f0a', border: '#232c3a', borderHi: '#34405a',
+};
+
+// Theme a session's tmux status bar / selection to match the webapp.
+async function styleSession(name) {
+  const set = (k, v) => tmux(['set-option', '-t', name, k, v]).catch(() => {});
+  const setw = (k, v) => tmux(['set-option', '-w', '-t', name, k, v]).catch(() => {});
+  await set('status-style', `bg=${C.barBg},fg=${C.dim}`);
+  await set('status-left', `#[fg=${C.accentInk},bg=${C.accent},bold] #{@ccdeck_title} #[fg=${C.faint},bg=${C.barBg}] `);
+  await set('status-left-length', '40');
+  await set('status-right', `#[fg=${C.faint}]%H:%M `);
+  await set('message-style', `bg=${C.accent},fg=${C.accentInk}`);
+  await set('mode-style', `bg=${C.accent},fg=${C.accentInk}`); // copy-mode selection
+  await setw('window-status-current-style', `fg=${C.text},bg=${C.border},bold`);
+  await setw('window-status-style', `fg=${C.dim},bg=${C.barBg}`);
+  await setw('pane-active-border-style', `fg=${C.borderHi}`);
+  await setw('pane-border-style', `fg=${C.border}`);
 }
 
 export function isManagedName(name) {
@@ -120,8 +148,10 @@ export async function createSession({ dir, title, resume }) {
   await tmux(['set-option', '-t', name, '@ccdeck_dir', abs]);
   if (resume) await tmux(['set-option', '-t', name, '@ccdeck_resume', resume]);
   await setMouse(name, true);
+  await styleSession(name);
   // Launch the CLI inside the login shell so the session survives if claude exits.
-  await tmux(['send-keys', '-t', name, launch, 'Enter']);
+  // Prefix COLORTERM=truecolor so Claude emits 24-bit color (diffs, highlights).
+  await tmux(['send-keys', '-t', name, `COLORTERM=truecolor ${launch}`, 'Enter']);
   return name;
 }
 
