@@ -13,6 +13,18 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
         └──── grid / list / group / search / launch / resume / kill (REST) ──┘
 ```
 
+## Screenshots
+
+| Active sessions | Usage & ROI |
+|---|---|
+| ![Active sessions grid with live previews](docs/active.png) | ![Usage tab with plan ROI](docs/usage.png) |
+
+| Grouped by directory | History (resume) |
+|---|---|
+| ![Grouped, collapsible view](docs/grouped.png) | ![History of past sessions](docs/history.png) |
+
+<sub>Regenerate with `node scripts/screenshots.mjs` (needs `npm install playwright --no-save && npx playwright install chromium`, plus a `TOKEN` cookie value).</sub>
+
 ## Features
 
 - **Status panel** — at-a-glance counts: active sessions, running, attached, distinct
