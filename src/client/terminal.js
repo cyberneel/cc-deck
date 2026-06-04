@@ -32,7 +32,7 @@ document.body.innerHTML = `
     <aside id="sidebar">
       <div class="sb-head"><span>Sessions</span><button id="sb-collapse" class="icon" title="Collapse">«</button></div>
       <div id="sb-list"></div>
-      <div class="sb-foot faint">Ctrl+Tab to cycle · Alt+1–9 to jump</div>
+      <div class="sb-foot faint">Alt+\` to cycle · Alt+1–9 to jump</div>
     </aside>
     <div id="main">
       <div class="term-bar">
@@ -109,8 +109,10 @@ applySidebar();
 
 // Don't let our shortcut keys reach the pty.
 term.attachCustomKeyEventHandler((e) => {
-  if (e.type === 'keydown' && e.ctrlKey && e.key === 'Tab') return false;
-  if (e.type === 'keydown' && e.altKey && /^[1-9]$/.test(e.key)) return false;
+  if (e.type !== 'keydown') return true;
+  if (e.ctrlKey && e.key === 'Tab') return false;
+  if (e.altKey && e.code === 'Backquote') return false;
+  if (e.altKey && /^[1-9]$/.test(e.key)) return false;
   return true;
 });
 
@@ -228,6 +230,7 @@ new ResizeObserver(onResize).observe(document.getElementById('terminal'));
 const sw = document.getElementById('switcher');
 const swBox = document.getElementById('sw-box');
 let switching = false;
+let switchMod = null; // which held modifier ('Alt'|'Control') started the cycle
 let swList = [];
 let swIdx = 0;
 
@@ -237,14 +240,19 @@ function mruOrderedExisting() {
   const rest = sessions.map((s) => s.name).filter((n) => !inMru.includes(n));
   return [...inMru, ...rest];
 }
-function openSwitcher(dir) {
+function openSwitcher(dir, mod) {
   swList = mruOrderedExisting();
   if (swList.length < 2) return;
   switching = true;
+  switchMod = mod;
   swIdx = dir; // first press moves to previous/next session
   if (swIdx < 0) swIdx = swList.length - 1;
   renderSwitcher();
   sw.style.display = 'flex';
+}
+function cycle(mod, reverse) {
+  if (!switching) openSwitcher(reverse ? -1 : 1, mod);
+  else stepSwitcher(reverse ? -1 : 1);
 }
 function stepSwitcher(dir) {
   swIdx = (swIdx + dir + swList.length) % swList.length;
@@ -261,25 +269,35 @@ function commitSwitcher() {
   sw.style.display = 'none';
   if (switching && swList[swIdx]) switchTo(swList[swIdx]);
   switching = false;
+  switchMod = null;
 }
 
 window.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.key === 'Tab') {
+  // Primary (interceptable everywhere): hold Alt, tap ` to cycle MRU order.
+  if (e.altKey && e.code === 'Backquote') {
     e.preventDefault();
-    if (!switching) openSwitcher(e.shiftKey ? -1 : 1);
-    else stepSwitcher(e.shiftKey ? -1 : 1);
+    cycle('Alt', e.shiftKey);
     return;
   }
-  if (switching && e.key === 'Escape') { sw.style.display = 'none'; switching = false; e.preventDefault(); return; }
-  // Alt+1–9: jump directly to the Nth sidebar session (reliable fallback).
+  // Bonus: Ctrl+Tab where the browser allows it (often reserved — hence Alt+`).
+  if (e.ctrlKey && e.key === 'Tab') {
+    e.preventDefault();
+    cycle('Control', e.shiftKey);
+    return;
+  }
+  if (switching && e.key === 'Escape') { sw.style.display = 'none'; switching = false; switchMod = null; e.preventDefault(); return; }
+  // Alt+1–9: jump directly to the Nth sidebar session.
   if (e.altKey && /^[1-9]$/.test(e.key)) {
-    const ordered = orderedSessions();
-    const target = ordered[Number(e.key) - 1];
+    const target = orderedSessions()[Number(e.key) - 1];
     if (target) { e.preventDefault(); switchTo(target.name); }
   }
 }, true);
 window.addEventListener('keyup', (e) => {
-  if (switching && (e.key === 'Control' || !e.ctrlKey)) commitSwitcher();
+  if (!switching || !switchMod) return;
+  const released =
+    (switchMod === 'Alt' && (e.key === 'Alt' || !e.altKey)) ||
+    (switchMod === 'Control' && (e.key === 'Control' || !e.ctrlKey));
+  if (released) { e.preventDefault(); commitSwitcher(); }
 }, true);
 
 // ---- boot ----

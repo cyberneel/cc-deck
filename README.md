@@ -39,8 +39,9 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
   alt-screen so the wheel scrolls xterm's local buffer instantly).
 - **In-terminal session switcher** — a collapsible sidebar lists every active session with
   live/idle and "needs-attention" indicators (unseen activity since you last viewed it).
-  Click to switch in place (no reload), **Ctrl+Tab / Ctrl+Shift+Tab** to cycle in
-  most-recently-used order (Zen-style overlay), or **Alt+1–9** to jump directly.
+  Click to switch in place (no reload), **Alt+` / Alt+Shift+`** to cycle in
+  most-recently-used order (Zen-style overlay; hold Alt, tap backtick, release to commit),
+  or **Alt+1–9** to jump directly. (Ctrl+Tab also works where the browser doesn't reserve it.)
 - **History tab** — lists past Claude sessions from `~/.claude/projects` with directory,
   branch, time, and opening prompt. "▶ Resume" runs `claude --resume <id>` in the original
   directory as a fresh live session — a backend equivalent of `claude --resume`.
