@@ -164,6 +164,7 @@ function render() {
       </div>
       <div class="spacer"></div>
       <button class="primary" id="new-btn" title="New session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New session'}</button>
+      <button id="reload-btn" class="icon" title="Reload app">↻</button>
       <button id="logout-btn" title="Log out">⏻</button>
     </div>
     <div class="wrap">
@@ -214,6 +215,7 @@ function render() {
     renderBody();
   });
   document.getElementById('new-btn').addEventListener('click', openNewModal);
+  document.getElementById('reload-btn').addEventListener('click', () => location.reload());
   document.getElementById('logout-btn').addEventListener('click', async () => {
     await api('/api/logout', { method: 'POST' });
     location.href = '/login.html';

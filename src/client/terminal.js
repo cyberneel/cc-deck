@@ -48,6 +48,7 @@ document.body.innerHTML = `
         <a href="/" title="Back to dashboard">←</a>
         <span class="title" id="title">${currentSession || 'session'}</span>
         <div class="spacer" style="flex:1"></div>
+        <button id="reload-btn" class="icon" title="Reload app">↻</button>
         <button id="scroll-toggle" class="icon" title="Scroll mode — tmux: full history; fast: smooth local scroll"></button>
         <span class="status" id="status">connecting…</span>
       </div>
@@ -228,6 +229,7 @@ document.getElementById('sb-backdrop').addEventListener('click', () => {
   sidebarOpen = false; localStorage.setItem('ccdeck.sidebar', 'closed'); applySidebar();
 });
 document.getElementById('sb-new').addEventListener('click', openNewModal);
+document.getElementById('reload-btn').addEventListener('click', () => location.reload());
 
 // ---- new session modal (launch + switch to it) ----
 let cfg = null;

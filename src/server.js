@@ -58,7 +58,15 @@ app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, 
 
 await app.register(fastifyCookie);
 await app.register(fastifyWebsocket);
-await app.register(fastifyStatic, { root: publicDir, prefix: '/' });
+// Serve assets with no-cache so the browser revalidates each load (304 when
+// unchanged, fresh when redeployed) — important for iOS home-screen apps that
+// otherwise cache the old bundle. ETags still make unchanged loads cheap.
+await app.register(fastifyStatic, {
+  root: publicDir,
+  prefix: '/',
+  cacheControl: false,
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+});
 
 // Paths reachable without auth.
 const PUBLIC_PATHS = new Set(['/login.html', '/login.css', '/api/login', '/favicon.ico']);
