@@ -26,6 +26,18 @@ const publicDir = join(__dirname, '..', 'public');
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL || 'info' } });
 
+// Tolerate an empty body on requests that declare application/json (e.g. a
+// bodyless DELETE/logout) instead of failing with 400 "body cannot be empty".
+app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+  if (!body || !body.trim()) return done(null, undefined);
+  try {
+    done(null, JSON.parse(body));
+  } catch (err) {
+    err.statusCode = 400;
+    done(err);
+  }
+});
+
 await app.register(fastifyCookie);
 await app.register(fastifyWebsocket);
 await app.register(fastifyStatic, { root: publicDir, prefix: '/' });

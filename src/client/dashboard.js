@@ -37,7 +37,10 @@ let burnData = null;
 let usageFetchedAt = 0;
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  // Only declare a JSON content-type when we actually send a body — otherwise
+  // Fastify rejects bodyless requests (DELETE/logout) with 400 "body cannot be empty".
+  const headers = opts.body ? { 'Content-Type': 'application/json' } : {};
+  const res = await fetch(path, { headers, ...opts });
   if (res.status === 401) {
     location.href = '/login.html';
     throw new Error('unauthorized');
