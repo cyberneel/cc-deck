@@ -1,10 +1,11 @@
 import { resolve } from 'node:path';
+import { homedir } from 'node:os';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 function parseRoots(raw) {
-  const list = (raw || process.env.HOME || '/home/cyber')
+  const list = (raw || process.env.HOME || homedir())
     .split(':')
     .map((p) => p.trim())
     .filter(Boolean)
