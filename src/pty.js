@@ -1,8 +1,11 @@
 import pkg from 'node-pty';
 import { isRequestAuthed } from './auth.js';
-import { isManagedName, setMouse, TMUX_ARGS } from './tmux.js';
+import { isManagedName, setMouse, resizeWindow, TMUX_ARGS } from './tmux.js';
 
 const { spawn } = pkg;
+
+// Last window size we applied per session, to skip redundant resize-window calls.
+const appliedSize = new Map();
 
 // Alternate-screen enable/disable sequences. In "fast" scroll mode we strip
 // these so tmux renders on xterm's main buffer, which keeps a local scrollback
@@ -24,9 +27,18 @@ export function attachHandler(socket, req) {
     return;
   }
 
-  const cols = clampInt(url.searchParams.get('cols'), 80, 20, 500);
-  const rows = clampInt(url.searchParams.get('rows'), 24, 5, 300);
+  let curCols = clampInt(url.searchParams.get('cols'), 80, 20, 500);
+  let curRows = clampInt(url.searchParams.get('rows'), 24, 5, 300);
+  const cols = curCols, rows = curRows;
   const fast = url.searchParams.get('scroll') === 'fast';
+
+  // Size the tmux window to THIS client (the device interacting), deduped.
+  const sizeWindowToClient = () => {
+    const key = `${curCols}x${curRows}`;
+    if (appliedSize.get(session) === key) return;
+    appliedSize.set(session, key);
+    resizeWindow(session, curCols, curRows).catch(() => {});
+  };
 
   // Disable Nagle's algorithm: terminal redraws are small and latency-sensitive,
   // so send them immediately instead of coalescing (smoother scroll + typing).
@@ -77,13 +89,16 @@ export function attachHandler(socket, req) {
       try {
         const obj = JSON.parse(msg);
         if (obj.type === 'resize') {
-          pty.resize(
-            clampInt(obj.cols, cols, 20, 500),
-            clampInt(obj.rows, rows, 5, 300),
-          );
+          curCols = clampInt(obj.cols, curCols, 20, 500);
+          curRows = clampInt(obj.rows, curRows, 5, 300);
+          pty.resize(curCols, curRows); // size THIS client's terminal (render correctly)
+          // Only the active/foreground pane flags `active` -> drive the window size
+          // to this device. Background warm panes resize their own client only.
+          if (obj.active) sizeWindowToClient();
           return;
         }
         if (obj.type === 'input' && typeof obj.data === 'string') {
+          sizeWindowToClient(); // typing = this device is the active one
           pty.write(obj.data);
           return;
         }
@@ -91,6 +106,7 @@ export function attachHandler(socket, req) {
         // Not JSON — fall through and treat as input.
       }
     }
+    sizeWindowToClient(); // raw keystrokes/scroll = active interaction on this device
     pty.write(msg);
   });
 

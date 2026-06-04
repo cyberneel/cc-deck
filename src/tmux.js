@@ -190,10 +190,20 @@ export async function setMouse(name, on) {
   if (!isManagedName(name)) return;
   await tmux(['set-option', '-t', name, 'mouse', on ? 'on' : 'off']).catch(() => {});
   await tmux(['set-option', '-t', name, 'history-limit', '50000']).catch(() => {});
-  // When the same session is open on multiple devices, size the window to the
-  // LARGEST client instead of the latest/smallest — so opening it on a phone
-  // doesn't shrink/reflow the view on your laptop.
-  await tmux(['set-option', '-w', '-t', name, 'window-size', 'largest']).catch(() => {});
+  // window-size manual: tmux never auto-sizes the window from attached clients.
+  // cc-deck drives the size explicitly (resizeWindow) to match whichever device
+  // last interacted — so background preloads on another device can't reshape it.
+  await tmux(['set-option', '-w', '-t', name, 'window-size', 'manual']).catch(() => {});
+}
+
+// Set the window to a specific size — called when a device the user is actively
+// using interacts with the session, so it fits that device dynamically.
+export async function resizeWindow(name, cols, rows) {
+  if (!isManagedName(name)) return;
+  const c = Math.max(20, Math.min(500, Math.round(Number(cols) || 0)));
+  const r = Math.max(5, Math.min(300, Math.round(Number(rows) || 0)));
+  if (!c || !r) return;
+  await tmux(['resize-window', '-t', name, '-x', String(c), '-y', String(r)]).catch(() => {});
 }
 
 export async function killSession(name) {

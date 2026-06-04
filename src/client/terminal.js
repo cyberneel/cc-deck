@@ -145,7 +145,10 @@ function connectPaneWs(pane) {
 }
 
 function sendPaneResize(pane) {
-  if (pane.ws?.readyState === WebSocket.OPEN) pane.ws.send(JSON.stringify({ type: 'resize', cols: gCols, rows: gRows }));
+  if (pane.ws?.readyState !== WebSocket.OPEN) return;
+  // active:true only for the focused pane -> the server sizes the tmux window to
+  // this device. Background warm panes resize just their own client terminal.
+  pane.ws.send(JSON.stringify({ type: 'resize', cols: gCols, rows: gRows, active: pane.name === currentSession }));
 }
 
 function disposePane(name) {
