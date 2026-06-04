@@ -126,9 +126,22 @@ app.post('/api/sessions', async (req, reply) => {
   }
 });
 
-// Past Claude sessions on disk (resumable via `claude --resume`).
+// Past Claude sessions on disk (resumable via `claude --resume`), excluding any
+// that are currently running — those live in the Active tab, so History stays clean.
 app.get('/api/history', async () => {
-  return await listHistory();
+  const hist = await listHistory();
+  try {
+    const live = new Set();
+    for (const s of await enrichedSessions()) {
+      if (s.liveSessionId) live.add(s.liveSessionId);
+      if (s.resumedFrom) live.add(s.resumedFrom);
+    }
+    const sessions = hist.sessions.filter((s) => !live.has(s.sessionId));
+    const excluded = hist.sessions.length - sessions.length;
+    return { ...hist, sessions, total: Math.max(sessions.length, hist.total - excluded) };
+  } catch {
+    return hist;
+  }
 });
 
 app.delete('/api/sessions/:name', async (req, reply) => {
