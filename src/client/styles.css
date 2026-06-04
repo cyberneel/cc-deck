@@ -1,12 +1,12 @@
 :root {
-  --bg: #0d1017;
-  --bg-elev: #151a23;
-  --bg-card: #161c27;
-  --border: #232c3a;
-  --border-hover: #34405a;
-  --text: #e6edf3;
-  --text-dim: #8b98ab;
-  --text-faint: #5c6877;
+  --bg: #0c0c0c;
+  --bg-elev: #171717;
+  --bg-card: #1c1c1c;
+  --border: #2c2c2c;
+  --border-hover: #3f3f3f;
+  --text: #ededed;
+  --text-dim: #9b9b9b;
+  --text-faint: #6a6a6a;
   --accent: #d97757;
   --accent-dim: #b85f43;
   --green: #5cb87a;
@@ -252,7 +252,7 @@ select:focus { outline: none; border-color: var(--accent); }
 .term-bar .status { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
 .term-bar .status.connected { color: var(--green); }
 .term-bar .status.closed { color: #ff8d85; }
-#terminal { position: relative; flex: 1; min-height: 0; background: #0a0d12; }
+#terminal { position: relative; flex: 1; min-height: 0; background: #0a0a0a; }
 
 /* ---- terminal page layout + session sidebar ---- */
 #app-term { display: flex; height: 100vh; height: 100dvh; overflow: hidden; position: relative; }

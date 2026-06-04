@@ -41,8 +41,8 @@ export async function initServer() {
 
 // cc-deck color palette (kept in sync with src/client/styles.css).
 const C = {
-  barBg: '#151a23', dim: '#8b98ab', faint: '#5c6877', text: '#e6edf3',
-  accent: '#d97757', accentInk: '#1a0f0a', border: '#232c3a', borderHi: '#34405a',
+  barBg: '#171717', dim: '#9b9b9b', faint: '#6a6a6a', text: '#ededed',
+  accent: '#d97757', accentInk: '#1a0f0a', border: '#2c2c2c', borderHi: '#3f3f3f',
 };
 
 // Theme a session's tmux status bar / selection to match the webapp.

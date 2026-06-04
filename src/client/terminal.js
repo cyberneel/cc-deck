@@ -69,8 +69,8 @@ const TERM_OPTS = {
   fontFamily: "'JetBrains Mono','SF Mono','Fira Code',ui-monospace,monospace",
   fontSize: isMobile ? 12 : 13, lineHeight: 1.0, cursorBlink: true, scrollback: 10000, allowProposedApi: true,
   theme: {
-    background: '#0a0d12', foreground: '#e6edf3', cursor: '#d97757', selectionBackground: '#2a3344',
-    black: '#0a0d12', brightBlack: '#5c6877', red: '#ff8d85', brightRed: '#ff8d85',
+    background: '#0a0a0a', foreground: '#ededed', cursor: '#d97757', selectionBackground: '#3a3a3a',
+    black: '#0a0a0a', brightBlack: '#6a6a6a', red: '#ff8d85', brightRed: '#ff8d85',
     green: '#5cb87a', brightGreen: '#5cb87a', yellow: '#e0c060', brightYellow: '#e0c060',
     blue: '#6ea8fe', brightBlue: '#6ea8fe', magenta: '#c099ff', brightMagenta: '#c099ff',
     cyan: '#5fd3d3', brightCyan: '#5fd3d3', white: '#e6edf3', brightWhite: '#ffffff',
