@@ -33,8 +33,10 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
   ranked by relevance. Works in both Active and History tabs.
 - **Three views** — grid (with live pane previews), compact list, or **grouped by directory**.
 - **Active tab** — launch a session in any directory under your roots (with a folder picker),
-  rename, kill, and open a full-screen xterm.js terminal (WebGL renderer, auto-reconnect).
-  Closing the browser only *detaches* — Claude keeps running.
+  rename, kill, and open a full-screen xterm.js terminal (WebGL/canvas renderer, auto-reconnect).
+  Closing the browser only *detaches* — Claude keeps running. A per-terminal **scroll-mode
+  toggle** switches between *tmux* (native copy-mode, full history) and *fast* (strips the
+  alt-screen so the wheel scrolls xterm's local buffer instantly).
 - **History tab** — lists past Claude sessions from `~/.claude/projects` with directory,
   branch, time, and opening prompt. "▶ Resume" runs `claude --resume <id>` in the original
   directory as a fresh live session — a backend equivalent of `claude --resume`.

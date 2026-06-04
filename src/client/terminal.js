@@ -11,16 +11,33 @@ document.head.appendChild(styleEl);
 const params = new URLSearchParams(location.search);
 const session = params.get('session');
 
+// Scroll mode: 'tmux' = native tmux copy-mode (full history, higher latency);
+// 'fast' = strip alt-screen so xterm keeps a local scrollback the wheel scrolls
+// instantly client-side.
+let scrollMode = localStorage.getItem('ccdeck.scroll') || 'tmux';
+
 document.body.innerHTML = `
   <div class="term-bar">
     <a href="/" title="Back to dashboard">←</a>
     <span class="title" id="title">${session || 'session'}</span>
     <div class="spacer" style="flex:1"></div>
+    <button id="scroll-toggle" class="icon" title="Scroll mode — tmux: full history; fast: smooth local scroll"></button>
     <span class="status" id="status">connecting…</span>
   </div>
   <div id="terminal"></div>`;
 
 const statusEl = document.getElementById('status');
+const scrollBtn = document.getElementById('scroll-toggle');
+function refreshScrollBtn() {
+  scrollBtn.textContent = scrollMode === 'fast' ? '⚡ fast scroll' : '↕ tmux scroll';
+}
+refreshScrollBtn();
+scrollBtn.addEventListener('click', () => {
+  scrollMode = scrollMode === 'fast' ? 'tmux' : 'fast';
+  localStorage.setItem('ccdeck.scroll', scrollMode);
+  refreshScrollBtn();
+  reconnect(); // re-attach with the new mode
+});
 
 const term = new Terminal({
   fontFamily: "'JetBrains Mono','SF Mono','Fira Code',ui-monospace,monospace",
@@ -69,15 +86,16 @@ function setStatus(text, cls) {
 
 let ws;
 let reconnectTimer;
+let suppressReconnect = false;
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const url = `${proto}://${location.host}/ws/attach?session=${encodeURIComponent(session)}&cols=${term.cols}&rows=${term.rows}`;
+  const url = `${proto}://${location.host}/ws/attach?session=${encodeURIComponent(session)}&cols=${term.cols}&rows=${term.rows}&scroll=${scrollMode}`;
   ws = new WebSocket(url);
   ws.binaryType = 'arraybuffer';
 
   ws.onopen = () => {
-    setStatus('connected', 'connected');
+    setStatus(scrollMode === 'fast' ? 'connected · fast scroll' : 'connected', 'connected');
     sendResize();
     term.focus();
   };
@@ -90,11 +108,21 @@ function connect() {
       location.href = '/login.html';
       return;
     }
+    if (suppressReconnect) { suppressReconnect = false; return; }
     setStatus('disconnected — reconnecting…', 'closed');
     clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(connect, 1500);
   };
   ws.onerror = () => setStatus('connection error', 'closed');
+}
+
+// Tear down the current attach and immediately re-attach (used by the toggle).
+function reconnect() {
+  clearTimeout(reconnectTimer);
+  suppressReconnect = true;
+  try { ws?.close(); } catch { /* */ }
+  term.reset();
+  connect();
 }
 
 function sendResize() {

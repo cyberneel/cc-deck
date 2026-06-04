@@ -1,8 +1,13 @@
 import pkg from 'node-pty';
 import { isRequestAuthed } from './auth.js';
-import { isManagedName, enableMouse } from './tmux.js';
+import { isManagedName, setMouse } from './tmux.js';
 
 const { spawn } = pkg;
+
+// Alternate-screen enable/disable sequences. In "fast" scroll mode we strip
+// these so tmux renders on xterm's main buffer, which keeps a local scrollback
+// the wheel can scroll instantly client-side (no per-notch round-trip).
+const ALT_SCREEN_RE = /\x1b\[\?(?:1049|1047|47)[hl]/g;
 
 // Handle a websocket that bridges the browser terminal to `tmux attach`.
 export function attachHandler(socket, req) {
@@ -21,14 +26,15 @@ export function attachHandler(socket, req) {
 
   const cols = clampInt(url.searchParams.get('cols'), 80, 20, 500);
   const rows = clampInt(url.searchParams.get('rows'), 24, 5, 300);
+  const fast = url.searchParams.get('scroll') === 'fast';
 
   // Disable Nagle's algorithm: terminal redraws are small and latency-sensitive,
   // so send them immediately instead of coalescing (smoother scroll + typing).
   try { socket._socket?.setNoDelay?.(true); } catch { /* */ }
 
-  // Ensure mouse mode is on so the browser wheel scrolls tmux history natively
-  // (covers sessions created before this was added). Fire-and-forget.
-  enableMouse(session).catch(() => {});
+  // tmux scroll: mouse ON (wheel → copy-mode). fast scroll: mouse OFF (wheel
+  // scrolls xterm's local buffer instead). Applies to existing sessions too.
+  setMouse(session, !fast).catch(() => {});
 
   let pty;
   try {
@@ -45,9 +51,20 @@ export function attachHandler(socket, req) {
     return;
   }
 
-  pty.onData((data) => {
-    if (socket.readyState === socket.OPEN) socket.send(data);
-  });
+  // In fast mode, strip alt-screen sequences (holding back a trailing partial
+  // escape across chunk boundaries so we never split a sequence mid-strip).
+  let carry = '';
+  const send = (data) => {
+    if (socket.readyState !== socket.OPEN) return;
+    if (!fast) { socket.send(data); return; }
+    let s = carry + data;
+    carry = '';
+    const partial = s.match(/\x1b(?:\[[0-9?;]*)?$/);
+    if (partial) { carry = partial[0]; s = s.slice(0, s.length - carry.length); }
+    socket.send(s.replace(ALT_SCREEN_RE, ''));
+  };
+
+  pty.onData(send);
 
   pty.onExit(() => {
     if (socket.readyState === socket.OPEN) socket.close(1000, 'pty exited');
