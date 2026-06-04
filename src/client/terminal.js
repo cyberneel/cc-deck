@@ -259,13 +259,25 @@ if (isMobile && window.visualViewport) {
 }
 
 // ---- session list + sidebar ----
-async function api(path) {
-  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' } });
+async function api(path, opts = {}) {
+  const headers = opts.body ? { 'Content-Type': 'application/json' } : {};
+  const res = await fetch(path, { headers, ...opts });
   if (res.status === 401) { location.href = '/login.html'; throw new Error('unauthorized'); }
-  return res.json();
+  return res.json().catch(() => ({}));
 }
-function isLive(s) { return /node|claude/i.test(s.paneCommand || '') || (s.lastActivity && Date.now() - s.lastActivity < 15000); }
-function needsAttention(s) { return s.name !== currentSession && s.lastActivity && s.lastActivity > (lastSeen[s.name] || 0); }
+function isLive(s) { return !!s.liveSessionId || /node|claude/i.test(s.paneCommand || '') || (s.lastActivity && Date.now() - s.lastActivity < 15000); }
+// Status dot color: accent=needs you, green=working, blue=ready/your turn, grey=idle.
+function statusDot(s) {
+  if (s.waitingFor) return 'attn';
+  if (s.claudeStatus === 'busy') return 'live';
+  if (s.claudeStatus === 'idle') return 'ready';
+  return isLive(s) ? 'live' : 'idle';
+}
+function needsAttention(s) {
+  if (s.name === currentSession) return false;
+  if (s.waitingFor) return true; // blocked on you (e.g. permission)
+  return s.lastActivity && s.lastActivity > (lastSeen[s.name] || 0);
+}
 function titleOf(name) { return sessions.find((s) => s.name === name)?.title || name; }
 function baseName(p) { if (!p) return ''; return p.replace(/\/$/, '').split('/').slice(-2).join('/'); }
 function orderedSessions() { return [...sessions].sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0)); }
@@ -295,16 +307,34 @@ function renderSidebar() {
     const warm = panes.has(s.name) && !cur;
     const num = i < 9 ? `<span class="sb-num">${i + 1}</span>` : '';
     return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''}" data-name="${esc(s.name)}" title="${warm ? 'preloaded' : ''}">
-      <span class="sb-dot ${isLive(s) ? 'live' : 'idle'}"></span>
+      <span class="sb-dot ${statusDot(s)}"></span>
       <span class="sb-meta"><span class="sb-title">${esc(s.title)}${warm ? ' <span class="sb-warm" title="preloaded">•</span>' : ''}</span><span class="sb-dir">${esc(baseName(s.dir))}</span></span>
-      ${att ? '<span class="sb-attn" title="Activity since you last viewed">●</span>' : num}
+      ${att ? '<span class="sb-attn" title="Needs you / activity since last viewed">●</span>' : num}
+      <button class="sb-kill" title="Kill session" data-kill="${esc(s.name)}">✕</button>
     </div>`;
   }).join('') || '<div class="faint" style="padding:12px">No active sessions</div>';
-  list.querySelectorAll('.sb-item').forEach((el) => el.addEventListener('click', () => switchTo(el.dataset.name)));
+  list.querySelectorAll('.sb-item').forEach((el) =>
+    el.addEventListener('click', (e) => { if (!e.target.closest('.sb-kill')) switchTo(el.dataset.name); }));
+  list.querySelectorAll('.sb-kill').forEach((b) =>
+    b.addEventListener('click', (e) => { e.stopPropagation(); killSessionFromSidebar(b.dataset.kill); }));
   const attnCount = sessions.filter(needsAttention).length;
   const badge = document.getElementById('sb-badge');
   badge.style.display = attnCount ? '' : 'none';
   badge.textContent = attnCount;
+}
+
+async function killSessionFromSidebar(name) {
+  const s = sessions.find((x) => x.name === name);
+  if (!confirm(`Kill session "${s?.title || name}"? Claude and its tmux session will be terminated.`)) return;
+  try { await api(`/api/sessions/${name}`, { method: 'DELETE' }); }
+  catch (e) { alert('Kill failed: ' + e.message); return; }
+  if (panes.has(name)) disposePane(name);
+  await refreshSessions();
+  if (name === currentSession) {
+    const next = orderedSessions()[0]; // killed one is gone from the list now
+    if (next) switchTo(next.name); // currentSession is still the (dead) name, so this proceeds
+    else location.href = '/'; // nothing left to show
+  }
 }
 
 // ---- switching (instant when the target is already warm) ----

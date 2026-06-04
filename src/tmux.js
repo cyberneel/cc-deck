@@ -99,6 +99,7 @@ const FIELDS = [
   '#{@ccdeck_title}',
   '#{@ccdeck_dir}',
   '#{pane_current_command}',
+  '#{@ccdeck_resume}',
 ].join('\t');
 
 export async function listSessions() {
@@ -106,7 +107,7 @@ export async function listSessions() {
   const sessions = [];
   for (const line of out.split('\n')) {
     if (!line.trim()) continue;
-    const [name, attached, activity, created, title, dir, paneCmd] = line.split('\t');
+    const [name, attached, activity, created, title, dir, paneCmd, resume] = line.split('\t');
     if (!isManagedName(name)) continue;
     sessions.push({
       name,
@@ -117,6 +118,7 @@ export async function listSessions() {
       title: title || name.slice(config.prefix.length),
       dir: dir || '',
       paneCommand: paneCmd || '',
+      resumedFrom: resume || null,
     });
   }
   sessions.sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0));

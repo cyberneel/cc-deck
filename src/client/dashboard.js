@@ -66,7 +66,15 @@ function fmtAbsTime(ms) {
 }
 function isLive(s) {
   const cmd = s.paneCommand || '';
-  return /node|claude/i.test(cmd) || (s.lastActivity && Date.now() - s.lastActivity < 15000);
+  return !!s.liveSessionId || /node|claude/i.test(cmd) || (s.lastActivity && Date.now() - s.lastActivity < 15000);
+}
+// Derive a friendly status from Claude's reported state (claude agents --json).
+function statusOf(s) {
+  if (s.waitingFor) return { text: /perm/i.test(s.waitingFor) ? 'needs permission' : 'needs you', cls: 'attn' };
+  if (s.claudeStatus === 'busy') return { text: 'working', cls: 'live' };
+  if (s.claudeStatus === 'idle') return { text: 'ready', cls: 'ready' };
+  if (/node|claude/i.test(s.paneCommand || '')) return { text: 'running', cls: 'live' };
+  return { text: 'stopped', cls: 'idle' };
 }
 function esc(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -293,13 +301,13 @@ function wireActiveCards(container) {
 }
 
 function cardHtml(s) {
-  const live = isLive(s);
+  const st = statusOf(s);
   return `<div class="card" data-name="${esc(s.name)}">
     <div class="card-head"><div class="card-title" title="${esc(s.title)}">${esc(s.title)}</div></div>
     <div class="card-dir" title="${esc(s.dir)}">${esc(shortDir(s.dir))}</div>
     <pre class="preview" data-preview="${esc(s.name)}">…</pre>
     <div class="card-foot">
-      <span class="badge ${live ? 'live' : 'idle'}"><span class="pulse"></span>${live ? 'running' : 'idle'}</span>
+      <span class="badge ${st.cls}"><span class="pulse"></span>${st.text}</span>
       <span class="faint">${s.attached ? 'attached · ' : ''}${fmtTime(s.lastActivity)}</span>
       <div class="spacer"></div>
       <button class="icon rename-btn" title="Rename">✎</button>
@@ -360,6 +368,7 @@ function renderHistory() {
       <p class="muted">Claude transcripts live in <code>~/.claude/projects</code>.</p></div>`;
     return;
   }
+  rebuildLiveMap(); // which past sessions are currently running (so we Open, not Resume)
   const filtered = search(history, (s) => `${s.title} ${s.cwd} ${s.gitBranch}`);
   if (!filtered.length) return emptySearch(container);
 
@@ -373,15 +382,26 @@ function renderHistory() {
   wireHistoryCards(container);
 }
 
+// Map each running session's Claude id -> the active cc-deck session showing it.
+let liveClaudeMap = new Map();
+function rebuildLiveMap() {
+  liveClaudeMap = new Map();
+  for (const s of sessions) {
+    if (s.liveSessionId) liveClaudeMap.set(s.liveSessionId, s.name);
+    if (s.resumedFrom) liveClaudeMap.set(s.resumedFrom, s.name);
+  }
+}
+
 function wireHistoryCards(container) {
   container.querySelectorAll('.card').forEach((el) => {
     const id = el.dataset.id;
     const s = history.find((x) => x.sessionId === id);
-    const btn = el.querySelector('.resume-btn');
-    const open = async () => {
+    const openName = el.dataset.open || null; // already running -> open that session
+    const go = async () => {
+      if (openName) { location.href = `/terminal.html?session=${encodeURIComponent(openName)}`; return; }
       if (!s.cwd) return;
-      btn.disabled = true;
-      btn.textContent = 'Resuming…';
+      const btn = el.querySelector('.resume-btn');
+      btn.disabled = true; btn.textContent = 'Resuming…';
       try {
         const { name } = await api('/api/sessions', {
           method: 'POST',
@@ -389,30 +409,31 @@ function wireHistoryCards(container) {
         });
         location.href = `/terminal.html?session=${encodeURIComponent(name)}`;
       } catch (e) {
-        btn.disabled = false;
-        btn.textContent = '▶ Resume';
+        btn.disabled = false; btn.textContent = '▶ Resume';
         alert('Could not resume: ' + e.message);
       }
     };
-    el.addEventListener('click', (e) => { if (!e.target.closest('button')) open(); });
-    btn?.addEventListener('click', (e) => { e.stopPropagation(); open(); });
+    el.addEventListener('click', (e) => { if (!e.target.closest('button')) go(); });
+    el.querySelector('.resume-btn, .open-btn')?.addEventListener('click', (e) => { e.stopPropagation(); go(); });
   });
 }
 
 function historyCardHtml(s) {
   const noCwd = !s.cwd;
-  return `<div class="card hist" data-id="${esc(s.sessionId)}">
+  const runningName = liveClaudeMap.get(s.sessionId) || null;
+  const foot = runningName
+    ? `<span class="badge live"><span class="pulse"></span>running</span><div class="spacer"></div>
+       <button class="primary open-btn">▶ Open</button>`
+    : `<span class="faint">${fmtAbsTime(s.lastModified)} · ${s.sizeKb} KB</span><div class="spacer"></div>
+       <button class="primary resume-btn" ${noCwd ? 'disabled title="No recorded directory"' : ''}>▶ Resume</button>`;
+  return `<div class="card hist ${runningName ? 'isrunning' : ''}" data-id="${esc(s.sessionId)}" ${runningName ? `data-open="${esc(runningName)}"` : ''}>
     <div class="card-head">
       <div style="flex:1;min-width:0">
         <div class="card-title" title="${esc(s.title)}">${esc(s.title)}</div>
         <div class="hist-dir">${esc(shortDir(s.cwd))}${s.gitBranch ? ` · ${esc(s.gitBranch)}` : ''}</div>
       </div>
     </div>
-    <div class="card-foot">
-      <span class="faint">${fmtAbsTime(s.lastModified)} · ${s.sizeKb} KB</span>
-      <div class="spacer"></div>
-      <button class="primary resume-btn" ${noCwd ? 'disabled title="No recorded directory"' : ''}>▶ Resume</button>
-    </div>
+    <div class="card-foot">${foot}</div>
   </div>`;
 }
 

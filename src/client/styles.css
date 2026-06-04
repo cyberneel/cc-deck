@@ -201,8 +201,11 @@ select:focus { outline: none; border-color: var(--accent); }
 .badge { font-size: 11px; padding: 3px 8px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; }
 .badge.live { background: rgba(92,184,122,.12); color: var(--green); }
 .badge.idle { background: rgba(139,152,171,.12); color: var(--text-dim); }
+.badge.ready { background: rgba(110,168,254,.14); color: #6ea8fe; }
+.badge.attn { background: rgba(217,119,87,.18); color: var(--accent); }
 .badge .pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.badge.live .pulse { animation: pulse 1.8s infinite; }
+.badge.live .pulse, .badge.attn .pulse { animation: pulse 1.8s infinite; }
+.card.isrunning { border-color: var(--green); }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
 
 /* list view tweaks */
@@ -257,6 +260,12 @@ select:focus { outline: none; border-color: var(--accent); }
 .sb-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; }
 .sb-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .sb-dot.idle { background: var(--text-faint); }
+.sb-dot.ready { background: #6ea8fe; box-shadow: 0 0 6px #6ea8fe; }
+.sb-dot.attn { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.sb-kill { margin-left: 6px; flex: 0 0 auto; border: none; background: transparent; color: var(--text-faint); padding: 4px 7px; border-radius: 6px; font-size: 12px; opacity: 0; transition: opacity .12s, color .12s; }
+.sb-item:hover .sb-kill { opacity: 1; }
+.sb-kill:hover { color: #ff8d85; background: var(--bg); }
+@media (max-width: 700px) { .sb-kill { opacity: .55; } }
 .sb-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .sb-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
 .sb-dir { font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; }

@@ -16,7 +16,15 @@ import {
 } from './tmux.js';
 import { attachHandler } from './pty.js';
 import { initServer } from './tmux.js';
+import { getAgents, matchAgents } from './agents.js';
 import { listHistory } from './history.js';
+
+// Active sessions enriched with each one's live Claude status (busy/idle/waiting).
+async function enrichedSessions() {
+  const sessions = await listSessions();
+  try { matchAgents(sessions, await getAgents()); } catch { /* degrade */ }
+  return sessions;
+}
 import { getBurn } from './burn.js';
 import { getUsage } from './usage.js';
 import { getPricing } from './pricing.js';
@@ -87,13 +95,21 @@ app.post('/api/logout', async (req, reply) => {
 
 // ---- Session API ----
 app.get('/api/sessions', async () => {
-  return { sessions: await listSessions() };
+  return { sessions: await enrichedSessions() };
 });
 
 app.post('/api/sessions', async (req, reply) => {
   const { dir, title, resume } = req.body || {};
   if (!dir) return reply.code(400).send({ error: 'dir is required' });
   try {
+    // Don't launch a duplicate: if the session being resumed is already running,
+    // hand back the existing one so the client can just open it.
+    if (resume) {
+      const existing = (await enrichedSessions()).find(
+        (s) => s.resumedFrom === resume || s.liveSessionId === resume,
+      );
+      if (existing) return { name: existing.name, alreadyRunning: true };
+    }
     const name = await createSession({ dir, title, resume });
     return { name };
   } catch (err) {
