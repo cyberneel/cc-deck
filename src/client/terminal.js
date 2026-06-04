@@ -16,6 +16,7 @@ let scrollMode = localStorage.getItem('ccdeck.scroll') || 'tmux';
 // On phones the sidebar is an overlay drawer — start it closed so the terminal is full-width.
 let sidebarOpen = isMobile ? false : localStorage.getItem('ccdeck.sidebar') !== 'closed';
 let ctrlArm = false; // sticky Ctrl for the on-screen key bar
+let metaArm = false; // sticky Meta/Alt for the on-screen key bar
 
 // How many sessions to keep warm (current + most-recent others).
 const WARM = 3;
@@ -109,8 +110,13 @@ function makePane(name) {
 
   const pane = { name, wrap, term, fit, ws: null, dispose: false, manual: false, rc: null };
   term.onData((d) => {
-    // Sticky Ctrl (from the mobile key bar): fold the next typed char to a control code.
-    if (ctrlArm && d.length === 1) { d = String.fromCharCode(d.charCodeAt(0) & 0x1f); ctrlArm = false; updateCtrlBtn(); }
+    // Sticky Ctrl/Meta (mobile key bar): fold the next typed char to a control
+    // code and/or prefix ESC (how terminals encode Meta/Alt+key).
+    if ((ctrlArm || metaArm) && d.length === 1) {
+      if (ctrlArm) d = String.fromCharCode(d.charCodeAt(0) & 0x1f);
+      if (metaArm) d = `\x1b${d}`;
+      ctrlArm = metaArm = false; updateCtrlBtn(); updateMetaBtn();
+    }
     if (pane.ws?.readyState === WebSocket.OPEN) pane.ws.send(d);
   });
   panes.set(name, pane);
@@ -316,10 +322,13 @@ termHost.addEventListener('touchend', () => { touchY = null; }, { capture: true,
 function activeWs() { const p = panes.get(currentSession); return p?.ws?.readyState === WebSocket.OPEN ? p.ws : null; }
 function sendKey(seq) { activeWs()?.send(seq); panes.get(currentSession)?.term.focus(); }
 function updateCtrlBtn() { document.getElementById('kb-ctrl')?.classList.toggle('armed', ctrlArm); }
+function updateMetaBtn() { document.getElementById('kb-meta')?.classList.toggle('armed', metaArm); }
 const KEYS = [
   { label: 'esc', seq: '\x1b' },
   { label: 'tab', seq: '\t' },
+  { label: '⇧⇥', seq: '\x1b[Z', title: 'Shift+Tab — cycle permission mode' },
   { label: 'ctrl', ctrl: true },
+  { label: 'meta', meta: true },
   { label: '←', seq: '\x1b[D' },
   { label: '↑', seq: '\x1b[A' },
   { label: '↓', seq: '\x1b[B' },
@@ -327,13 +336,15 @@ const KEYS = [
   { label: '^C', seq: '\x03' },
 ];
 const keybar = document.getElementById('keybar');
-keybar.innerHTML = KEYS.map((k, i) => `<button ${k.ctrl ? 'id="kb-ctrl"' : ''} data-i="${i}">${k.label}</button>`).join('');
+keybar.innerHTML = KEYS.map((k, i) =>
+  `<button ${k.ctrl ? 'id="kb-ctrl"' : ''}${k.meta ? 'id="kb-meta"' : ''} data-i="${i}" title="${k.title || ''}">${k.label}</button>`).join('');
 keybar.querySelectorAll('button').forEach((btn) => {
   // Use pointerdown + preventDefault so tapping a key doesn't steal focus/raise-dismiss the keyboard.
   btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     const k = KEYS[Number(btn.dataset.i)];
     if (k.ctrl) { ctrlArm = !ctrlArm; updateCtrlBtn(); }
+    else if (k.meta) { metaArm = !metaArm; updateMetaBtn(); }
     else sendKey(k.seq);
   });
 });
