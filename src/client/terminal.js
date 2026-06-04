@@ -364,10 +364,17 @@ keybar.querySelectorAll('button').forEach((btn) => {
   });
 });
 
-// Keep the layout (and key bar) above the iOS on-screen keyboard.
+// Keep the layout (and key bar) above the iOS on-screen keyboard — but ONLY while
+// the keyboard is actually up. Pinning to the visual-viewport height when it's
+// down leaves a gap at the bottom in standalone mode, so otherwise fall back to
+// the CSS 100dvh (clear the inline height).
 if (isMobile && window.visualViewport) {
   const vv = window.visualViewport;
-  const onVV = () => { appEl.style.height = `${vv.height}px`; fitActive(); };
+  const onVV = () => {
+    const keyboardUp = window.innerHeight - vv.height > 120;
+    appEl.style.height = keyboardUp ? `${vv.height}px` : '';
+    fitActive();
+  };
   vv.addEventListener('resize', onVV);
   vv.addEventListener('scroll', onVV);
 }
