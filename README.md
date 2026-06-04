@@ -134,14 +134,37 @@ journalctl --user -u cc-deck -f         # logs
 **Remember:** changes to `.env` need `systemctl --user restart cc-deck`; changes to
 `src/client/*` need `npm run build` first.
 
-## Exposing on your own domain via Cloudflare
+## Exposing on your own domain via Cloudflare (access off-VPN)
 
-1. Install `cloudflared`, create a tunnel to `http://127.0.0.1:8787`, and route your
-   hostname (`cloudflared tunnel route dns <tunnel> claude.example.com`).
-2. The app's password login already protects it. For a stronger layer, add a
-   **Cloudflare Access** policy (SSO) in front of the hostname.
-3. cc-deck sets `secure` cookies when it sees `x-forwarded-proto: https`, so login works
-   correctly behind Cloudflare's TLS.
+A named Cloudflare Tunnel reaches the loopback app with no inbound ports, and Cloudflare
+Access gates it at the edge so it's never publicly exposed:
+
+```bash
+# 1. install cloudflared, then authenticate + pick your domain (opens a browser)
+cloudflared tunnel login
+# 2. create the tunnel and route a hostname to it
+cloudflared tunnel create cc-deck
+cloudflared tunnel route dns cc-deck claude.example.com
+# 3. config pointing at the local app (use a dedicated file if you have other tunnels)
+cat > ~/.cloudflared/cc-deck.config.yml <<YAML
+tunnel: <TUNNEL_ID>
+credentials-file: $HOME/.cloudflared/<TUNNEL_ID>.json
+ingress:
+  - hostname: claude.example.com
+    service: http://127.0.0.1:8787
+  - service: http_status:404
+YAML
+# 4. run it (a systemd user service like cc-deck's keeps it up; enable-linger to persist)
+cloudflared tunnel --config ~/.cloudflared/cc-deck.config.yml run
+```
+
+Then, in **Zero Trust → Access → Applications**, add a **self-hosted** app for
+`claude.example.com` with an **Allow** policy limited to your email (the built-in
+**One-time PIN** method emails you a code — no IdP setup needed). Now reaching the hostname
+requires a Cloudflare login *before* the app is touched, and the app password is a second
+layer. cc-deck sets `secure` cookies when it sees `x-forwarded-proto: https`, and WebSockets
+(the terminal) pass through Access using the browser's Access cookie, so it all works behind
+the tunnel. Keep your Tailscale route as well — on-VPN access is unaffected.
 
 ## Security notes
 
