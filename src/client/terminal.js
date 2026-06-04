@@ -310,17 +310,29 @@ function renderSidebar() {
       <span class="sb-dot ${statusDot(s)}"></span>
       <span class="sb-meta"><span class="sb-title">${esc(s.title)}${warm ? ' <span class="sb-warm" title="preloaded">•</span>' : ''}</span><span class="sb-dir">${esc(baseName(s.dir))}</span></span>
       ${att ? '<span class="sb-attn" title="Needs you / activity since last viewed">●</span>' : num}
+      <button class="sb-rename" title="Rename session" data-rename="${esc(s.name)}">✎</button>
       <button class="sb-kill" title="Kill session" data-kill="${esc(s.name)}">✕</button>
     </div>`;
   }).join('') || '<div class="faint" style="padding:12px">No active sessions</div>';
   list.querySelectorAll('.sb-item').forEach((el) =>
-    el.addEventListener('click', (e) => { if (!e.target.closest('.sb-kill')) switchTo(el.dataset.name); }));
+    el.addEventListener('click', (e) => { if (!e.target.closest('.sb-kill, .sb-rename')) switchTo(el.dataset.name); }));
+  list.querySelectorAll('.sb-rename').forEach((b) =>
+    b.addEventListener('click', (e) => { e.stopPropagation(); renameSessionFromSidebar(b.dataset.rename); }));
   list.querySelectorAll('.sb-kill').forEach((b) =>
     b.addEventListener('click', (e) => { e.stopPropagation(); killSessionFromSidebar(b.dataset.kill); }));
   const attnCount = sessions.filter(needsAttention).length;
   const badge = document.getElementById('sb-badge');
   badge.style.display = attnCount ? '' : 'none';
   badge.textContent = attnCount;
+}
+
+async function renameSessionFromSidebar(name) {
+  const s = sessions.find((x) => x.name === name);
+  const title = prompt('Rename session', s?.title || '');
+  if (title == null) return;
+  try { await api(`/api/sessions/${name}`, { method: 'PATCH', body: JSON.stringify({ title }) }); }
+  catch (e) { alert('Rename failed: ' + e.message); return; }
+  await refreshSessions();
 }
 
 async function killSessionFromSidebar(name) {
