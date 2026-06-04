@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { statSync } from 'node:fs';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyCookie from '@fastify/cookie';
@@ -68,8 +69,12 @@ await app.register(fastifyStatic, {
   setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
 });
 
-// Paths reachable without auth.
-const PUBLIC_PATHS = new Set(['/login.html', '/login.css', '/api/login', '/favicon.ico']);
+// Paths reachable without auth (login assets + PWA manifest/icons the browser
+// fetches before login).
+const PUBLIC_PATHS = new Set([
+  '/login.html', '/login.css', '/api/login', '/favicon.ico',
+  '/manifest.webmanifest', '/icon-180.png', '/icon-192.png', '/icon-512.png',
+]);
 
 function isAuthed(req) {
   const token = req.cookies?.[config.cookieName];
@@ -193,6 +198,13 @@ app.get('/api/fs', async (req, reply) => {
 
 app.get('/api/config', async () => {
   return { roots: config.roots, launchCommand: config.launchCommand, home: process.env.HOME || '' };
+});
+
+// Build version = the client bundle's mtime. The UI polls this and offers a
+// reload when it changes (so a redeploy is picked up without manual refresh).
+app.get('/api/version', async () => {
+  try { return { v: Math.round(statSync(join(publicDir, 'dashboard.js')).mtimeMs) }; }
+  catch { return { v: 0 }; }
 });
 
 // ---- Usage / ROI ----

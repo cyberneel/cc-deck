@@ -532,6 +532,23 @@ window.addEventListener('keyup', (e) => {
 
 window.addEventListener('beforeunload', () => { for (const p of panes.values()) { p.dispose = true; try { p.ws?.close(); } catch { /* */ } } });
 
+// Offer a reload when a new build is deployed.
+let appVersion = null;
+async function checkVersion() {
+  try {
+    const { v } = await api('/api/version');
+    if (appVersion === null) appVersion = v;
+    else if (v && v !== appVersion && !document.getElementById('update-toast')) {
+      const t = document.createElement('div');
+      t.id = 'update-toast'; t.className = 'toast';
+      t.innerHTML = 'New version available <button class="primary" style="margin-left:8px;padding:5px 12px">Reload</button>';
+      t.querySelector('button').addEventListener('click', () => location.reload());
+      document.body.appendChild(t);
+    }
+  } catch { /* */ }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
+
 // ---- boot ----
 if (!currentSession) {
   setStatus('no session specified', 'closed');
@@ -541,4 +558,6 @@ if (!currentSession) {
   applySidebar();
   refreshSessions().then(reconcileWarm); // preload the recent sessions
   setInterval(refreshSessions, 3000);
+  checkVersion();
+  setInterval(checkVersion, 30000);
 }

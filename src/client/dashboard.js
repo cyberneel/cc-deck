@@ -36,6 +36,25 @@ let usageData = null;
 let burnData = null;
 let usageFetchedAt = 0;
 
+// Offer a reload when a new build is deployed (the bundle's version changed).
+let appVersion = null;
+async function checkVersion() {
+  try {
+    const { v } = await api('/api/version');
+    if (appVersion === null) appVersion = v;
+    else if (v && v !== appVersion) showUpdateToast();
+  } catch { /* */ }
+}
+function showUpdateToast() {
+  if (document.getElementById('update-toast')) return;
+  const t = document.createElement('div');
+  t.id = 'update-toast'; t.className = 'toast';
+  t.innerHTML = 'New version available <button class="primary" style="margin-left:8px;padding:5px 12px">Reload</button>';
+  t.querySelector('button').addEventListener('click', () => location.reload());
+  document.body.appendChild(t);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
+
 async function api(path, opts = {}) {
   // Only declare a JSON content-type when we actually send a body — otherwise
   // Fastify rejects bodyless requests (DELETE/logout) with 400 "body cannot be empty".
@@ -683,5 +702,7 @@ function openNewModal() {
   render();
   refreshHistory(); // populate the "Past sessions" stat + history tab data
   if (tab === 'usage') loadUsage();
+  checkVersion();
   setInterval(refresh, 4000);
+  setInterval(checkVersion, 30000);
 })();
