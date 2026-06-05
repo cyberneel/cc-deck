@@ -30,8 +30,10 @@ function bumpMru(name) {
 if (currentSession) bumpMru(currentSession);
 
 let sessions = [];
-const lastSeen = {};
-let baselined = false;
+// Sessions that need your attention (blocked on you, or just finished). Cleared
+// when you view them or they start working again.
+const attention = new Set();
+const prevStatus = {};
 
 document.body.innerHTML = `
   <div id="app-term" class="${sidebarOpen ? '' : 'collapsed'}">
@@ -400,9 +402,7 @@ function statusDot(s) {
   return isLive(s) ? 'live' : 'idle';
 }
 function needsAttention(s) {
-  if (s.name === currentSession) return false;
-  if (s.waitingFor) return true; // blocked on you (e.g. permission)
-  return s.lastActivity && s.lastActivity > (lastSeen[s.name] || 0);
+  return attention.has(s.name);
 }
 function titleOf(name) { return sessions.find((s) => s.name === name)?.title || name; }
 function baseName(p) { if (!p) return ''; return p.replace(/\/$/, '').split('/').slice(-2).join('/'); }
@@ -417,8 +417,17 @@ async function refreshSessions() {
   try {
     const { sessions: list } = await api('/api/sessions');
     sessions = list;
-    if (!baselined) { for (const s of sessions) lastSeen[s.name] = Date.now(); baselined = true; }
-    lastSeen[currentSession] = Date.now();
+    // Flag a session for attention when it's blocked on you (waitingFor) or it
+    // just finished (busy -> idle). Clear when it resumes working. Current session
+    // is never flagged (you're looking at it). Background output alone doesn't flag.
+    for (const s of sessions) {
+      if (s.name !== currentSession) {
+        if (s.waitingFor || (prevStatus[s.name] === 'busy' && s.claudeStatus === 'idle')) attention.add(s.name);
+        else if (s.claudeStatus === 'busy') attention.delete(s.name);
+      }
+      prevStatus[s.name] = s.claudeStatus;
+    }
+    attention.delete(currentSession);
     titleEl.textContent = titleOf(currentSession);
     renderSidebar();
   } catch { /* */ }
@@ -430,12 +439,11 @@ function renderSidebar() {
   list.innerHTML = ordered.map((s, i) => {
     const cur = s.name === currentSession;
     const att = needsAttention(s);
-    const warm = panes.has(s.name) && !cur;
     const num = i < 9 ? `<span class="sb-num">${i + 1}</span>` : '';
-    return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''}" data-name="${esc(s.name)}" title="${warm ? 'preloaded' : ''}">
+    return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''}" data-name="${esc(s.name)}">
       <span class="sb-dot ${statusDot(s)}"></span>
-      <span class="sb-meta"><span class="sb-title">${esc(s.title)}${warm ? ' <span class="sb-warm" title="preloaded">•</span>' : ''}</span><span class="sb-dir">${esc(baseName(s.dir))}</span></span>
-      ${att ? '<span class="sb-attn" title="Needs you / activity since last viewed">●</span>' : num}
+      <span class="sb-meta"><span class="sb-title">${esc(s.title)}</span><span class="sb-dir">${esc(baseName(s.dir))}</span></span>
+      ${att ? '<span class="sb-attn" title="Needs your attention">●</span>' : num}
       <button class="sb-rename" title="Rename session" data-rename="${esc(s.name)}">✎</button>
       <button class="sb-kill" title="Kill session" data-kill="${esc(s.name)}">✕</button>
     </div>`;
@@ -478,11 +486,10 @@ async function killSessionFromSidebar(name) {
 // ---- switching (instant when the target is already warm) ----
 function switchTo(name) {
   if (!name || name === currentSession) return;
-  lastSeen[currentSession] = Date.now();
   if (!panes.has(name)) makePane(name);
   currentSession = name;
   bumpMru(name);
-  lastSeen[name] = Date.now();
+  attention.delete(name); // you're now viewing it
   history.replaceState({}, '', `?session=${encodeURIComponent(name)}`);
   titleEl.textContent = titleOf(name);
   if (isMobile && sidebarOpen) { sidebarOpen = false; applySidebar(); } // close the drawer
@@ -518,7 +525,7 @@ function renderSwitcher() {
   swBox.innerHTML = swList.map((name, i) => {
     const s = sessions.find((x) => x.name === name) || {};
     return `<div class="sw-item ${i === swIdx ? 'sel' : ''}">
-      <span class="sb-dot ${statusDot(s)}"></span>${esc(titleOf(name))}${needsAttention(s) ? ' <span class="sb-attn">●</span>' : ''}${panes.has(name) ? ' <span class="sb-warm">•</span>' : ''}
+      <span class="sb-dot ${statusDot(s)}"></span>${esc(titleOf(name))}${needsAttention(s) ? ' <span class="sb-attn">●</span>' : ''}
     </div>`;
   }).join('');
 }
