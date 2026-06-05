@@ -3,8 +3,19 @@ import { readdir, stat, open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
+import { config } from './config.js';
 
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
+
+// Claude encodes a session's cwd into its project-dir name by replacing every
+// `/` with `-`. Precompute the encoded form of each excluded dir so we can skip
+// whole project directories (the dir itself or any subdirectory) without reading
+// a single transcript — and before the result cap, so excluded churn can't push
+// real sessions out of the list.
+const EXCLUDED_ENCODED = config.excludeDirs.map((d) => d.replace(/\//g, '-'));
+function isExcludedProjectDir(name) {
+  return EXCLUDED_ENCODED.some((enc) => name === enc || name.startsWith(enc + '-'));
+}
 const SESSION_ID_RE = /^[0-9a-fA-F-]{36}$/;
 const MAX_RESULTS = 80;
 
@@ -129,6 +140,7 @@ export async function listHistory() {
   const files = [];
   for (const d of projectDirs) {
     if (!d.isDirectory()) continue;
+    if (isExcludedProjectDir(d.name)) continue;
     const dir = join(PROJECTS_DIR, d.name);
     let entries;
     try { entries = await readdir(dir); } catch { continue; }

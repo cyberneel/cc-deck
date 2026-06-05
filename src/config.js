@@ -20,6 +20,13 @@ export const config = {
   secret: process.env.CCDECK_SECRET || '',
   // Directories under which new sessions may be launched / browsed.
   roots: parseRoots(process.env.CCDECK_ROOTS),
+  // Directories whose Claude transcripts are hidden from the History tab — e.g.
+  // dirs where another app (hyre) runs `claude -p` headlessly. Colon-separated.
+  excludeDirs: (process.env.CCDECK_EXCLUDE_DIRS || '')
+    .split(':')
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => resolve(p)),
   // tmux session name prefix for sessions this app manages.
   prefix: 'ccdeck-',
   // Dedicated tmux socket so cc-deck's sessions live on their own server,
