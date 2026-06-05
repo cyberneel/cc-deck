@@ -158,8 +158,9 @@ select:focus { outline: none; border-color: var(--accent); }
 .mtable { width: 100%; border-collapse: collapse; font-size: 13px; }
 .mtable th { text-align: left; color: var(--text-dim); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .mtable td { padding: 8px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12.5px; }
-.mtable tr:last-child td { border-bottom: none; }
+.mtable tbody tr:last-child td { border-bottom: none; }
 .mtable td:first-child { color: var(--text); }
+.mtable tfoot td { border-top: 1px solid var(--border-hi, var(--border)); border-bottom: none; color: var(--text); font-weight: 600; }
 
 .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
 .grid.list { grid-template-columns: 1fr; }

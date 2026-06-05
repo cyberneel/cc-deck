@@ -550,10 +550,17 @@ function renderUsage() {
   html += renderBurnCards();
   html += renderDailyBars(u.daily);
 
+  const tot = u.byModel.reduce((a, m) => {
+    a.messages += m.messages; a.input += m.input; a.output += m.output;
+    a.cache += m.cacheWrite + m.cacheRead; a.total += m.totalTokens; a.cost += m.cost;
+    return a;
+  }, { messages: 0, input: 0, output: 0, cache: 0, total: 0, cost: 0 });
+
   html += `<div class="panel"><h3>By model <span class="faint">(this billing cycle)</span></h3>
-    <table class="mtable"><thead><tr><th>Model</th><th>Messages</th><th>Tokens</th><th>API value</th></tr></thead>
+    <table class="mtable"><thead><tr><th>Model</th><th>Messages</th><th>Input</th><th>Output</th><th>Cache</th><th>Total</th><th>API value</th></tr></thead>
     <tbody>${u.byModel.map((m) =>
-      `<tr><td>${esc(m.model)}</td><td>${m.messages.toLocaleString()}</td><td>${tokensFmt(m.totalTokens)}</td><td>${money(m.cost)}</td></tr>`).join('')}</tbody></table>
+      `<tr><td>${esc(m.model)}</td><td>${m.messages.toLocaleString()}</td><td>${tokensFmt(m.input)}</td><td>${tokensFmt(m.output)}</td><td>${tokensFmt(m.cacheWrite + m.cacheRead)}</td><td>${tokensFmt(m.totalTokens)}</td><td>${money(m.cost)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td>Total</td><td>${tot.messages.toLocaleString()}</td><td>${tokensFmt(tot.input)}</td><td>${tokensFmt(tot.output)}</td><td>${tokensFmt(tot.cache)}</td><td>${tokensFmt(tot.total)}</td><td>${money(tot.cost)}</td></tr></tfoot></table>
     <p class="faint">Estimated by applying Anthropic API list prices (including cache read/write rates) to your actual token usage. Your subscription isn't billed per token — this is what the same usage would cost on the pay-as-you-go API.<br>${pricingNote(u.pricing)}</p>
   </div></div>`;
 
