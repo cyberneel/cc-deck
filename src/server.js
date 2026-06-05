@@ -20,6 +20,7 @@ import { attachHandler } from './pty.js';
 import { initServer } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
 import { listHistory, claudeLiveMeta } from './history.js';
+import { buildGraph, buildThread } from './graph.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
 // Claude's own session name (custom /rename title, else its auto-title), and the
@@ -182,6 +183,22 @@ app.get('/api/sessions/:name/preview', async (req, reply) => {
   try {
     const text = await capturePane(req.params.name);
     return { text };
+  } catch (err) {
+    return reply.code(err.statusCode || 500).send({ error: err.message });
+  }
+});
+
+// ---- Session graph (read-only branch/conversation tree) ----
+app.get('/api/transcripts/:id/graph', async (req, reply) => {
+  try {
+    return await buildGraph(req.params.id, req.query.cwd);
+  } catch (err) {
+    return reply.code(err.statusCode || 500).send({ error: err.message });
+  }
+});
+app.get('/api/transcripts/:id/thread', async (req, reply) => {
+  try {
+    return await buildThread(req.params.id, req.query.uuid, req.query.cwd);
   } catch (err) {
     return reply.code(err.statusCode || 500).send({ error: err.message });
   }

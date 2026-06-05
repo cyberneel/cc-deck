@@ -492,3 +492,49 @@ select:focus { outline: none; border-color: var(--accent); }
 @media (prefers-reduced-transparency: reduce) {
   .modal, .sw-box, .toast { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg-elev); }
 }
+
+/* ===================== session graph viewer ===================== */
+.graph-modal { width: min(1100px, 95vw); max-height: 88vh; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.graph-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 15px 18px; border-bottom: 1px solid var(--glass-stroke); }
+.graph-titles { min-width: 0; }
+.graph-titles h2 { margin: 0 0 3px; font-size: 16px; }
+.graph-titles .faint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70vw; }
+.graph-body { display: flex; min-height: 0; flex: 1; }
+.graph-scroll { position: relative; overflow: auto; flex: 1 1 55%; border-right: 1px solid var(--glass-stroke); }
+.graph-svg { position: absolute; top: 0; left: 0; pointer-events: none; }
+.graph-svg path, .graph-svg line { fill: none; }
+.ge-main { stroke: var(--accent); stroke-width: 2; }
+.ge-branch { stroke: #4a4a4a; stroke-width: 2; }
+.gdot { stroke: var(--bg); stroke-width: 1.5; }
+.gd-user { fill: #6ea8fe; }
+.gd-asst { fill: #d6d6d6; }
+.gd-off { opacity: .45; }
+.gd-ring { fill: none; stroke: #fff; stroke-width: 2; }
+.graph-rows { position: relative; }
+.gnode { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.04); }
+.gnode:hover { background: rgba(255,255,255,.05); }
+.gnode.sel { background: rgba(217,119,87,.15); }
+.gnode-line { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.gtext { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.grole { font-size: 10px; padding: 1px 6px; border-radius: 10px; flex: 0 0 auto; font-weight: 600; }
+.grole.user { background: rgba(110,168,254,.16); color: #6ea8fe; }
+.grole.assistant { background: rgba(217,119,87,.16); color: var(--accent); }
+.gmeta { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; padding-right: 10px; }
+.gtag { font-size: 10px; color: var(--text-dim); background: rgba(255,255,255,.06); border: 1px solid var(--border); border-radius: 6px; padding: 0 5px; white-space: nowrap; }
+.gtag-branch { color: var(--accent); border-color: rgba(217,119,87,.4); }
+.graph-detail { flex: 1 1 45%; overflow: hidden; padding: 14px 16px; display: flex; flex-direction: column; min-width: 0; }
+.graph-hint, .graph-empty { color: var(--text-dim); padding: 24px; text-align: center; }
+.gd-head { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; flex: 0 0 auto; }
+.gd-thread { display: flex; flex-direction: column; gap: 10px; overflow: auto; flex: 1; min-height: 0; }
+.gmsg { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: rgba(255,255,255,.02); }
+.gmsg.user { border-left: 3px solid #6ea8fe; }
+.gmsg.assistant { border-left: 3px solid var(--accent); }
+.gmsg-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.gmsg-body { font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto; }
+.gt-tools { margin-top: 8px; display: flex; gap: 5px; flex-wrap: wrap; }
+@media (max-width: 700px) {
+  .graph-body { flex-direction: column; }
+  .graph-scroll { flex: none; height: 46%; border-right: none; border-bottom: 1px solid var(--glass-stroke); }
+  .graph-detail { flex: none; height: 54%; }
+  .graph-titles .faint { max-width: 80vw; white-space: normal; }
+}

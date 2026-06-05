@@ -1,5 +1,6 @@
 import css from './styles.css';
 import { registerServiceWorker, applyUpdate } from './swreg.js';
+import { openGraph } from './graph.js';
 
 // Inject shared styles.
 const styleEl = document.createElement('style');
@@ -319,6 +320,11 @@ function wireActiveCards(container) {
       await api(`/api/sessions/${name}`, { method: 'DELETE' });
       await refresh();
     });
+    el.querySelector('.graph-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const b = e.currentTarget;
+      openGraph(b.dataset.graph, b.dataset.gtitle, b.dataset.cwd);
+    });
     el.querySelector('.rename-btn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       const s = sessions.find((x) => x.name === name);
@@ -341,6 +347,7 @@ function cardHtml(s) {
       ${modeChip(s)}
       <span class="faint">${s.attached ? 'attached · ' : ''}${fmtTime(s.lastActivity)}</span>
       <div class="spacer"></div>
+      ${s.liveSessionId ? `<button class="icon graph-btn" title="Session graph" data-graph="${esc(s.liveSessionId)}" data-cwd="${esc(s.dir || '')}" data-gtitle="${esc(s.title)}">⎇</button>` : ''}
       <button class="icon rename-btn" title="Rename">✎</button>
       <button class="icon danger kill-btn" title="Kill session">✕</button>
     </div>
@@ -446,17 +453,23 @@ function wireHistoryCards(container) {
     };
     el.addEventListener('click', (e) => { if (!e.target.closest('button')) go(); });
     el.querySelector('.resume-btn, .open-btn')?.addEventListener('click', (e) => { e.stopPropagation(); go(); });
+    el.querySelector('.graph-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const b = e.currentTarget;
+      openGraph(b.dataset.graph, b.dataset.gtitle, b.dataset.cwd);
+    });
   });
 }
 
 function historyCardHtml(s) {
   const noCwd = !s.cwd;
   const runningName = liveClaudeMap.get(s.sessionId) || null;
+  const graphBtn = `<button class="icon graph-btn" title="Session graph" data-graph="${esc(s.sessionId)}" data-cwd="${esc(s.cwd || '')}" data-gtitle="${esc(s.title)}">⎇</button>`;
   const foot = runningName
     ? `<span class="badge live"><span class="pulse"></span>running</span><div class="spacer"></div>
-       <button class="primary open-btn">▶ Open</button>`
+       ${graphBtn}<button class="primary open-btn">▶ Open</button>`
     : `${modeChip(s)}<span class="faint">${fmtAbsTime(s.lastModified)} · ${s.sizeKb} KB</span><div class="spacer"></div>
-       <button class="primary resume-btn" ${noCwd ? 'disabled title="No recorded directory"' : ''}>▶ Resume</button>`;
+       ${graphBtn}<button class="primary resume-btn" ${noCwd ? 'disabled title="No recorded directory"' : ''}>▶ Resume</button>`;
   return `<div class="card hist ${runningName ? 'isrunning' : ''}" data-id="${esc(s.sessionId)}" ${runningName ? `data-open="${esc(runningName)}"` : ''}>
     <div class="card-head">
       <div style="flex:1;min-width:0">
