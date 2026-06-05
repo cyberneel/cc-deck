@@ -72,7 +72,7 @@ await app.register(fastifyStatic, {
 // Paths reachable without auth (login assets + PWA manifest/icons the browser
 // fetches before login).
 const PUBLIC_PATHS = new Set([
-  '/login.html', '/login.css', '/api/login', '/favicon.ico',
+  '/login.html', '/login.css', '/api/login', '/favicon.ico', '/sw.js',
   '/manifest.webmanifest', '/icon-180.png', '/icon-192.png', '/icon-512.png',
 ]);
 

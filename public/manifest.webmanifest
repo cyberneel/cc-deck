@@ -1,10 +1,16 @@
 {
+  "id": "/",
   "name": "cc-deck",
   "short_name": "cc-deck",
   "description": "Dashboard for your Claude CLI sessions",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["developer", "productivity", "utilities"],
   "background_color": "#0c0c0c",
   "theme_color": "#0c0c0c",
   "icons": [

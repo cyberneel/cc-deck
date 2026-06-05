@@ -5,4 +5,5 @@ public/dashboard.js.map
 public/terminal.js
 public/terminal.js.map
 public/xterm.css
+public/sw.js
 *.log

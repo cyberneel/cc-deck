@@ -3,6 +3,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { CanvasAddon } from '@xterm/addon-canvas';
 import css from './styles.css';
+import { registerServiceWorker, applyUpdate } from './swreg.js';
 
 const styleEl = document.createElement('style');
 styleEl.textContent = css;
@@ -234,7 +235,7 @@ document.getElementById('sb-backdrop').addEventListener('click', () => {
   sidebarOpen = false; localStorage.setItem('ccdeck.sidebar', 'closed'); applySidebar();
 });
 document.getElementById('sb-new').addEventListener('click', openNewModal);
-document.getElementById('reload-btn').addEventListener('click', () => location.reload());
+document.getElementById('reload-btn').addEventListener('click', () => applyUpdate(pendingWorker));
 
 // ---- new session modal (launch + switch to it) ----
 let cfg = null;
@@ -551,19 +552,24 @@ window.addEventListener('beforeunload', () => { for (const p of panes.values()) 
 
 // Offer a reload when a new build is deployed.
 let appVersion = null;
+let pendingWorker = null;
+function showUpdateToast(worker) {
+  if (worker) pendingWorker = worker;
+  if (document.getElementById('update-toast')) return;
+  const t = document.createElement('div');
+  t.id = 'update-toast'; t.className = 'toast';
+  t.innerHTML = 'New version available <button class="primary" style="margin-left:8px;padding:5px 12px">Reload</button>';
+  t.querySelector('button').addEventListener('click', () => applyUpdate(pendingWorker));
+  document.body.appendChild(t);
+}
 async function checkVersion() {
   try {
     const { v } = await api('/api/version');
     if (appVersion === null) appVersion = v;
-    else if (v && v !== appVersion && !document.getElementById('update-toast')) {
-      const t = document.createElement('div');
-      t.id = 'update-toast'; t.className = 'toast';
-      t.innerHTML = 'New version available <button class="primary" style="margin-left:8px;padding:5px 12px">Reload</button>';
-      t.querySelector('button').addEventListener('click', () => location.reload());
-      document.body.appendChild(t);
-    }
+    else if (v && v !== appVersion) showUpdateToast();
   } catch { /* */ }
 }
+registerServiceWorker((w) => showUpdateToast(w));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
 
 // ---- boot ----
