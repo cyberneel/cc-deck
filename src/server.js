@@ -14,6 +14,7 @@ import {
   renameSession,
   capturePane,
   listDirs,
+  createDir,
 } from './tmux.js';
 import { attachHandler } from './pty.js';
 import { initServer } from './tmux.js';
@@ -191,6 +192,17 @@ app.get('/api/fs', async (req, reply) => {
   const path = req.query.path || config.roots[0];
   try {
     return await listDirs(path);
+  } catch (err) {
+    return reply.code(err.statusCode || 500).send({ error: err.message });
+  }
+});
+
+// Create a folder under `parent`, then return the refreshed listing + new path.
+app.post('/api/fs', async (req, reply) => {
+  const { parent, name } = req.body || {};
+  try {
+    const created = await createDir(parent, name);
+    return { created, ...(await listDirs(parent)) };
   } catch (err) {
     return reply.code(err.statusCode || 500).send({ error: err.message });
   }

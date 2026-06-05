@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { stat, readdir } from 'node:fs/promises';
+import { stat, readdir, mkdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import crypto from 'node:crypto';
 import { config } from './config.js';
@@ -241,6 +241,37 @@ export async function capturePane(name, lines = 24) {
   assertManaged(name);
   const out = await tmux(['capture-pane', '-p', '-t', name, '-S', `-${lines}`]);
   return out;
+}
+
+// Create a new subdirectory `name` under `parent` (for the new-session picker).
+// `parent` must already exist under an allowed root; `name` must be a single,
+// safe path segment. Returns the absolute path of the (new or existing) folder.
+export async function createDir(parent, name) {
+  const absParent = await resolveAllowedDir(parent);
+  const clean = (name || '').toString().trim();
+  if (!clean || clean.length > 80 || clean.startsWith('.') || /[/\\\0]/.test(clean) || clean === '..') {
+    const e = new Error('Invalid folder name (no slashes, leading dots, or empty)');
+    e.statusCode = 400;
+    throw e;
+  }
+  const abs = join(absParent, clean);
+  // Defensive: the result must still resolve under an allowed root.
+  const ok = config.roots.some((root) => abs === root || abs.startsWith(root + '/'));
+  if (!ok) {
+    const e = new Error('Folder must be under an allowed root');
+    e.statusCode = 400;
+    throw e;
+  }
+  try {
+    await mkdir(abs); // throws EEXIST if it already exists — that's fine to surface
+  } catch (err) {
+    if (err.code !== 'EEXIST') {
+      const e = new Error(`Could not create folder: ${err.message}`);
+      e.statusCode = 400;
+      throw e;
+    }
+  }
+  return abs;
 }
 
 // List immediate subdirectories of a path (for the new-session directory picker).

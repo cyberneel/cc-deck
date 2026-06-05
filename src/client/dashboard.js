@@ -657,6 +657,10 @@ function openNewModal() {
         <label>Directory</label>
         <input id="dir-input" value="${esc(currentPath)}" spellcheck="false" />
         <div class="browser" id="browser"></div>
+        <div class="mkdir-row">
+          <input id="mkdir-name" placeholder="new-folder-name" spellcheck="false" autocapitalize="off" autocomplete="off" />
+          <button type="button" id="mkdir-btn">+ Create folder here</button>
+        </div>
       </div>
       <div class="field">
         <label>Title <span class="faint">(optional)</span></label>
@@ -690,6 +694,27 @@ function openNewModal() {
   }
   browse(currentPath);
   dirInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') browse(dirInput.value); });
+
+  // Create a new subfolder under the current path, then navigate into it.
+  const mkdirName = bg.querySelector('#mkdir-name');
+  async function createFolder() {
+    const name = mkdirName.value.trim();
+    if (!name) { mkdirName.focus(); return; }
+    errEl.textContent = '';
+    try {
+      const { created } = await api('/api/fs', {
+        method: 'POST',
+        body: JSON.stringify({ parent: currentPath, name }),
+      });
+      mkdirName.value = '';
+      await browse(created); // jump into the freshly-made folder
+      bg.querySelector('#title-input').focus();
+    } catch (e) {
+      errEl.textContent = e.message;
+    }
+  }
+  bg.querySelector('#mkdir-btn').addEventListener('click', createFolder);
+  mkdirName.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); createFolder(); } });
 
   const close = () => bg.remove();
   bg.querySelector('#cancel-btn').addEventListener('click', close);

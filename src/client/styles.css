@@ -255,6 +255,11 @@ select:focus { outline: none; border-color: var(--accent); }
 .browser .row:hover { background: var(--bg-card); }
 .browser .row.up { color: var(--text-dim); }
 
+/* new-folder control under the directory browser */
+.mkdir-row { display: flex; gap: 8px; margin-top: 8px; }
+.mkdir-row input { flex: 1; font-family: var(--mono); font-size: 12.5px; padding: 8px 12px; }
+.mkdir-row button { flex: 0 0 auto; white-space: nowrap; font-size: 13px; }
+
 /* ---- Terminal page ---- */
 .term-bar { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--bg-elev); border-bottom: 1px solid var(--border); height: 44px; flex: 0 0 auto; }
 .term-bar .title { font-size: 14px; font-weight: 600; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
