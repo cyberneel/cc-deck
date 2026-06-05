@@ -526,10 +526,12 @@ function renderUsage() {
   const multiple = cyc / price;
   const pct = Math.min(100, multiple * 100);
   const broke = multiple >= 1;
-  const cycEnd = new Date(u.cycle.end).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const dfmt = (ms) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const cycStart = dfmt(u.cycle.start);
+  const cycEnd = dfmt(u.cycle.end);
 
   html += `<div class="roi ${broke ? 'good' : ''}">
-    <div class="roi-label">API-equivalent value used this billing cycle</div>
+    <div class="roi-label">API-equivalent value used this billing cycle <span class="faint">(since ${cycStart})</span></div>
     <div class="roi-value">${money(cyc)} <span class="roi-of">/ ${money(price)} plan</span></div>
     <div class="roi-bar"><div class="roi-fill ${broke ? 'good' : ''}" style="width:${pct}%"></div></div>
     <div class="roi-verdict ${broke ? 'good' : ''}">${broke
