@@ -11,6 +11,14 @@
   --accent-dim: #b85f43;
   --green: #5cb87a;
   --radius: 12px;
+  /* Liquid-glass surfaces — translucent + blurred. Used for overlays (all
+     viewports) and across the mobile UI. The faint top inset gives the bright
+     "specular" rim that reads as a glass edge. */
+  --glass: rgba(30,30,33,.6);
+  --glass-strong: rgba(22,22,25,.74);
+  --glass-stroke: rgba(255,255,255,.12);
+  --glass-hi: inset 0 1px 0 rgba(255,255,255,.10);
+  --glass-blur: saturate(180%) blur(22px);
   --mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', ui-monospace, 'Cascadia Code', Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif;
 }
@@ -351,4 +359,131 @@ select:focus { outline: none; border-color: var(--accent); }
   }
   .keybar button { flex: 0 0 auto; min-width: 44px; padding: 9px 12px; font-size: 13px; font-family: var(--mono); }
   .keybar button.armed { background: var(--accent); border-color: var(--accent); color: #1a0f0a; }
+}
+
+/* ===================== liquid-glass overlays (all viewports) ===================== */
+.modal-bg { background: rgba(0,0,0,.5); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.modal {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-stroke);
+  box-shadow: var(--glass-hi), 0 30px 80px rgba(0,0,0,.55);
+  border-radius: 18px;
+}
+.switcher { background: rgba(0,0,0,.4); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.sw-box {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-stroke);
+  box-shadow: var(--glass-hi), 0 30px 70px rgba(0,0,0,.55);
+}
+.toast {
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-stroke);
+  box-shadow: var(--glass-hi), 0 14px 44px rgba(0,0,0,.45);
+  border-radius: 14px;
+}
+
+/* ===================== mobile · liquid glass ===================== */
+@media (max-width: 700px) {
+  /* Ambient color glow behind everything, so glass surfaces have something to
+     refract (pure-black behind glass just looks grey). Fixed + behind content. */
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(130% 90% at 100% -10%, rgba(217,119,87,.18), transparent 55%),
+      radial-gradient(120% 85% at -15% 112%, rgba(110,168,254,.13), transparent 52%);
+  }
+
+  /* Floating frosted top bar */
+  .topbar {
+    background: linear-gradient(rgba(20,20,22,.72), rgba(20,20,22,.5));
+    -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--glass-stroke);
+    box-shadow: var(--glass-hi), 0 4px 18px rgba(0,0,0,.3);
+  }
+
+  /* Segmented controls → glass pills with a floating active segment */
+  .toggle {
+    overflow: visible; gap: 3px; padding: 3px; border-radius: 12px;
+    background: rgba(255,255,255,.06); border-color: var(--glass-stroke);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  }
+  .toggle button { border-radius: 9px; transition: background .15s, color .15s; }
+  .toggle button.active {
+    background: rgba(255,255,255,.16); color: #fff;
+    box-shadow: var(--glass-hi), 0 1px 5px rgba(0,0,0,.35);
+  }
+
+  /* Cards, tiles, panels, group headers → frosted glass squircles. The diagonal
+     white gradient is a soft specular sheen, so light reads as hitting glass. */
+  .tile, .card, .panel, .roi, .group-head {
+    background:
+      linear-gradient(150deg, rgba(255,255,255,.07), rgba(255,255,255,0) 42%),
+      var(--glass);
+    -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+    border-color: var(--glass-stroke);
+    box-shadow: var(--glass-hi), 0 8px 26px rgba(0,0,0,.26);
+    border-radius: 16px;
+  }
+  .card { border-radius: 18px; }
+  .card:hover, .card:active, .tile.clickable:active { border-color: rgba(255,255,255,.22); }
+  .card.isrunning { border-color: rgba(92,184,122,.55); }
+  /* Keep the monospace preview legible: darker glass + matching fade. */
+  .preview { background: rgba(0,0,0,.30); border-top: 1px solid var(--glass-stroke); }
+  .preview::after { background: linear-gradient(transparent, rgba(12,12,13,.7)); }
+
+  /* Inputs / selects as glass */
+  .search input, input, textarea, select {
+    background: rgba(255,255,255,.06); border-color: var(--glass-stroke);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  }
+
+  /* Terminal: glass top bar, frosted drawer, floating glass key bar */
+  .term-bar {
+    background: linear-gradient(rgba(20,20,22,.72), rgba(20,20,22,.5));
+    -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--glass-stroke);
+  }
+  #sidebar {
+    background: linear-gradient(rgba(26,26,29,.76), rgba(18,18,20,.68));
+    -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+    border-right: 1px solid var(--glass-stroke);
+    box-shadow: var(--glass-hi), 10px 0 44px rgba(0,0,0,.5);
+  }
+  #app-term:not(.collapsed) #sb-backdrop {
+    background: rgba(0,0,0,.32);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  }
+  .sb-item:hover { background: rgba(255,255,255,.06); }
+  .sb-item.current { background: rgba(255,255,255,.09); }
+
+  .keybar {
+    gap: 7px; padding: 8px 9px calc(9px + env(safe-area-inset-bottom));
+    background: linear-gradient(rgba(28,28,31,.6), rgba(20,20,22,.82));
+    -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+    border-top: 1px solid var(--glass-stroke);
+    box-shadow: 0 -1px 0 rgba(255,255,255,.05), 0 -10px 30px rgba(0,0,0,.34);
+  }
+  .keybar button {
+    min-width: 46px; padding: 10px 13px; border-radius: 13px; color: #f2f2f2;
+    background: rgba(255,255,255,.09); border: 1px solid var(--glass-stroke);
+    box-shadow: var(--glass-hi);
+    transition: transform .08s ease, background .12s;
+  }
+  .keybar button:active { background: rgba(255,255,255,.2); transform: scale(.92); }
+  .keybar button.armed {
+    background: var(--accent); border-color: var(--accent); color: #1a0f0a;
+    box-shadow: var(--glass-hi), 0 0 14px rgba(217,119,87,.5);
+  }
+
+  /* A little more breathing room */
+  .wrap { padding: 16px 14px; }
+  .grid { gap: 14px; }
+}
+
+/* Respect reduced-motion / transparency preferences. */
+@media (prefers-reduced-transparency: reduce) {
+  .modal, .sw-box, .toast { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg-elev); }
 }
