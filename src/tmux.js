@@ -147,7 +147,7 @@ async function scheduleRename(name, title) {
   }
 }
 
-export async function createSession({ dir, title, resume }) {
+export async function createSession({ dir, title, resume, fork }) {
   const abs = await resolveAllowedDir(dir);
   const id = `${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
   const name = `${config.prefix}${id}`;
@@ -164,13 +164,19 @@ export async function createSession({ dir, title, resume }) {
       throw e;
     }
     launch = `${config.launchCommand} --resume ${resume}`;
+    // Fork = branch into a NEW session id that copies the prior history, leaving
+    // the original untouched (vs. plain resume, which appends to the original).
+    if (fork) launch += ' --fork-session';
   }
 
   await tmux(['new-session', '-d', '-s', name, '-c', abs, '-x', '220', '-y', '50']);
   await initServer(); // server is up now — make sure it won't exit when emptied
   await tmux(['set-option', '-t', name, '@ccdeck_title', cleanTitle || abs.split('/').pop() || name]);
   await tmux(['set-option', '-t', name, '@ccdeck_dir', abs]);
-  if (resume) await tmux(['set-option', '-t', name, '@ccdeck_resume', resume]);
+  // Tag the source id only for a plain resume (so we can dedup/Open it). A fork
+  // is a new, independent session — matched by PID — so we don't tag it as a
+  // resume of the original (that would hijack the original's Open/Resume logic).
+  if (resume && !fork) await tmux(['set-option', '-t', name, '@ccdeck_resume', resume]);
   await setMouse(name, true);
   await styleSession(name);
   // Launch the CLI inside the login shell so the session survives if claude exits.

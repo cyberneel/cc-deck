@@ -124,18 +124,20 @@ app.get('/api/sessions', async () => {
 });
 
 app.post('/api/sessions', async (req, reply) => {
-  const { dir, title, resume } = req.body || {};
+  const { dir, title, resume, fork } = req.body || {};
   if (!dir) return reply.code(400).send({ error: 'dir is required' });
   try {
     // Don't launch a duplicate: if the session being resumed is already running,
-    // hand back the existing one so the client can just open it.
-    if (resume) {
+    // hand back the existing one so the client can just open it. Forking is the
+    // exception — it intentionally branches off into a NEW session even when the
+    // original is live, so skip the dedup guard.
+    if (resume && !fork) {
       const existing = (await enrichedSessions()).find(
         (s) => s.resumedFrom === resume || s.liveSessionId === resume,
       );
       if (existing) return { name: existing.name, alreadyRunning: true };
     }
-    const name = await createSession({ dir, title, resume });
+    const name = await createSession({ dir, title, resume, fork });
     return { name };
   } catch (err) {
     return reply.code(err.statusCode || 500).send({ error: err.message });

@@ -23,7 +23,10 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
           <h2>${escH(fallbackTitle || 'Session graph')}</h2>
           <div class="faint" id="gx-sub">loading…</div>
         </div>
-        <button class="icon gx-close" title="Close">✕</button>
+        <div class="graph-actions">
+          <button class="primary gx-fork" title="Fork into a new session that copies this context" disabled>⑂ Fork</button>
+          <button class="icon gx-close" title="Close">✕</button>
+        </div>
       </div>
       <div class="graph-body">
         <div class="graph-scroll" id="gx-scroll"><div class="graph-empty">Loading transcript…</div></div>
@@ -49,6 +52,27 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
   bg.querySelector('#gx-sub').textContent =
     `${g.cwd || ''}${g.gitBranch ? ' · ' + g.gitBranch : ''} · ${g.stats.messages} msgs · ` +
     `${g.stats.branchPoints} branch${g.stats.branchPoints === 1 ? '' : 'es'} · ~${tok(g.stats.totalTokens)} tokens`;
+
+  // Wire the Fork action now that we know the session's directory.
+  const forkDir = g.cwd || cwd || '';
+  const forkBtn = bg.querySelector('.gx-fork');
+  if (forkDir) {
+    forkBtn.disabled = false;
+    forkBtn.addEventListener('click', async () => {
+      forkBtn.disabled = true; forkBtn.textContent = 'Forking…';
+      try {
+        const r = await fetch('/api/sessions', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ dir: forkDir, resume: sessionId, fork: true, title: `${g.title || fallbackTitle || 'session'} (fork)` }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+        location.href = `/terminal.html?session=${encodeURIComponent(j.name)}`;
+      } catch (e) { forkBtn.disabled = false; forkBtn.textContent = '⑂ Fork'; alert('Fork failed: ' + e.message); }
+    });
+  } else {
+    forkBtn.title = 'No recorded directory — can’t fork';
+  }
 
   if (!g.nodes.length) { scroll.innerHTML = `<div class="graph-empty">No conversation messages to graph.</div>`; return; }
 

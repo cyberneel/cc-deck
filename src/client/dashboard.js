@@ -458,18 +458,44 @@ function wireHistoryCards(container) {
       const b = e.currentTarget;
       openGraph(b.dataset.graph, b.dataset.gtitle, b.dataset.cwd);
     });
+    el.querySelector('.fork-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const b = e.currentTarget;
+      forkFrom(b.dataset.fork, b.dataset.cwd, b.dataset.gtitle, b);
+    });
   });
+}
+
+// git-branch glyph (inline SVG so it renders identically everywhere).
+const FORK_ICON = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="4" cy="3" r="1.5"/><circle cx="4" cy="13" r="1.5"/><circle cx="12" cy="5" r="1.5"/><path d="M4 4.5v7M4 8h4a2 2 0 0 0 2-2V6.5"/></svg>';
+
+// Fork a session into a NEW one that copies its context (claude --fork-session),
+// then jump into it. Used from history cards and the graph viewer.
+async function forkFrom(resume, dir, title, btn) {
+  if (!dir) { alert('No recorded directory for this session — can’t fork.'); return; }
+  if (btn) btn.disabled = true;
+  try {
+    const { name } = await api('/api/sessions', {
+      method: 'POST',
+      body: JSON.stringify({ dir, resume, fork: true, title: `${title || 'session'} (fork)` }),
+    });
+    location.href = `/terminal.html?session=${encodeURIComponent(name)}`;
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    alert('Fork failed: ' + e.message);
+  }
 }
 
 function historyCardHtml(s) {
   const noCwd = !s.cwd;
   const runningName = liveClaudeMap.get(s.sessionId) || null;
   const graphBtn = `<button class="icon graph-btn" title="Session graph" data-graph="${esc(s.sessionId)}" data-cwd="${esc(s.cwd || '')}" data-gtitle="${esc(s.title)}">⎇</button>`;
+  const forkBtn = noCwd ? '' : `<button class="icon fork-btn" title="Fork into a new session (copies this session's context)" data-fork="${esc(s.sessionId)}" data-cwd="${esc(s.cwd || '')}" data-gtitle="${esc(s.title)}">${FORK_ICON}</button>`;
   const foot = runningName
     ? `<span class="badge live"><span class="pulse"></span>running</span><div class="spacer"></div>
-       ${graphBtn}<button class="primary open-btn">▶ Open</button>`
+       ${graphBtn}${forkBtn}<button class="primary open-btn">▶ Open</button>`
     : `${modeChip(s)}<span class="faint">${fmtAbsTime(s.lastModified)} · ${s.sizeKb} KB</span><div class="spacer"></div>
-       ${graphBtn}<button class="primary resume-btn" ${noCwd ? 'disabled title="No recorded directory"' : ''}>▶ Resume</button>`;
+       ${graphBtn}${forkBtn}<button class="primary resume-btn" ${noCwd ? 'disabled title="No recorded directory"' : ''}>▶ Resume</button>`;
   return `<div class="card hist ${runningName ? 'isrunning' : ''}" data-id="${esc(s.sessionId)}" ${runningName ? `data-open="${esc(runningName)}"` : ''}>
     <div class="card-head">
       <div style="flex:1;min-width:0">
