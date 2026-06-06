@@ -19,6 +19,7 @@ import {
   listDirs,
   createDir,
   sessionDir,
+  resolveAllowedDir,
 } from './tmux.js';
 import { attachHandler } from './pty.js';
 import { initServer } from './tmux.js';
@@ -237,9 +238,11 @@ function safeRelPath(name) {
   return parts.join('/');
 }
 app.post('/api/upload', async (req, reply) => {
-  const session = req.query.session;
   let baseDir;
-  try { baseDir = await sessionDir(session); } catch (err) { return reply.code(err.statusCode || 400).send({ error: err.message }); }
+  try {
+    // Prefer an explicit (validated) destination dir; fall back to the session cwd.
+    baseDir = req.query.dir ? await resolveAllowedDir(req.query.dir) : await sessionDir(req.query.session);
+  } catch (err) { return reply.code(err.statusCode || 400).send({ error: err.message }); }
   const names = [];
   try {
     for await (const part of req.files()) {

@@ -330,6 +330,8 @@ select:focus { outline: none; border-color: var(--accent); }
 }
 .upload-menu button { border: none; background: transparent; text-align: left; padding: 9px 14px; border-radius: 8px; font-size: 13px; white-space: nowrap; }
 .upload-menu button:hover { background: rgba(255,255,255,.08); }
+.up-files { max-height: 150px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); padding: 6px 10px; }
+.up-f { font-family: var(--mono); font-size: 12px; color: var(--text-dim); padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- mobile on-screen key bar + drawer backdrop (hidden on desktop) ---- */
 #sb-backdrop { display: none; }

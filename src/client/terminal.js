@@ -360,18 +360,18 @@ function toast(msg) {
   setTimeout(() => t.remove(), 4000);
 }
 
-async function uploadFiles(files, withPaths) {
-  if (!files.length || !currentSession) return;
+async function uploadFiles(files, withPaths, dir) {
+  if (!files.length || !dir) return;
   const form = new FormData();
   // Carry each file's relative path in the field name ("f:<path>") so folder
   // structure survives (multipart strips the directory from the filename).
   for (const f of files) form.append('f:' + ((withPaths && f.webkitRelativePath) || f.name), f, f.name);
   toast(`Uploading ${files.length} item(s)…`);
   try {
-    const r = await fetch(`/api/upload?session=${encodeURIComponent(currentSession)}`, { method: 'POST', body: form });
+    const r = await fetch(`/api/upload?dir=${encodeURIComponent(dir)}`, { method: 'POST', body: form });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
-    toast(`Added ${j.count} file(s) to the session folder`);
+    toast(`Added ${j.count} file(s) to ${dir.split('/').slice(-2).join('/')}`);
   } catch (e) { toast('Upload failed: ' + e.message); }
 }
 
@@ -382,8 +382,73 @@ function pickAndUpload(folder) {
   if (folder) input.webkitdirectory = true;
   input.style.display = 'none';
   document.body.appendChild(input);
-  input.addEventListener('change', () => { const files = [...input.files]; input.remove(); uploadFiles(files, folder); });
+  input.addEventListener('change', () => { const files = [...input.files]; input.remove(); if (files.length) openUploadModal(files, folder); });
   input.click();
+}
+
+// Show the selected files and let the user choose/browse the destination folder
+// (defaulting to the current session's cwd) before sending.
+function openUploadModal(files, withPaths) {
+  const cur = sessions.find((s) => s.name === currentSession);
+  let currentPath = (cur && cur.dir) || '/';
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `
+    <div class="modal">
+      <h2>Send ${files.length} item${files.length === 1 ? '' : 's'}</h2>
+      <div class="field">
+        <label>Destination folder</label>
+        <input id="up-dir" value="${esc(currentPath)}" spellcheck="false" />
+        <div class="browser" id="up-browser"></div>
+        <div class="mkdir-row">
+          <input id="up-mk" placeholder="new-folder-name" spellcheck="false" autocapitalize="off" autocomplete="off" />
+          <button type="button" id="up-mk-btn">+ Create folder here</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Sending</label>
+        <div class="up-files">${files.map((f) => `<div class="up-f">${esc((withPaths && f.webkitRelativePath) || f.name)}</div>`).join('')}</div>
+      </div>
+      <div class="error" id="up-err"></div>
+      <div class="modal-actions">
+        <button id="up-cancel">Cancel</button>
+        <button class="primary" id="up-go">Upload here</button>
+      </div>
+    </div>`;
+  document.body.appendChild(bg);
+  const dirInput = bg.querySelector('#up-dir');
+  const browser = bg.querySelector('#up-browser');
+  const errEl = bg.querySelector('#up-err');
+  async function browse(path) {
+    try {
+      const { path: abs, dirs } = await api(`/api/fs?path=${encodeURIComponent(path)}`);
+      currentPath = abs; dirInput.value = abs;
+      const parent = abs.split('/').slice(0, -1).join('/') || '/';
+      browser.innerHTML = `<div class="row up" data-path="${esc(parent)}">⬆ ..</div>` +
+        dirs.map((d) => `<div class="row" data-path="${esc(d.path)}">📁 ${esc(d.name)}</div>`).join('');
+      browser.querySelectorAll('.row').forEach((r) => r.addEventListener('click', () => browse(r.dataset.path)));
+    } catch (e) { errEl.textContent = e.message; }
+  }
+  browse(currentPath);
+  dirInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') browse(dirInput.value); });
+  const mk = bg.querySelector('#up-mk');
+  async function mkdirHere() {
+    const name = mk.value.trim();
+    if (!name) { mk.focus(); return; }
+    errEl.textContent = '';
+    try { const { created } = await api('/api/fs', { method: 'POST', body: JSON.stringify({ parent: currentPath, name }) }); mk.value = ''; await browse(created); }
+    catch (e) { errEl.textContent = e.message; }
+  }
+  bg.querySelector('#up-mk-btn').addEventListener('click', mkdirHere);
+  mk.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); mkdirHere(); } });
+  const close = () => bg.remove();
+  bg.querySelector('#up-cancel').addEventListener('click', close);
+  bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
+  bg.querySelector('#up-go').addEventListener('click', () => {
+    const dir = dirInput.value.trim();
+    close();
+    uploadFiles(files, withPaths, dir);
+  });
 }
 
 document.getElementById('upload-btn').addEventListener('click', (e) => {
