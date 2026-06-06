@@ -5,7 +5,7 @@ import { CanvasAddon } from '@xterm/addon-canvas';
 import css from './styles.css';
 import { registerServiceWorker, applyUpdate } from './swreg.js';
 import { openShare } from './graph.js';
-import { SEED_FIELD_HTML, wireSeedSection } from './seedpicker.js';
+import { openNewModal as openNewModalShared } from './newsession.js';
 
 const styleEl = document.createElement('style');
 styleEl.textContent = css;
@@ -239,94 +239,11 @@ document.getElementById('sb-backdrop').addEventListener('click', () => {
 document.getElementById('sb-new').addEventListener('click', openNewModal);
 document.getElementById('reload-btn').addEventListener('click', () => applyUpdate(pendingWorker));
 
-// ---- new session modal (launch + switch to it) ----
+// ---- new session modal (shared with the dashboard) ----
 let cfg = null;
 async function openNewModal() {
   if (!cfg) { try { cfg = await api('/api/config'); } catch { cfg = { roots: [] }; } }
-  let currentPath = (cfg.roots && cfg.roots[0]) || cfg.home || '/';
-  const bg = document.createElement('div');
-  bg.className = 'modal-bg';
-  bg.innerHTML = `
-    <div class="modal">
-      <h2>New Claude session</h2>
-      <div class="field">
-        <label>Directory</label>
-        <input id="dir-input" value="${esc(currentPath)}" spellcheck="false" />
-        <div class="browser" id="browser"></div>
-        <div class="mkdir-row">
-          <input id="mkdir-name" placeholder="new-folder-name" spellcheck="false" autocapitalize="off" autocomplete="off" />
-          <button type="button" id="mkdir-btn">+ Create folder here</button>
-        </div>
-      </div>
-      <div class="field">
-        <label>Title <span class="faint">(optional)</span></label>
-        <input id="title-input" placeholder="defaults to the folder name" spellcheck="false" />
-      </div>
-      ${SEED_FIELD_HTML}
-      <div class="error" id="modal-error"></div>
-      <div class="modal-actions">
-        <button id="cancel-btn">Cancel</button>
-        <button class="primary" id="launch-btn">Launch claude</button>
-      </div>
-    </div>`;
-  document.body.appendChild(bg);
-  const dirInput = bg.querySelector('#dir-input');
-  const browser = bg.querySelector('#browser');
-  const errEl = bg.querySelector('#modal-error');
-  async function browse(path) {
-    try {
-      const { path: abs, dirs } = await api(`/api/fs?path=${encodeURIComponent(path)}`);
-      currentPath = abs; dirInput.value = abs;
-      const parent = abs.split('/').slice(0, -1).join('/') || '/';
-      browser.innerHTML = `<div class="row up" data-path="${esc(parent)}">⬆ ..</div>` +
-        dirs.map((d) => `<div class="row" data-path="${esc(d.path)}">📁 ${esc(d.name)}</div>`).join('');
-      browser.querySelectorAll('.row').forEach((r) => r.addEventListener('click', () => browse(r.dataset.path)));
-    } catch (e) { errEl.textContent = e.message; }
-  }
-  browse(currentPath);
-  dirInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') browse(dirInput.value); });
-  // Create a new subfolder under the current path, then navigate into it.
-  const mkdirName = bg.querySelector('#mkdir-name');
-  async function createFolder() {
-    const name = mkdirName.value.trim();
-    if (!name) { mkdirName.focus(); return; }
-    errEl.textContent = '';
-    try {
-      const { created } = await api('/api/fs', { method: 'POST', body: JSON.stringify({ parent: currentPath, name }) });
-      mkdirName.value = '';
-      await browse(created);
-      bg.querySelector('#title-input').focus();
-    } catch (e) { errEl.textContent = e.message; }
-  }
-  bg.querySelector('#mkdir-btn').addEventListener('click', createFolder);
-  mkdirName.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); createFolder(); } });
-  const getSeed = wireSeedSection(bg);
-  const close = () => bg.remove();
-  bg.querySelector('#cancel-btn').addEventListener('click', close);
-  bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
-  bg.querySelector('#launch-btn').addEventListener('click', async () => {
-    errEl.textContent = '';
-    const btn = bg.querySelector('#launch-btn');
-    const seed = getSeed();
-    const orig = btn.textContent;
-    btn.disabled = true;
-    try {
-      const title = bg.querySelector('#title-input').value;
-      let name;
-      if (seed) {
-        btn.textContent = seed.scope === 'summary' ? 'Generating context…' : 'Preparing…';
-        ({ name } = await api('/api/handoff', {
-          method: 'POST',
-          body: JSON.stringify({ sourceId: seed.sourceId, cwd: seed.cwd, scope: seed.scope, dest: 'new', targetDir: dirInput.value, title }),
-        }));
-      } else {
-        ({ name } = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ dir: dirInput.value, title }) }));
-      }
-      close();
-      await refreshSessions();
-      switchTo(name);
-    } catch (e) { btn.disabled = false; btn.textContent = orig; errEl.textContent = e.message; }
-  });
+  openNewModalShared({ api, cfg, onCreated: async (name) => { await refreshSessions(); switchTo(name); } });
 }
 
 // Tapping the terminal focuses the active session (raises the iOS keyboard).
