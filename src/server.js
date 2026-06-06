@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve, sep, basename } from 'node:path';
+import { dirname, join, resolve, sep, basename, relative } from 'node:path';
 import { statSync, createWriteStream, createReadStream } from 'node:fs';
 import { mkdir, stat, readdir, rm, access } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
@@ -239,6 +239,20 @@ function safeRelPath(name) {
 }
 const pathExists = (p) => access(p).then(() => true).catch(() => false);
 
+// Find a non-conflicting path by appending " (1)", " (2)", … before the extension.
+async function uniquePath(p) {
+  if (!(await pathExists(p))) return p;
+  const dir = dirname(p), b = basename(p);
+  const dot = b.lastIndexOf('.');
+  const stem = dot > 0 ? b.slice(0, dot) : b;
+  const ext = dot > 0 ? b.slice(dot) : '';
+  for (let i = 1; i < 10000; i++) {
+    const cand = join(dir, `${stem} (${i})${ext}`);
+    if (!(await pathExists(cand))) return cand;
+  }
+  return p;
+}
+
 // Which of the given relative names already exist under `dir` (overwrite check).
 app.post('/api/upload/check', async (req, reply) => {
   let baseDir;
@@ -258,7 +272,8 @@ app.post('/api/upload', async (req, reply) => {
     // Prefer an explicit (validated) destination dir; fall back to the session cwd.
     baseDir = req.query.dir ? await resolveAllowedDir(req.query.dir) : await sessionDir(req.query.session);
   } catch (err) { return reply.code(err.statusCode || 400).send({ error: err.message }); }
-  const overwrite = req.query.overwrite === '1';
+  // On a name conflict: 'skip' (default), 'overwrite', or 'rename' (keep both).
+  const mode = req.query.mode || (req.query.overwrite === '1' ? 'overwrite' : 'skip');
   const names = [];
   const skipped = [];
   try {
@@ -268,13 +283,17 @@ app.post('/api/upload', async (req, reply) => {
       const raw = part.fieldname && part.fieldname.startsWith('f:') ? part.fieldname.slice(2) : part.filename;
       const rel = safeRelPath(raw);
       if (!rel) { part.file.resume(); continue; }
-      const dest = resolve(baseDir, rel);
+      let dest = resolve(baseDir, rel);
       // Defense in depth: the resolved path must stay inside the target dir.
       if (dest !== baseDir && !dest.startsWith(baseDir + sep)) { part.file.resume(); continue; }
-      if (!overwrite && (await pathExists(dest))) { part.file.resume(); skipped.push(rel); continue; }
+      if (await pathExists(dest)) {
+        if (mode === 'skip') { part.file.resume(); skipped.push(rel); continue; }
+        if (mode === 'rename') dest = await uniquePath(dest);
+        // 'overwrite' keeps dest as-is
+      }
       await mkdir(dirname(dest), { recursive: true });
       await pipeline(part.file, createWriteStream(dest));
-      names.push(rel);
+      names.push(relative(baseDir, dest)); // actual written path (may be renamed)
     }
   } catch (err) {
     return reply.code(500).send({ error: err.message });
