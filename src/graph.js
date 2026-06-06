@@ -11,7 +11,7 @@ export function isSessionId(id) {
 
 // Locate a transcript file by sessionId across all project dirs (filename is the
 // session UUID, so the match is unique). Optionally biased by a known cwd.
-async function findTranscriptFile(sessionId, cwd) {
+export async function findTranscriptFile(sessionId, cwd) {
   if (cwd) {
     const guess = join(PROJECTS_DIR, cwd.replace(/\//g, '-'), `${sessionId}.jsonl`);
     try { await readFile(guess, { encoding: 'utf8', flag: 'r' }); return guess; } catch { /* fall through */ }

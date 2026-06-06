@@ -2,6 +2,7 @@ import css from './styles.css';
 import { registerServiceWorker, applyUpdate } from './swreg.js';
 import { openGraph } from './graph.js';
 import { openNewModal as openNewModalShared } from './newsession.js';
+import { openStorage } from './storage.js';
 
 // Inject shared styles.
 const styleEl = document.createElement('style');
@@ -189,6 +190,7 @@ function render() {
       </div>
       <div class="spacer"></div>
       <button class="primary" id="new-btn" title="New session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New session'}</button>
+      <button id="storage-btn" class="icon" title="Storage &amp; cleanup">🗄</button>
       <button id="reload-btn" class="icon" title="Reload app">↻</button>
       <button id="logout-btn" title="Log out">⏻</button>
     </div>
@@ -240,6 +242,7 @@ function render() {
     renderBody();
   });
   document.getElementById('new-btn').addEventListener('click', openNewModal);
+  document.getElementById('storage-btn').addEventListener('click', openStorage);
   document.getElementById('reload-btn').addEventListener('click', () => applyUpdate(pendingWorker));
   document.getElementById('logout-btn').addEventListener('click', async () => {
     await api('/api/logout', { method: 'POST' });

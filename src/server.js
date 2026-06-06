@@ -22,6 +22,7 @@ import { getAgents, matchAgents } from './agents.js';
 import { listHistory, claudeLiveMeta } from './history.js';
 import { buildGraph, buildThread } from './graph.js';
 import { runHandoff } from './handoff.js';
+import { listArtifacts, deleteArtifacts } from './storage.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
 // Claude's own session name (custom /rename title, else its auto-title), and the
@@ -218,6 +219,32 @@ app.post('/api/handoff', async (req, reply) => {
       dest: b.dest === 'running' ? 'running' : 'new',
       targetSession: b.targetSession, targetDir: b.targetDir, title: b.title,
     });
+  } catch (err) {
+    return reply.code(err.statusCode || 500).send({ error: err.message });
+  }
+});
+
+// ---- Storage / retention hub (controlled, selective deletes) ----
+app.get('/api/storage', async (req, reply) => {
+  try {
+    return await listArtifacts();
+  } catch (err) {
+    return reply.code(err.statusCode || 500).send({ error: err.message });
+  }
+});
+app.post('/api/storage/delete', async (req, reply) => {
+  const b = req.body || {};
+  try {
+    // Protect transcripts of currently-running sessions from deletion.
+    const protectedIds = new Set();
+    for (const s of await enrichedSessions()) {
+      if (s.liveSessionId) protectedIds.add(s.liveSessionId);
+      if (s.resumedFrom) protectedIds.add(s.resumedFrom);
+    }
+    return await deleteArtifacts(
+      { handoffs: b.handoffs || [], caches: b.caches || [], transcripts: b.transcripts || [] },
+      protectedIds,
+    );
   } catch (err) {
     return reply.code(err.statusCode || 500).send({ error: err.message });
   }
