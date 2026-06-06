@@ -399,9 +399,11 @@ function renderSidebar() {
       <span class="sb-dot ${statusDot(s)}"></span>
       <span class="sb-meta"><span class="sb-title">${esc(s.title)}</span><span class="sb-dir">${esc(baseName(s.dir))}</span></span>
       ${att ? '<span class="sb-attn" title="Needs your attention">●</span>' : num}
-      ${s.liveSessionId ? `<button class="sb-share" title="Share this session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
-      <button class="sb-rename" title="Rename session" data-rename="${esc(s.name)}">✎</button>
-      <button class="sb-kill" title="Kill session" data-kill="${esc(s.name)}">✕</button>
+      <div class="sb-actions">
+        ${s.liveSessionId ? `<button class="sb-share" title="Share this session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
+        <button class="sb-rename" title="Rename session" data-rename="${esc(s.name)}">✎</button>
+        <button class="sb-kill" title="Kill session" data-kill="${esc(s.name)}">✕</button>
+      </div>
     </div>`;
   }).join('') || '<div class="faint" style="padding:12px">No active sessions</div>';
   list.querySelectorAll('.sb-item').forEach((el) =>

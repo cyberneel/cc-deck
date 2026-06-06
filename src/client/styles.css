@@ -277,7 +277,7 @@ select:focus { outline: none; border-color: var(--accent); }
 .sb-new { margin: 10px 12px 4px; padding: 9px; background: var(--accent); border: 1px solid var(--accent); color: #1a0f0a; font-weight: 600; border-radius: 9px; font-size: 13px; }
 .sb-new:hover { background: var(--accent-dim); border-color: var(--accent-dim); }
 #sb-list { flex: 1; overflow-y: auto; padding: 8px; }
-.sb-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 9px; cursor: pointer; margin-bottom: 4px; white-space: nowrap; }
+.sb-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 9px; cursor: pointer; margin-bottom: 4px; white-space: nowrap; position: relative; }
 .sb-item:hover { background: var(--bg-card); }
 .sb-item.current { background: var(--bg-card); box-shadow: inset 2px 0 0 var(--accent); }
 .sb-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; }
@@ -285,12 +285,23 @@ select:focus { outline: none; border-color: var(--accent); }
 .sb-dot.idle { background: var(--text-faint); }
 .sb-dot.ready { background: #6ea8fe; box-shadow: 0 0 6px #6ea8fe; }
 .sb-dot.attn { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-.sb-kill, .sb-rename, .sb-share { margin-left: 4px; flex: 0 0 auto; border: none; background: transparent; color: var(--text-faint); padding: 4px 6px; border-radius: 6px; font-size: 12px; opacity: 0; transition: opacity .12s, color .12s; }
+/* Action buttons float as an overlay (out of flow) so they never shrink the
+   session name; revealed on hover (desktop) / always shown on touch. The left
+   fade keeps them legible over a long title. */
+.sb-actions {
+  position: absolute; right: 4px; top: 0; bottom: 0; display: flex; align-items: center; gap: 1px;
+  padding-left: 22px; border-radius: 0 9px 9px 0;
+  opacity: 0; pointer-events: none; transition: opacity .12s;
+  background: linear-gradient(to right, transparent, var(--bg-card) 32%);
+}
+.sb-item:hover .sb-actions { opacity: 1; pointer-events: auto; }
+.sb-kill, .sb-rename, .sb-share { flex: 0 0 auto; border: none; background: transparent; color: var(--text-faint); padding: 4px 6px; border-radius: 6px; font-size: 12px; transition: color .12s; }
 .sb-share svg { display: block; }
-.sb-item:hover .sb-kill, .sb-item:hover .sb-rename, .sb-item:hover .sb-share { opacity: 1; }
-.sb-rename:hover, .sb-share:hover { color: var(--accent); background: var(--bg); }
-.sb-kill:hover { color: #ff8d85; background: var(--bg); }
-@media (max-width: 700px) { .sb-kill, .sb-rename, .sb-share { opacity: .55; } }
+.sb-rename:hover, .sb-share:hover { color: var(--accent); }
+.sb-kill:hover { color: #ff8d85; }
+@media (max-width: 700px) {
+  .sb-actions { opacity: 1; pointer-events: auto; background: linear-gradient(to right, transparent, rgba(20,20,22,.92) 34%); }
+}
 .sb-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .sb-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
 .sb-dir { font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; }
