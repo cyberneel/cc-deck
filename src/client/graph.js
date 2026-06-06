@@ -24,6 +24,7 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
           <div class="faint" id="gx-sub">loading…</div>
         </div>
         <div class="graph-actions">
+          <button class="gx-share" title="Share this session's context into another session" disabled>Share →</button>
           <button class="primary gx-fork" title="Fork into a new session that copies this context" disabled>⑂ Fork</button>
           <button class="icon gx-close" title="Close">✕</button>
         </div>
@@ -73,6 +74,11 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
   } else {
     forkBtn.title = 'No recorded directory — can’t fork';
   }
+
+  // ---- Share context flow ----
+  const shareBtn = bg.querySelector('.gx-share');
+  shareBtn.disabled = false;
+  shareBtn.addEventListener('click', () => openShare(sessionId, g, cwd, () => selectedId));
 
   if (!g.nodes.length) { scroll.innerHTML = `<div class="graph-empty">No conversation messages to graph.</div>`; return; }
 
@@ -126,7 +132,9 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
 
   // ---- interaction ----
   let selected = null;
+  let selectedId = null;
   const selectNode = async (id) => {
+    selectedId = id;
     if (selected) selected.classList.remove('sel');
     const row = scroll.querySelector(`.gnode[data-id="${CSS.escape(id)}"]`);
     if (row) { row.classList.add('sel'); selected = row; }
@@ -149,4 +157,91 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
   // Open the current head by default.
   const cur = g.nodes.find((n) => n.current) || g.nodes[g.nodes.length - 1];
   if (cur) selectNode(cur.id);
+}
+
+// The "Share context" sub-modal: pick what to share (AI summary vs full
+// transcript), range (whole vs up to the selected node), and where it lands
+// (a new session or a running one). Then POST /api/handoff and open the result.
+async function openShare(sessionId, g, cwd, getSelectedId) {
+  const selId = getSelectedId();
+  const sm = document.createElement('div');
+  sm.className = 'modal-bg share-bg';
+  sm.innerHTML = `
+    <div class="modal share-modal">
+      <h2>Share context</h2>
+      <div class="field"><label>What to share</label>
+        <div class="seg" id="sh-scope">
+          <button data-v="summary" class="active">AI summary</button>
+          <button data-v="thread">Full transcript</button>
+        </div>
+        <div class="faint" id="sh-scope-hint">A concise AI briefing (goal, decisions, state, files, next steps).</div>
+      </div>
+      ${selId ? `<div class="field"><label>Range</label>
+        <div class="seg" id="sh-range">
+          <button data-v="whole" class="active">Whole session</button>
+          <button data-v="node">Up to selected message</button>
+        </div></div>` : ''}
+      <div class="field"><label>Send to</label>
+        <div class="seg" id="sh-dest">
+          <button data-v="new" class="active">New session</button>
+          <button data-v="running">Running session</button>
+        </div></div>
+      <div class="field" id="sh-new-wrap"><label>Directory</label>
+        <input id="sh-dir" value="${escH(g.cwd || cwd || '')}" spellcheck="false" /></div>
+      <div class="field" id="sh-run-wrap" style="display:none"><label>Target session</label>
+        <select id="sh-target"></select></div>
+      <div class="error" id="sh-err"></div>
+      <div class="modal-actions">
+        <button id="sh-cancel">Cancel</button>
+        <button class="primary" id="sh-go">Share</button>
+      </div>
+    </div>`;
+  document.body.appendChild(sm);
+  const closeS = () => sm.remove();
+  sm.querySelector('#sh-cancel').addEventListener('click', closeS);
+  sm.addEventListener('click', (e) => { if (e.target === sm) closeS(); });
+
+  const segVal = (id) => sm.querySelector(`#${id} button.active`)?.dataset.v;
+  sm.querySelectorAll('.seg').forEach((seg) => seg.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    seg.querySelectorAll('button').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    if (seg.id === 'sh-dest') {
+      sm.querySelector('#sh-new-wrap').style.display = b.dataset.v === 'new' ? '' : 'none';
+      sm.querySelector('#sh-run-wrap').style.display = b.dataset.v === 'running' ? '' : 'none';
+    }
+    if (seg.id === 'sh-scope') {
+      sm.querySelector('#sh-scope-hint').textContent = b.dataset.v === 'summary'
+        ? 'A concise AI briefing (goal, decisions, state, files, next steps).'
+        : 'The exact messages, verbatim. Higher fidelity, more tokens.';
+    }
+  }));
+
+  // Populate running sessions for the "running" destination.
+  try {
+    const { sessions } = await gj('/api/sessions?_=1');
+    sm.querySelector('#sh-target').innerHTML =
+      (sessions || []).map((s) => `<option value="${escH(s.name)}">${escH(s.title || s.name)}</option>`).join('')
+      || '<option value="">(no running sessions)</option>';
+  } catch { /* leave empty */ }
+
+  sm.querySelector('#sh-go').addEventListener('click', async () => {
+    const scope = segVal('sh-scope');
+    const dest = segVal('sh-dest');
+    const range = selId ? segVal('sh-range') : 'whole';
+    const body = { sourceId: sessionId, cwd: g.cwd || cwd, scope, dest, title: g.title || '' };
+    if (range === 'node') body.uuid = selId;
+    if (dest === 'new') body.targetDir = sm.querySelector('#sh-dir').value.trim();
+    else body.targetSession = sm.querySelector('#sh-target').value;
+    if (dest === 'running' && !body.targetSession) { sm.querySelector('#sh-err').textContent = 'No running session selected.'; return; }
+    const go = sm.querySelector('#sh-go'), errEl = sm.querySelector('#sh-err');
+    errEl.textContent = ''; go.disabled = true;
+    go.textContent = scope === 'summary' ? 'Generating summary…' : 'Sharing…';
+    try {
+      const r = await fetch('/api/handoff', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      location.href = `/terminal.html?session=${encodeURIComponent(j.name)}`;
+    } catch (e) { go.disabled = false; go.textContent = 'Share'; errEl.textContent = e.message; }
+  });
 }

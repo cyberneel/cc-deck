@@ -130,24 +130,43 @@ export async function listSessions() {
 const RESUME_ID_RE = /^[0-9a-fA-F-]{36}$/;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// `claude --name` only sets a transient display name; the persisted title cc-deck
-// reads comes from the /rename slash command. So for a freshly-named session, wait
-// until Claude has booted to its prompt, then send /rename. Fire-and-forget.
-async function scheduleRename(name, title) {
+// Some setup can only happen once Claude has booted to its prompt: `/rename`
+// (the persisted title comes from the slash command, not `--name`) and seeding an
+// initial prompt (e.g. a context handoff). Poll for the UI, then type them.
+// Fire-and-forget.
+async function scheduleBoot(name, { rename, seed }) {
   for (let i = 0; i < 30; i++) {
     await sleep(700);
     let pane;
     try { pane = await tmux(['capture-pane', '-p', '-t', name, '-S', '-25']); } catch { return; }
     if (!pane) continue;
     if (/\? for shortcuts|❯|esc to interrupt/.test(pane)) { // Claude's UI is up
-      await tmux(['send-keys', '-l', '-t', name, `/rename ${title}`]).catch(() => {});
-      await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
+      if (rename) {
+        await tmux(['send-keys', '-l', '-t', name, `/rename ${rename}`]).catch(() => {});
+        await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
+      }
+      if (seed) {
+        if (rename) await sleep(600); // let the /rename submit first
+        await tmux(['send-keys', '-l', '-t', name, seed]).catch(() => {});
+        await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
+      }
       return;
     }
   }
 }
 
-export async function createSession({ dir, title, resume, fork }) {
+// Type a single line into a managed session's prompt and submit it. Used to
+// inject a context handoff into a running session. Keep `text` single-line —
+// embedded newlines would submit early.
+export async function sendText(name, text) {
+  assertManaged(name);
+  const line = (text || '').toString().replace(/[\r\n]+/g, ' ').trim();
+  if (!line) return;
+  await tmux(['send-keys', '-l', '-t', name, line]).catch(() => {});
+  await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
+}
+
+export async function createSession({ dir, title, resume, fork, seed }) {
   const abs = await resolveAllowedDir(dir);
   const id = `${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
   const name = `${config.prefix}${id}`;
@@ -182,9 +201,10 @@ export async function createSession({ dir, title, resume, fork }) {
   // Launch the CLI inside the login shell so the session survives if claude exits.
   // Prefix COLORTERM=truecolor so Claude emits 24-bit color (diffs, highlights).
   await tmux(['send-keys', '-t', name, `COLORTERM=truecolor ${launch}`, 'Enter']);
-  // For a fresh session with a custom title, name the Claude session too (once
-  // it's booted) so the name shows in Claude and `claude --resume`. Background.
-  if (!resume && cleanTitle) scheduleRename(name, cleanTitle).catch(() => {});
+  // Once Claude has booted: name a fresh titled session (so the name shows in
+  // Claude and `claude --resume`) and/or type a seed prompt. Background.
+  const doRename = !resume && cleanTitle;
+  if (doRename || seed) scheduleBoot(name, { rename: doRename ? cleanTitle : null, seed }).catch(() => {});
   return name;
 }
 

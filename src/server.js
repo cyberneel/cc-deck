@@ -21,6 +21,7 @@ import { initServer } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
 import { listHistory, claudeLiveMeta } from './history.js';
 import { buildGraph, buildThread } from './graph.js';
+import { runHandoff } from './handoff.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
 // Claude's own session name (custom /rename title, else its auto-title), and the
@@ -201,6 +202,22 @@ app.get('/api/transcripts/:id/graph', async (req, reply) => {
 app.get('/api/transcripts/:id/thread', async (req, reply) => {
   try {
     return await buildThread(req.params.id, req.query.uuid, req.query.cwd);
+  } catch (err) {
+    return reply.code(err.statusCode || 500).send({ error: err.message });
+  }
+});
+
+// Share context from one session into a new or running session (handoff).
+app.post('/api/handoff', async (req, reply) => {
+  const b = req.body || {};
+  if (!b.sourceId) return reply.code(400).send({ error: 'sourceId is required' });
+  try {
+    return await runHandoff({
+      sourceId: b.sourceId, cwd: b.cwd, uuid: b.uuid || null,
+      scope: b.scope === 'thread' ? 'thread' : 'summary',
+      dest: b.dest === 'running' ? 'running' : 'new',
+      targetSession: b.targetSession, targetDir: b.targetDir, title: b.title,
+    });
   } catch (err) {
     return reply.code(err.statusCode || 500).send({ error: err.message });
   }
