@@ -1,10 +1,13 @@
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-import { statSync } from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
+import { statSync, createWriteStream } from 'node:fs';
+import { mkdir } from 'node:fs/promises';
+import { pipeline } from 'node:stream/promises';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyCookie from '@fastify/cookie';
 import fastifyWebsocket from '@fastify/websocket';
+import fastifyMultipart from '@fastify/multipart';
 import { config } from './config.js';
 import { checkPassword, issueToken, verifyToken } from './auth.js';
 import {
@@ -15,6 +18,7 @@ import {
   capturePane,
   listDirs,
   createDir,
+  sessionDir,
 } from './tmux.js';
 import { attachHandler } from './pty.js';
 import { initServer } from './tmux.js';
@@ -63,6 +67,7 @@ app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, 
 
 await app.register(fastifyCookie);
 await app.register(fastifyWebsocket);
+await app.register(fastifyMultipart, { limits: { fileSize: 100 * 1024 * 1024, files: 500 } });
 // Serve assets with no-cache so the browser revalidates each load (304 when
 // unchanged, fresh when redeployed) — important for iOS home-screen apps that
 // otherwise cache the old bundle. ETags still make unchanged loads cheap.
@@ -222,6 +227,38 @@ app.post('/api/handoff', async (req, reply) => {
   } catch (err) {
     return reply.code(err.statusCode || 500).send({ error: err.message });
   }
+});
+
+// Upload files/folders into a session's working directory. Multipart; each
+// part's filename carries its relative path (for folder uploads). Writes are
+// confined to the session's cwd (which must be under an allowed root).
+function safeRelPath(name) {
+  const parts = String(name || '').split('/').filter((p) => p && p !== '.' && p !== '..');
+  return parts.join('/');
+}
+app.post('/api/upload', async (req, reply) => {
+  const session = req.query.session;
+  let baseDir;
+  try { baseDir = await sessionDir(session); } catch (err) { return reply.code(err.statusCode || 400).send({ error: err.message }); }
+  const names = [];
+  try {
+    for await (const part of req.files()) {
+      // The relative path is carried in the field name ("f:<path>") because
+      // multipart basenames part.filename — so folder structure survives.
+      const raw = part.fieldname && part.fieldname.startsWith('f:') ? part.fieldname.slice(2) : part.filename;
+      const rel = safeRelPath(raw);
+      if (!rel) { part.file.resume(); continue; }
+      const dest = resolve(baseDir, rel);
+      // Defense in depth: the resolved path must stay inside the session dir.
+      if (dest !== baseDir && !dest.startsWith(baseDir + sep)) { part.file.resume(); continue; }
+      await mkdir(dirname(dest), { recursive: true });
+      await pipeline(part.file, createWriteStream(dest));
+      names.push(rel);
+    }
+  } catch (err) {
+    return reply.code(500).send({ error: err.message });
+  }
+  return { count: names.length, dir: baseDir, names };
 });
 
 // ---- Storage / retention hub (controlled, selective deletes) ----

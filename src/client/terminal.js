@@ -53,6 +53,7 @@ document.body.innerHTML = `
         <a href="/" title="Back to dashboard">←</a>
         <span class="title" id="title">${currentSession || 'session'}</span>
         <div class="spacer" style="flex:1"></div>
+        <button id="upload-btn" class="icon" title="Send files / folder to this session">📎</button>
         <button id="reload-btn" class="icon" title="Reload app">↻</button>
         <button id="scroll-toggle" class="icon" title="Scroll mode — tmux: full history; fast: smooth local scroll"></button>
         <span class="status" id="status">connecting…</span>
@@ -112,6 +113,23 @@ function makePane(name) {
     term.loadAddon(webgl);
   } catch { try { term.loadAddon(new CanvasAddon()); } catch { /* */ } }
   term.attachCustomKeyEventHandler(shortcutGuard);
+  // Clipboard sync: tmux copy-mode yanks arrive as an OSC 52 sequence — turn that
+  // into a system-clipboard write so terminal selections reach the device clipboard.
+  try {
+    term.parser.registerOscHandler(52, (data) => {
+      const b64 = data.slice(data.indexOf(';') + 1);
+      try {
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        navigator.clipboard?.writeText(new TextDecoder().decode(bytes)).catch(() => {});
+      } catch { /* not base64 */ }
+      return true;
+    });
+  } catch { /* older xterm */ }
+  // Copy-on-select for fast scroll mode (where xterm owns the selection).
+  wrap.addEventListener('mouseup', () => {
+    const s = term.getSelection();
+    if (s) navigator.clipboard?.writeText(s).catch(() => {});
+  });
   term.resize(gCols, gRows);
 
   const pane = { name, wrap, term, fit, ws: null, dispose: false, manual: false, rc: null };
@@ -294,7 +312,18 @@ const KEYS = [
   { label: '↓', seq: '\x1b[B', repeat: true },
   { label: '→', seq: '\x1b[C', repeat: true },
   { label: '^C', seq: '\x03' },
+  { label: '⎘', paste: true, title: 'Paste from clipboard' },
 ];
+
+// Paste the device clipboard into the active session as a bracketed paste (so
+// multi-line text is delivered intact, not submitted line-by-line).
+async function pasteClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) activeWs()?.send(`\x1b[200~${text}\x1b[201~`);
+  } catch { /* clipboard blocked */ }
+  panes.get(currentSession)?.term.focus();
+}
 const keybar = document.getElementById('keybar');
 keybar.innerHTML = KEYS.map((k, i) =>
   `<button ${k.ctrl ? 'id="kb-ctrl"' : ''}${k.meta ? 'id="kb-meta"' : ''} data-i="${i}" title="${k.title || ''}">${k.label}</button>`).join('');
@@ -317,8 +346,61 @@ keybar.querySelectorAll('button').forEach((btn) => {
     e.preventDefault();
     if (k.ctrl) { ctrlArm = !ctrlArm; updateCtrlBtn(); }
     else if (k.meta) { metaArm = !metaArm; updateMetaBtn(); }
+    else if (k.paste) { pasteClipboard(); }
     else sendKey(k.seq);
   });
+});
+
+// ---- send files / folder to the session ----
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+async function uploadFiles(files, withPaths) {
+  if (!files.length || !currentSession) return;
+  const form = new FormData();
+  // Carry each file's relative path in the field name ("f:<path>") so folder
+  // structure survives (multipart strips the directory from the filename).
+  for (const f of files) form.append('f:' + ((withPaths && f.webkitRelativePath) || f.name), f, f.name);
+  toast(`Uploading ${files.length} item(s)…`);
+  try {
+    const r = await fetch(`/api/upload?session=${encodeURIComponent(currentSession)}`, { method: 'POST', body: form });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    toast(`Added ${j.count} file(s) to the session folder`);
+  } catch (e) { toast('Upload failed: ' + e.message); }
+}
+
+function pickAndUpload(folder) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = true;
+  if (folder) input.webkitdirectory = true;
+  input.style.display = 'none';
+  document.body.appendChild(input);
+  input.addEventListener('change', () => { const files = [...input.files]; input.remove(); uploadFiles(files, folder); });
+  input.click();
+}
+
+document.getElementById('upload-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const open = document.getElementById('upload-menu');
+  if (open) { open.remove(); return; }
+  const m = document.createElement('div');
+  m.id = 'upload-menu';
+  m.className = 'upload-menu';
+  const desktop = !matchMedia('(max-width: 700px)').matches; // iOS can't pick folders
+  m.innerHTML = `<button data-folder="0">📄 Files…</button>${desktop ? '<button data-folder="1">📁 Folder…</button>' : ''}`;
+  const r = e.currentTarget.getBoundingClientRect();
+  m.style.top = `${r.bottom + 4}px`;
+  m.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+  document.body.appendChild(m);
+  m.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { m.remove(); pickAndUpload(b.dataset.folder === '1'); }));
+  setTimeout(() => document.addEventListener('click', function h() { m.remove(); document.removeEventListener('click', h); }, { once: true }), 0);
 });
 
 // Keep the layout (and key bar) above the iOS on-screen keyboard — but ONLY while

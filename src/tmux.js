@@ -33,10 +33,13 @@ async function tmux(args) {
 // server restarts, so this is (re)applied on startup and on create.
 export async function initServer() {
   await tmux(['set-option', '-s', 'exit-empty', 'off']).catch(() => {});
-  // Tell tmux the xterm-256color client supports RGB (24-bit) — the key bit.
-  await tmux(['set-option', '-as', 'terminal-features', ',xterm-256color:RGB']).catch(() => {});
+  // Tell tmux the xterm-256color client supports RGB (24-bit) + OSC52 clipboard.
+  await tmux(['set-option', '-as', 'terminal-features', ',xterm-256color:RGB:clipboard']).catch(() => {});
   await tmux(['set-option', '-g', 'default-terminal', 'tmux-256color']).catch(() => {});
   await tmux(['set-environment', '-g', 'COLORTERM', 'truecolor']).catch(() => {});
+  // Copying in copy-mode emits an OSC52 sequence; the browser terminal turns that
+  // into a system-clipboard write, so tmux selections sync to the device clipboard.
+  await tmux(['set-option', '-g', 'set-clipboard', 'on']).catch(() => {});
 }
 
 // cc-deck color palette (kept in sync with src/client/styles.css).
@@ -254,6 +257,15 @@ export async function renameSession(name, title) {
       await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
     }
   }
+}
+
+// The validated working directory of a managed session (for file uploads). Reads
+// the @ccdeck_dir option and confirms it still lives under an allowed root.
+export async function sessionDir(name) {
+  assertManaged(name);
+  const dir = (await tmux(['show-options', '-t', name, '-v', '@ccdeck_dir']).catch(() => '')).trim();
+  if (!dir) { const e = new Error('Session directory unknown'); e.statusCode = 400; throw e; }
+  return resolveAllowedDir(dir);
 }
 
 export async function sessionExists(name) {
