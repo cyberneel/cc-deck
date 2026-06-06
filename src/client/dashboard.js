@@ -3,6 +3,7 @@ import { registerServiceWorker, applyUpdate } from './swreg.js';
 import { openGraph } from './graph.js';
 import { openNewModal as openNewModalShared } from './newsession.js';
 import { openStorage } from './storage.js';
+import { renderFiles } from './files.js';
 
 // Inject shared styles.
 const styleEl = document.createElement('style');
@@ -187,6 +188,7 @@ function render() {
         <button data-tab="active" class="${tab === 'active' ? 'active' : ''}">Active</button>
         <button data-tab="history" class="${tab === 'history' ? 'active' : ''}">History</button>
         <button data-tab="usage" class="${tab === 'usage' ? 'active' : ''}">Usage</button>
+        <button data-tab="files" class="${tab === 'files' ? 'active' : ''}">Files</button>
       </div>
       <div class="spacer"></div>
       <button class="primary" id="new-btn" title="New session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New session'}</button>
@@ -195,8 +197,8 @@ function render() {
       <button id="logout-btn" title="Log out">⏻</button>
     </div>
     <div class="wrap">
-      <div class="stats" id="stats" style="${tab === 'usage' ? 'display:none' : ''}"></div>
-      <div class="subbar" style="${tab === 'usage' ? 'display:none' : ''}">
+      <div class="stats" id="stats" style="${tab === 'usage' || tab === 'files' ? 'display:none' : ''}"></div>
+      <div class="subbar" style="${tab === 'usage' || tab === 'files' ? 'display:none' : ''}">
         <div class="search">
           <span class="search-ico">⌕</span>
           <input id="search" type="text" spellcheck="false" autocomplete="off"
@@ -280,6 +282,7 @@ function renderStats() {
 // ---- body dispatch ----
 function renderBody() {
   if (tab === 'usage') return renderUsage();
+  if (tab === 'files') return renderFiles(document.getElementById('cards'));
   renderStats();
   if (tab === 'history') renderHistory();
   else renderActive();

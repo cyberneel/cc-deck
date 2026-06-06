@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve, sep } from 'node:path';
-import { statSync, createWriteStream } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { dirname, join, resolve, sep, basename } from 'node:path';
+import { statSync, createWriteStream, createReadStream } from 'node:fs';
+import { mkdir, stat, readdir, rm, access } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
@@ -237,13 +237,30 @@ function safeRelPath(name) {
   const parts = String(name || '').split('/').filter((p) => p && p !== '.' && p !== '..');
   return parts.join('/');
 }
+const pathExists = (p) => access(p).then(() => true).catch(() => false);
+
+// Which of the given relative names already exist under `dir` (overwrite check).
+app.post('/api/upload/check', async (req, reply) => {
+  let baseDir;
+  try { baseDir = await resolveAllowedDir(req.query.dir); } catch (err) { return reply.code(err.statusCode || 400).send({ error: err.message }); }
+  const names = Array.isArray(req.body?.names) ? req.body.names : [];
+  const exists = [];
+  for (const n of names) {
+    const rel = safeRelPath(n);
+    if (rel && (await pathExists(resolve(baseDir, rel)))) exists.push(rel);
+  }
+  return { exists };
+});
+
 app.post('/api/upload', async (req, reply) => {
   let baseDir;
   try {
     // Prefer an explicit (validated) destination dir; fall back to the session cwd.
     baseDir = req.query.dir ? await resolveAllowedDir(req.query.dir) : await sessionDir(req.query.session);
   } catch (err) { return reply.code(err.statusCode || 400).send({ error: err.message }); }
+  const overwrite = req.query.overwrite === '1';
   const names = [];
+  const skipped = [];
   try {
     for await (const part of req.files()) {
       // The relative path is carried in the field name ("f:<path>") because
@@ -252,8 +269,9 @@ app.post('/api/upload', async (req, reply) => {
       const rel = safeRelPath(raw);
       if (!rel) { part.file.resume(); continue; }
       const dest = resolve(baseDir, rel);
-      // Defense in depth: the resolved path must stay inside the session dir.
+      // Defense in depth: the resolved path must stay inside the target dir.
       if (dest !== baseDir && !dest.startsWith(baseDir + sep)) { part.file.resume(); continue; }
+      if (!overwrite && (await pathExists(dest))) { part.file.resume(); skipped.push(rel); continue; }
       await mkdir(dirname(dest), { recursive: true });
       await pipeline(part.file, createWriteStream(dest));
       names.push(rel);
@@ -261,7 +279,60 @@ app.post('/api/upload', async (req, reply) => {
   } catch (err) {
     return reply.code(500).send({ error: err.message });
   }
-  return { count: names.length, dir: baseDir, names };
+  return { count: names.length, dir: baseDir, names, skipped };
+});
+
+// ---- file explorer (browse / download / delete within allowed roots) ----
+app.get('/api/files', async (req, reply) => {
+  try {
+    const abs = await resolveAllowedDir(req.query.path || config.roots[0]);
+    const ents = await readdir(abs, { withFileTypes: true });
+    const entries = [];
+    for (const e of ents) {
+      if (e.name.startsWith('.')) continue; // hide dotfiles
+      const s = await stat(join(abs, e.name)).catch(() => null);
+      entries.push({
+        name: e.name,
+        type: e.isDirectory() ? 'dir' : 'file',
+        sizeKb: s && s.isFile() ? Math.round(s.size / 1024) : null,
+        mtime: s ? s.mtimeMs : null,
+      });
+    }
+    entries.sort((a, b) => (a.type !== b.type ? (a.type === 'dir' ? -1 : 1) : a.name.localeCompare(b.name)));
+    const parent = config.roots.some((r) => abs === r) ? null : dirname(abs);
+    return { path: abs, parent, roots: config.roots, entries };
+  } catch (err) {
+    return reply.code(err.statusCode || 500).send({ error: err.message });
+  }
+});
+
+app.get('/api/files/download', async (req, reply) => {
+  try {
+    const p = resolve(req.query.path || '');
+    const ok = config.roots.some((r) => p === r || p.startsWith(r + sep));
+    if (!ok) return reply.code(400).send({ error: 'Path must be under an allowed root' });
+    const s = await stat(p);
+    if (!s.isFile()) return reply.code(400).send({ error: 'Not a file' });
+    reply.header('Content-Disposition', `attachment; filename="${basename(p).replace(/"/g, '')}"`);
+    reply.header('Content-Type', 'application/octet-stream');
+    return reply.send(createReadStream(p));
+  } catch (err) {
+    return reply.code(err.statusCode || 404).send({ error: 'File not found' });
+  }
+});
+
+app.post('/api/files/delete', async (req, reply) => {
+  const paths = Array.isArray(req.body?.paths) ? req.body.paths : [];
+  const result = { deleted: 0, errors: [] };
+  for (const raw of paths) {
+    const p = resolve(String(raw || ''));
+    // Refuse to delete an allowed root itself; only things strictly under one.
+    const inside = config.roots.some((r) => p.startsWith(r + sep)) && !config.roots.includes(p);
+    if (!inside) { result.errors.push(`${raw}: outside allowed roots`); continue; }
+    try { await rm(p, { recursive: true, force: false }); result.deleted += 1; }
+    catch (e) { result.errors.push(`${basename(p)}: ${e.code || e.message}`); }
+  }
+  return result;
 });
 
 // ---- Storage / retention hub (controlled, selective deletes) ----

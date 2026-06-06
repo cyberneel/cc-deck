@@ -333,6 +333,28 @@ select:focus { outline: none; border-color: var(--accent); }
 .up-files { max-height: 150px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); padding: 6px 10px; }
 .up-f { font-family: var(--mono); font-size: 12px; color: var(--text-dim); padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ---- file explorer (dashboard Files tab) ---- */
+.fx { display: flex; flex-direction: column; gap: 10px; }
+.fx-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); }
+.fx-crumbs { display: flex; align-items: center; gap: 3px; min-width: 0; flex-wrap: wrap; }
+.fx-crumb { border: none; background: transparent; color: var(--text); padding: 4px 7px; border-radius: 6px; font-size: 13px; font-family: var(--mono); }
+.fx-crumb:hover { background: rgba(255,255,255,.07); color: var(--accent); }
+.fx-sep { color: var(--text-faint); }
+.fx-bar #fx-upload, .fx-bar #fx-mkdir, .fx-bar #fx-up { flex: 0 0 auto; }
+.fx-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg-card); }
+.fx-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.fx-row:last-child { border-bottom: none; }
+.fx-row.dir { cursor: pointer; }
+.fx-row:hover { background: rgba(255,255,255,.04); }
+.fx-ico { flex: 0 0 auto; }
+.fx-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+.fx-row.dir .fx-name { color: var(--text); font-weight: 500; }
+.fx-meta { flex: 0 0 auto; font-size: 11px; }
+.fx-act { flex: 0 0 auto; border: none; background: transparent; color: var(--text-faint); padding: 5px 7px; border-radius: 6px; font-size: 13px; text-decoration: none; display: inline-flex; cursor: pointer; }
+.fx-act:hover { background: var(--bg); color: var(--accent); }
+.fx-del:hover { color: #ff8d85; }
+@media (max-width: 700px) { .toggle.tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; } .toggle.tabs button { white-space: nowrap; } }
+
 /* ---- mobile on-screen key bar + drawer backdrop (hidden on desktop) ---- */
 #sb-backdrop { display: none; }
 .keybar { display: none; }

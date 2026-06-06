@@ -6,6 +6,7 @@ import css from './styles.css';
 import { registerServiceWorker, applyUpdate } from './swreg.js';
 import { openShare } from './graph.js';
 import { openNewModal as openNewModalShared } from './newsession.js';
+import { pickFiles, sendFiles } from './upload.js';
 
 const styleEl = document.createElement('style');
 styleEl.textContent = css;
@@ -352,38 +353,8 @@ keybar.querySelectorAll('button').forEach((btn) => {
 });
 
 // ---- send files / folder to the session ----
-function toast(msg) {
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 4000);
-}
-
-async function uploadFiles(files, withPaths, dir) {
-  if (!files.length || !dir) return;
-  const form = new FormData();
-  // Carry each file's relative path in the field name ("f:<path>") so folder
-  // structure survives (multipart strips the directory from the filename).
-  for (const f of files) form.append('f:' + ((withPaths && f.webkitRelativePath) || f.name), f, f.name);
-  toast(`Uploading ${files.length} item(s)…`);
-  try {
-    const r = await fetch(`/api/upload?dir=${encodeURIComponent(dir)}`, { method: 'POST', body: form });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
-    toast(`Added ${j.count} file(s) to ${dir.split('/').slice(-2).join('/')}`);
-  } catch (e) { toast('Upload failed: ' + e.message); }
-}
-
 function pickAndUpload(folder) {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.multiple = true;
-  if (folder) input.webkitdirectory = true;
-  input.style.display = 'none';
-  document.body.appendChild(input);
-  input.addEventListener('change', () => { const files = [...input.files]; input.remove(); if (files.length) openUploadModal(files, folder); });
-  input.click();
+  pickFiles(folder, (files, withPaths) => openUploadModal(files, withPaths));
 }
 
 // Show the selected files and let the user choose/browse the destination folder
@@ -447,7 +418,7 @@ function openUploadModal(files, withPaths) {
   bg.querySelector('#up-go').addEventListener('click', () => {
     const dir = dirInput.value.trim();
     close();
-    uploadFiles(files, withPaths, dir);
+    sendFiles(files, withPaths, dir);
   });
 }
 
