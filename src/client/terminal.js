@@ -4,6 +4,8 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { CanvasAddon } from '@xterm/addon-canvas';
 import css from './styles.css';
 import { registerServiceWorker, applyUpdate } from './swreg.js';
+import { openShare } from './graph.js';
+import { SEED_FIELD_HTML, wireSeedSection } from './seedpicker.js';
 
 const styleEl = document.createElement('style');
 styleEl.textContent = css;
@@ -260,6 +262,7 @@ async function openNewModal() {
         <label>Title <span class="faint">(optional)</span></label>
         <input id="title-input" placeholder="defaults to the folder name" spellcheck="false" />
       </div>
+      ${SEED_FIELD_HTML}
       <div class="error" id="modal-error"></div>
       <div class="modal-actions">
         <button id="cancel-btn">Cancel</button>
@@ -297,20 +300,32 @@ async function openNewModal() {
   }
   bg.querySelector('#mkdir-btn').addEventListener('click', createFolder);
   mkdirName.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); createFolder(); } });
+  const getSeed = wireSeedSection(bg);
   const close = () => bg.remove();
   bg.querySelector('#cancel-btn').addEventListener('click', close);
   bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
   bg.querySelector('#launch-btn').addEventListener('click', async () => {
     errEl.textContent = '';
+    const btn = bg.querySelector('#launch-btn');
+    const seed = getSeed();
+    const orig = btn.textContent;
+    btn.disabled = true;
     try {
-      const { name } = await api('/api/sessions', {
-        method: 'POST',
-        body: JSON.stringify({ dir: dirInput.value, title: bg.querySelector('#title-input').value }),
-      });
+      const title = bg.querySelector('#title-input').value;
+      let name;
+      if (seed) {
+        btn.textContent = seed.scope === 'summary' ? 'Generating context…' : 'Preparing…';
+        ({ name } = await api('/api/handoff', {
+          method: 'POST',
+          body: JSON.stringify({ sourceId: seed.sourceId, cwd: seed.cwd, scope: seed.scope, dest: 'new', targetDir: dirInput.value, title }),
+        }));
+      } else {
+        ({ name } = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ dir: dirInput.value, title }) }));
+      }
       close();
       await refreshSessions();
       switchTo(name);
-    } catch (e) { errEl.textContent = e.message; }
+    } catch (e) { btn.disabled = false; btn.textContent = orig; errEl.textContent = e.message; }
   });
 }
 
@@ -453,6 +468,9 @@ async function refreshSessions() {
   } catch { /* */ }
 }
 
+// share/branch glyph (inline SVG → renders identically everywhere)
+const SHARE_ICON = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h5v5M14 2 7 9M12 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3.5"/></svg>';
+
 function renderSidebar() {
   const list = document.getElementById('sb-list');
   const ordered = orderedSessions();
@@ -464,16 +482,23 @@ function renderSidebar() {
       <span class="sb-dot ${statusDot(s)}"></span>
       <span class="sb-meta"><span class="sb-title">${esc(s.title)}</span><span class="sb-dir">${esc(baseName(s.dir))}</span></span>
       ${att ? '<span class="sb-attn" title="Needs your attention">●</span>' : num}
+      ${s.liveSessionId ? `<button class="sb-share" title="Share this session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
       <button class="sb-rename" title="Rename session" data-rename="${esc(s.name)}">✎</button>
       <button class="sb-kill" title="Kill session" data-kill="${esc(s.name)}">✕</button>
     </div>`;
   }).join('') || '<div class="faint" style="padding:12px">No active sessions</div>';
   list.querySelectorAll('.sb-item').forEach((el) =>
-    el.addEventListener('click', (e) => { if (!e.target.closest('.sb-kill, .sb-rename')) switchTo(el.dataset.name); }));
+    el.addEventListener('click', (e) => { if (!e.target.closest('.sb-kill, .sb-rename, .sb-share')) switchTo(el.dataset.name); }));
   list.querySelectorAll('.sb-rename').forEach((b) =>
     b.addEventListener('click', (e) => { e.stopPropagation(); renameSessionFromSidebar(b.dataset.rename); }));
   list.querySelectorAll('.sb-kill').forEach((b) =>
     b.addEventListener('click', (e) => { e.stopPropagation(); killSessionFromSidebar(b.dataset.kill); }));
+  list.querySelectorAll('.sb-share').forEach((b) =>
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const s = sessions.find((x) => x.name === b.dataset.share);
+      if (s && s.liveSessionId) openShare(s.liveSessionId, { cwd: s.dir, title: s.title });
+    }));
   const attnCount = sessions.filter(needsAttention).length;
   const badge = document.getElementById('sb-badge');
   badge.style.display = attnCount ? '' : 'none';

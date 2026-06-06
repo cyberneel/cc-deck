@@ -285,11 +285,12 @@ select:focus { outline: none; border-color: var(--accent); }
 .sb-dot.idle { background: var(--text-faint); }
 .sb-dot.ready { background: #6ea8fe; box-shadow: 0 0 6px #6ea8fe; }
 .sb-dot.attn { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
-.sb-kill, .sb-rename { margin-left: 4px; flex: 0 0 auto; border: none; background: transparent; color: var(--text-faint); padding: 4px 6px; border-radius: 6px; font-size: 12px; opacity: 0; transition: opacity .12s, color .12s; }
-.sb-item:hover .sb-kill, .sb-item:hover .sb-rename { opacity: 1; }
-.sb-rename:hover { color: var(--text); background: var(--bg); }
+.sb-kill, .sb-rename, .sb-share { margin-left: 4px; flex: 0 0 auto; border: none; background: transparent; color: var(--text-faint); padding: 4px 6px; border-radius: 6px; font-size: 12px; opacity: 0; transition: opacity .12s, color .12s; }
+.sb-share svg { display: block; }
+.sb-item:hover .sb-kill, .sb-item:hover .sb-rename, .sb-item:hover .sb-share { opacity: 1; }
+.sb-rename:hover, .sb-share:hover { color: var(--accent); background: var(--bg); }
 .sb-kill:hover { color: #ff8d85; background: var(--bg); }
-@media (max-width: 700px) { .sb-kill, .sb-rename { opacity: .55; } }
+@media (max-width: 700px) { .sb-kill, .sb-rename, .sb-share { opacity: .55; } }
 .sb-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .sb-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
 .sb-dir { font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; }
@@ -503,6 +504,9 @@ select:focus { outline: none; border-color: var(--accent); }
 .seg button.active { background: var(--bg-card); color: var(--text); box-shadow: var(--glass-hi); }
 .seg button + button { border-left: 1px solid var(--border); }
 .share-modal #sh-scope-hint { margin-top: 6px; }
+.seed-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text); font-size: 13px; }
+.seed-toggle input { width: auto; margin: 0; }
+#seed-src { width: 100%; }
 .fork-btn svg { display: block; }
 .fork-btn:hover { color: var(--accent); border-color: var(--border-hover); }
 .graph-titles { min-width: 0; }

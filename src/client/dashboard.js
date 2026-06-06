@@ -1,6 +1,7 @@
 import css from './styles.css';
 import { registerServiceWorker, applyUpdate } from './swreg.js';
 import { openGraph } from './graph.js';
+import { SEED_FIELD_HTML, wireSeedSection } from './seedpicker.js';
 
 // Inject shared styles.
 const styleEl = document.createElement('style');
@@ -705,6 +706,7 @@ function openNewModal() {
         <label>Title <span class="faint">(optional)</span></label>
         <input id="title-input" placeholder="defaults to the folder name" spellcheck="false" />
       </div>
+      ${SEED_FIELD_HTML}
       <div class="error" id="modal-error"></div>
       <div class="modal-actions">
         <button id="cancel-btn">Cancel</button>
@@ -755,18 +757,35 @@ function openNewModal() {
   bg.querySelector('#mkdir-btn').addEventListener('click', createFolder);
   mkdirName.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); createFolder(); } });
 
+  const getSeed = wireSeedSection(bg);
+
   const close = () => bg.remove();
   bg.querySelector('#cancel-btn').addEventListener('click', close);
   bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
   bg.querySelector('#launch-btn').addEventListener('click', async () => {
     errEl.textContent = '';
+    const btn = bg.querySelector('#launch-btn');
+    const seed = getSeed();
+    const orig = btn.textContent;
+    btn.disabled = true;
     try {
-      const { name } = await api('/api/sessions', {
-        method: 'POST',
-        body: JSON.stringify({ dir: dirInput.value, title: bg.querySelector('#title-input').value }),
-      });
+      let name;
+      const title = bg.querySelector('#title-input').value;
+      if (seed) {
+        btn.textContent = seed.scope === 'summary' ? 'Generating context…' : 'Preparing…';
+        ({ name } = await api('/api/handoff', {
+          method: 'POST',
+          body: JSON.stringify({ sourceId: seed.sourceId, cwd: seed.cwd, scope: seed.scope, dest: 'new', targetDir: dirInput.value, title }),
+        }));
+      } else {
+        ({ name } = await api('/api/sessions', {
+          method: 'POST',
+          body: JSON.stringify({ dir: dirInput.value, title }),
+        }));
+      }
       location.href = `/terminal.html?session=${encodeURIComponent(name)}`;
     } catch (e) {
+      btn.disabled = false; btn.textContent = orig;
       errEl.textContent = e.message;
     }
   });

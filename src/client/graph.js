@@ -78,7 +78,7 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
   // ---- Share context flow ----
   const shareBtn = bg.querySelector('.gx-share');
   shareBtn.disabled = false;
-  shareBtn.addEventListener('click', () => openShare(sessionId, g, cwd, () => selectedId));
+  shareBtn.addEventListener('click', () => openShare(sessionId, { cwd: g.cwd || cwd, title: g.title || fallbackTitle }, () => selectedId));
 
   if (!g.nodes.length) { scroll.innerHTML = `<div class="graph-empty">No conversation messages to graph.</div>`; return; }
 
@@ -162,7 +162,10 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
 // The "Share context" sub-modal: pick what to share (AI summary vs full
 // transcript), range (whole vs up to the selected node), and where it lands
 // (a new session or a running one). Then POST /api/handoff and open the result.
-async function openShare(sessionId, g, cwd, getSelectedId) {
+// `meta` = { cwd, title } of the source session; getSelectedId is optional.
+export async function openShare(sessionId, meta, getSelectedId = () => null) {
+  const g = { cwd: meta.cwd || '', title: meta.title || '' };
+  const cwd = meta.cwd || '';
   const selId = getSelectedId();
   const sm = document.createElement('div');
   sm.className = 'modal-bg share-bg';
