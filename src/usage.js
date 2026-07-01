@@ -8,7 +8,9 @@ import { getPricing, rateForModel } from './pricing.js';
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 
 function isBillableModel(model) {
-  return !!model && (model.includes('opus') || model.includes('sonnet') || model.includes('haiku'));
+  // Any real Claude model (opus/sonnet/haiku/fable/… and future families).
+  // Excludes '<synthetic>' and empty ids. Priced per exact id via pricing.js.
+  return !!model && model.startsWith('claude-');
 }
 
 // Dollar cost of one event given a per-million rate object (from pricing.js).
