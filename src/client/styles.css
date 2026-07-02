@@ -556,7 +556,14 @@ select:focus { outline: none; border-color: var(--accent); }
 .share-modal #sh-scope-hint { margin-top: 6px; }
 .seed-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text); font-size: 13px; }
 .seed-toggle input { width: auto; margin: 0; }
-#seed-src { width: 100%; }
+.seed-list { max-height: 210px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.seed-group { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--text-faint); padding: 7px 10px 3px; position: sticky; top: 0; background: var(--bg); }
+.seed-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; cursor: pointer; }
+.seed-item:hover { background: rgba(255,255,255,.04); }
+.seed-item input { width: auto; margin: 0; flex: 0 0 auto; }
+.seed-item-main { display: flex; flex-direction: column; min-width: 0; }
+.seed-item-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seed-item-meta { font-family: var(--mono); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- storage & cleanup hub ---- */
 .storage-modal { width: min(720px, 95vw); max-height: 86vh; padding: 0; display: flex; flex-direction: column; overflow: hidden; }

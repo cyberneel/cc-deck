@@ -262,10 +262,13 @@ app.get('/api/transcripts/:id/thread', async (req, reply) => {
 // Share context from one session into a new or running session (handoff).
 app.post('/api/handoff', async (req, reply) => {
   const b = req.body || {};
-  if (!b.sourceId) return reply.code(400).send({ error: 'sourceId is required' });
+  if (!b.sourceId && !(Array.isArray(b.sources) && b.sources.length)) {
+    return reply.code(400).send({ error: 'sourceId or sources is required' });
+  }
   try {
     return await runHandoff({
       sourceId: b.sourceId, cwd: b.cwd, uuid: b.uuid || null,
+      sources: Array.isArray(b.sources) ? b.sources : null, // multi-session seed
       scope: b.scope === 'thread' ? 'thread' : 'summary',
       dest: b.dest === 'running' ? 'running' : 'new',
       targetSession: b.targetSession, targetDir: b.targetDir, title: b.title,

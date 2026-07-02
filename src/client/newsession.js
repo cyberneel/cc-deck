@@ -91,7 +91,7 @@ export function openNewModal({ api, cfg = {}, onCreated }) {
         btn.textContent = seed.scope === 'summary' ? 'Generating context…' : 'Preparing…';
         ({ name } = await api('/api/handoff', {
           method: 'POST',
-          body: JSON.stringify({ sourceId: seed.sourceId, cwd: seed.cwd, scope: seed.scope, dest: 'new', targetDir: dirInput.value, title }),
+          body: JSON.stringify({ sources: seed.sources, scope: seed.scope, dest: 'new', targetDir: dirInput.value, title }),
         }));
       } else {
         ({ name } = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ dir: dirInput.value, title }) }));
