@@ -4,7 +4,7 @@
 // elsewhere. Stored as markdown files keyed by the Claude sessionId. A pending
 // note is `<sessionId>-<ts>.md`; once delivered it's renamed to `.md.done` (the
 // file stays so Claude can Read it, but it won't be injected again).
-import { mkdir, writeFile, readdir, rename } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, rename, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -29,6 +29,21 @@ export async function listPending(sessionId) {
   if (!SESSION_ID_RE.test(sessionId)) return [];
   const names = await listFiles();
   return names.filter((n) => n.startsWith(`${sessionId}-`) && n.endsWith('.md')).map((n) => join(NOTES_DIR, n));
+}
+
+// Read pending note contents for a session (for the viewer), newest first.
+export async function readPending(sessionId) {
+  const files = await listPending(sessionId);
+  const out = [];
+  for (const f of files) {
+    const base = f.split('/').pop();
+    const ms = parseInt(base.slice(sessionId.length + 1, -3), 36);
+    let text = '';
+    try { text = await readFile(f, 'utf8'); } catch { continue; }
+    out.push({ savedAt: Number.isFinite(ms) ? new Date(ms).toISOString() : null, text });
+  }
+  out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+  return out;
 }
 
 // Count of pending notes per session (one readdir), for badges.

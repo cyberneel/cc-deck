@@ -33,7 +33,7 @@ import { listArtifacts, deleteArtifacts } from './storage.js';
 import { createMcpServer } from './mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as oauth from './oauth.js';
-import { consumeNotesSeed, listPending, pendingCounts } from './notes.js';
+import { consumeNotesSeed, listPending, pendingCounts, readPending } from './notes.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
 // Claude's own session name (custom /rename title, else its auto-title), and the
@@ -183,12 +183,21 @@ app.get('/api/history', async () => {
       if (s.liveSessionId) live.add(s.liveSessionId);
       if (s.resumedFrom) live.add(s.resumedFrom);
     }
-    const sessions = hist.sessions.filter((s) => !live.has(s.sessionId));
+    const notes = await pendingCounts();
+    const sessions = hist.sessions
+      .filter((s) => !live.has(s.sessionId))
+      .map((s) => ({ ...s, noteCount: notes.get(s.sessionId) || 0 }));
     const excluded = hist.sessions.length - sessions.length;
     return { ...hist, sessions, total: Math.max(sessions.length, hist.total - excluded) };
   } catch {
     return hist;
   }
+});
+
+// Read pending external notes for a session (for the note viewer).
+app.get('/api/notes/:sessionId', async (req, reply) => {
+  try { return { notes: await readPending(req.params.sessionId) }; }
+  catch (err) { return reply.code(err.statusCode || 500).send({ error: err.message }); }
 });
 
 app.delete('/api/sessions/:name', async (req, reply) => {
