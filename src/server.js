@@ -31,6 +31,7 @@ import { runHandoff } from './handoff.js';
 import { listArtifacts, deleteArtifacts } from './storage.js';
 import { createMcpServer } from './mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import * as oauth from './oauth.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
 // Claude's own session name (custom /rename title, else its auto-title), and the
@@ -68,6 +69,11 @@ app.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, 
     done(err);
   }
 });
+// OAuth token + consent endpoints post form-encoded bodies.
+app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (req, body, done) => {
+  try { done(null, Object.fromEntries(new URLSearchParams(body || ''))); }
+  catch (err) { err.statusCode = 400; done(err); }
+});
 
 await app.register(fastifyCookie);
 await app.register(fastifyWebsocket);
@@ -87,7 +93,11 @@ await app.register(fastifyStatic, {
 const PUBLIC_PATHS = new Set([
   '/login.html', '/login.css', '/api/login', '/favicon.ico', '/sw.js',
   '/manifest.webmanifest', '/icon-180.png', '/icon-192.png', '/icon-512.png',
-  '/mcp', // MCP endpoint does its own bearer-token auth (below)
+  '/mcp', // MCP endpoint does its own bearer/OAuth auth (below)
+  // OAuth endpoints for claude.ai connectors — reachable without a cc-deck cookie.
+  '/.well-known/oauth-protected-resource', '/.well-known/oauth-authorization-server',
+  '/.well-known/oauth-protected-resource/mcp',
+  '/oauth/register', '/oauth/authorize', '/oauth/token',
 ]);
 
 function isAuthed(req) {
@@ -389,11 +399,47 @@ app.post('/api/storage/delete', async (req, reply) => {
 // past sessions. Bearer-gated; disabled unless CCDECK_MCP_TOKEN is set. Stateful:
 // initialize creates a session (server+transport) keyed by Mcp-Session-Id.
 const mcpSessions = new Map(); // sessionId -> { server, transport }
+// Accept either the static bearer token (Claude Code) or an OAuth access token (claude.ai).
 function mcpAuthed(req) {
-  return !!config.mcpToken && (req.headers.authorization || '') === `Bearer ${config.mcpToken}`;
+  const h = req.headers.authorization || '';
+  if (!h.startsWith('Bearer ')) return false;
+  const tok = h.slice(7);
+  if (config.mcpToken && tok === config.mcpToken) return true;
+  return !!oauth.verifyAccessToken(tok);
 }
+function mcpUnauthorized(req, reply) {
+  reply.header('WWW-Authenticate', `Bearer resource_metadata="${oauth.baseUrl(req)}/.well-known/oauth-protected-resource"`);
+  return reply.code(401).send({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized' } });
+}
+
+// OAuth 2.1 metadata + endpoints (for claude.ai remote connectors).
+app.get('/.well-known/oauth-protected-resource', async (req) => oauth.protectedResourceMeta(oauth.baseUrl(req)));
+app.get('/.well-known/oauth-protected-resource/mcp', async (req) => oauth.protectedResourceMeta(oauth.baseUrl(req)));
+app.get('/.well-known/oauth-authorization-server', async (req) => oauth.authServerMeta(oauth.baseUrl(req)));
+app.post('/oauth/register', async (req, reply) => {
+  try { return reply.code(201).send(oauth.registerClient(req.body || {})); }
+  catch (err) { return reply.code(err.statusCode || 400).send({ error: err.message }); }
+});
+app.get('/oauth/authorize', async (req, reply) => {
+  try { return reply.type('text/html').send(oauth.authorizePage(req.query)); }
+  catch (err) { return reply.code(err.statusCode || 400).send(err.message); }
+});
+app.post('/oauth/authorize', async (req, reply) => {
+  const form = req.body || {};
+  try { return reply.redirect(oauth.approveAuthorize(form)); }
+  catch (err) {
+    if (err.statusCode === 401) return reply.type('text/html').send(oauth.authorizePage({ ...form, _err: err.message }));
+    return reply.code(err.statusCode || 400).send(err.message);
+  }
+});
+app.post('/oauth/token', async (req, reply) => {
+  reply.header('Cache-Control', 'no-store');
+  try { return oauth.tokenExchange(req.body || {}); }
+  catch (err) { return reply.code(err.statusCode || 400).send({ error: err.message }); }
+});
+
 app.post('/mcp', async (req, reply) => {
-  if (!mcpAuthed(req)) return reply.code(401).send({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized' } });
+  if (!mcpAuthed(req)) return mcpUnauthorized(req, reply);
   const sid = req.headers['mcp-session-id'];
   const isInit = req.body && !Array.isArray(req.body) && req.body.method === 'initialize';
   let transport;

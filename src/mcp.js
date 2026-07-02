@@ -13,6 +13,23 @@ import { summarize } from './handoff.js';
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 const READ_CAP = 1_000_000; // bytes read per transcript when searching
 
+// Best-effort scrub of likely secrets before transcript text leaves the server.
+export function redact(s) {
+  if (!s) return s;
+  return String(s)
+    .replace(/-----BEGIN[\s\S]{0,80}?PRIVATE KEY-----[\s\S]*?-----END[\s\S]{0,80}?-----/g, '[REDACTED KEY BLOCK]')
+    .replace(/\bsk-ant-[A-Za-z0-9_-]{20,}\b/g, '[REDACTED]')
+    .replace(/\bsk-[A-Za-z0-9]{20,}\b/g, '[REDACTED]')
+    .replace(/\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, '[REDACTED]')
+    .replace(/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, '[REDACTED]')
+    .replace(/\bAKIA[0-9A-Z]{16}\b/g, '[REDACTED]')
+    .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, '[REDACTED JWT]')
+    // KEY=VALUE where the key name looks secret
+    .replace(/\b([A-Za-z0-9_]*(?:SECRET|TOKEN|PASSWORD|PASSWD|API[_-]?KEY|PRIVATE[_-]?KEY|ACCESS[_-]?KEY)[A-Za-z0-9_]*)(\s*[:=]\s*)["']?[^\s"']{6,}/gi, '$1$2[REDACTED]')
+    // long hex blobs (hashes/keys)
+    .replace(/\b[A-Fa-f0-9]{40,}\b/g, '[REDACTED]');
+}
+
 function contentText(content) {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) return content.filter((p) => p && p.type === 'text' && p.text).map((p) => p.text).join('\n');
@@ -79,9 +96,9 @@ async function searchSessions(query, limit) {
     const idx = hay.indexOf(words[0]);
     if (idx === -1 && !words.every((w) => meta.title.toLowerCase().includes(w))) continue; // matched only in JSON noise
     const at = idx === -1 ? 0 : idx;
-    const snippet = meta.body.slice(Math.max(0, at - 140), at + 220).replace(/\s+/g, ' ').trim();
+    const snippet = redact(meta.body.slice(Math.max(0, at - 140), at + 220).replace(/\s+/g, ' ').trim());
     results.push({
-      sessionId: f.id, title: meta.title, cwd: meta.cwd, gitBranch: meta.gitBranch,
+      sessionId: f.id, title: redact(meta.title), cwd: meta.cwd, gitBranch: meta.gitBranch,
       lastModified: new Date(f.mtime).toISOString(), snippet,
     });
   }
@@ -95,10 +112,10 @@ async function getContext(sessionId, format, maxChars) {
   const { messages } = await buildThread(sessionId, head.id);
   const header = `# ${g.title}\n_dir: ${g.cwd || '?'}${g.gitBranch ? ' · branch: ' + g.gitBranch : ''} · ${messages.length} messages_\n\n`;
   if (format === 'summary') {
-    const text = messages.map((m) => `${m.role === 'user' ? 'User' : 'Claude'}: ${m.text}`).join('\n\n').slice(0, 120_000);
-    return header + (await summarize(text));
+    const src = redact(messages.map((m) => `${m.role === 'user' ? 'User' : 'Claude'}: ${m.text}`).join('\n\n').slice(0, 120_000));
+    return header + redact(await summarize(src));
   }
-  const body = messages.map((m) => `## ${m.role === 'user' ? 'User' : 'Claude'}\n${m.text}`).join('\n\n');
+  const body = redact(messages.map((m) => `## ${m.role === 'user' ? 'User' : 'Claude'}\n${m.text}`).join('\n\n'));
   const capped = body.length > maxChars ? body.slice(0, maxChars) + '\n\n…[truncated; ask for format:"summary" for the whole thing]' : body;
   return header + capped;
 }
@@ -131,7 +148,7 @@ export function createMcpServer() {
     const top = sessions.slice(0, limit || 15);
     if (!top.length) return text('No past sessions found.');
     return text(top.map((s, i) =>
-      `${i + 1}. ${s.title}\n   sessionId: ${s.sessionId}\n   dir: ${s.cwd || '?'}${s.gitBranch ? ' · ' + s.gitBranch : ''} · ${new Date(s.lastModified).toISOString().slice(0, 10)}`).join('\n\n'));
+      `${i + 1}. ${redact(s.title)}\n   sessionId: ${s.sessionId}\n   dir: ${s.cwd || '?'}${s.gitBranch ? ' · ' + s.gitBranch : ''} · ${new Date(s.lastModified).toISOString().slice(0, 10)}`).join('\n\n'));
   });
 
   server.registerTool('get_session_context', {

@@ -36,6 +36,9 @@ export const config = {
   launchCommand: process.env.CCDECK_LAUNCH || 'claude',
   // Bearer token gating the MCP endpoint (/mcp). Empty = MCP disabled.
   mcpToken: process.env.CCDECK_MCP_TOKEN || '',
+  // Public origin for OAuth metadata (e.g. https://claude.cyberneel.com). Derived
+  // from request headers if unset — set it if the derived host is ever wrong.
+  publicUrl: process.env.CCDECK_PUBLIC_URL || '',
   cookieName: 'ccdeck',
   cookieMaxAge: 60 * 60 * 24 * 30, // 30 days (seconds)
 };
