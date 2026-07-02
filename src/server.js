@@ -21,6 +21,7 @@ import {
   createDir,
   sessionDir,
   resolveAllowedDir,
+  sendText,
 } from './tmux.js';
 import { attachHandler } from './pty.js';
 import { initServer } from './tmux.js';
@@ -32,6 +33,7 @@ import { listArtifacts, deleteArtifacts } from './storage.js';
 import { createMcpServer } from './mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as oauth from './oauth.js';
+import { consumeNotesSeed, listPending, pendingCounts } from './notes.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
 // Claude's own session name (custom /rename title, else its auto-title), and the
@@ -40,11 +42,13 @@ async function enrichedSessions() {
   const sessions = await listSessions();
   try {
     matchAgents(sessions, await getAgents());
+    const notes = await pendingCounts(); // external-note counts keyed by Claude id
     await Promise.all(sessions.map(async (s) => {
       if (!s.liveSessionId) return;
       const m = await claudeLiveMeta(s.dir, s.liveSessionId);
       if (m.title) s.title = m.title;
       if (m.mode) s.mode = m.mode;
+      s.noteCount = notes.get(s.liveSessionId) || 0;
     }));
   } catch { /* degrade */ }
   return sessions;
@@ -159,7 +163,10 @@ app.post('/api/sessions', async (req, reply) => {
       );
       if (existing) return { name: existing.name, alreadyRunning: true };
     }
-    const name = await createSession({ dir, title, resume, fork });
+    // Resuming a session? Seed it with any external notes saved from outside chats
+    // so it picks up what happened elsewhere (consumed so it won't re-inject).
+    const seed = resume && !fork ? await consumeNotesSeed(resume) : undefined;
+    const name = await createSession({ dir, title, resume, fork, seed });
     return { name };
   } catch (err) {
     return reply.code(err.statusCode || 500).send({ error: err.message });
@@ -188,6 +195,21 @@ app.delete('/api/sessions/:name', async (req, reply) => {
   try {
     await killSession(req.params.name);
     return { ok: true };
+  } catch (err) {
+    return reply.code(err.statusCode || 500).send({ error: err.message });
+  }
+});
+
+// Inject any pending external notes into a RUNNING session (live), then consume.
+app.post('/api/sessions/:name/apply-notes', async (req, reply) => {
+  try {
+    const s = (await enrichedSessions()).find((x) => x.name === req.params.name);
+    const id = s?.liveSessionId;
+    if (!id) return reply.code(400).send({ error: 'No live Claude session to apply notes to' });
+    const seed = await consumeNotesSeed(id);
+    if (!seed) return { applied: 0 };
+    await sendText(req.params.name, seed);
+    return { applied: 1 };
   } catch (err) {
     return reply.code(err.statusCode || 500).send({ error: err.message });
   }

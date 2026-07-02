@@ -4,6 +4,7 @@ import { openGraph } from './graph.js';
 import { openNewModal as openNewModalShared } from './newsession.js';
 import { openStorage } from './storage.js';
 import { renderFiles } from './files.js';
+import { toast } from './upload.js';
 
 // Inject shared styles.
 const styleEl = document.createElement('style');
@@ -332,6 +333,16 @@ function wireActiveCards(container) {
       const b = e.currentTarget;
       openGraph(b.dataset.graph, b.dataset.gtitle, b.dataset.cwd);
     });
+    el.querySelector('.note-btn')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const s = sessions.find((x) => x.name === name);
+      if (!confirm(`Apply ${s.noteCount} update(s) from outside chats into this running session? Claude will read them.`)) return;
+      try {
+        const r = await api(`/api/sessions/${name}/apply-notes`, { method: 'POST' });
+        toast(r.applied ? 'Applied — Claude is reading the update(s).' : 'No pending updates.');
+        await refresh();
+      } catch (err) { toast('Failed: ' + err.message); }
+    });
     el.querySelector('.rename-btn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       const s = sessions.find((x) => x.name === name);
@@ -354,6 +365,7 @@ function cardHtml(s) {
       ${modeChip(s)}
       <span class="faint">${s.attached ? 'attached · ' : ''}${fmtTime(s.lastActivity)}</span>
       <div class="spacer"></div>
+      ${s.noteCount ? `<button class="icon note-btn" title="${s.noteCount} update(s) from outside chats — apply to this session" data-note="${esc(s.name)}">📝${s.noteCount}</button>` : ''}
       ${s.liveSessionId ? `<button class="icon graph-btn" title="Session graph" data-graph="${esc(s.liveSessionId)}" data-cwd="${esc(s.dir || '')}" data-gtitle="${esc(s.title)}">⎇</button>` : ''}
       <button class="icon rename-btn" title="Rename">✎</button>
       <button class="icon danger kill-btn" title="Kill session">✕</button>

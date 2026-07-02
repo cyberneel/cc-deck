@@ -9,6 +9,7 @@ import { homedir } from 'node:os';
 import { buildGraph, buildThread, isSessionId } from './graph.js';
 import { listHistory } from './history.js';
 import { summarize } from './handoff.js';
+import { addNote } from './notes.js';
 
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 const READ_CAP = 1_000_000; // bytes read per transcript when searching
@@ -163,6 +164,23 @@ export function createMcpServer() {
     if (!isSessionId(session_id)) return text('Invalid session_id.');
     try { return text(await getContext(session_id, format || 'summary', max_chars || 40000)); }
     catch (e) { return text(`Could not load session: ${e.message}`); }
+  });
+
+  server.registerTool('save_session_summary', {
+    title: 'Save a summary back to a cc-deck session',
+    description:
+      "Save a concise summary of THIS conversation's outcomes back into a specific cc-deck (Claude Code) session, so that session becomes aware of what happened here the next time the user opens or resumes it. " +
+      'IMPORTANT: Only call this AFTER explicitly asking the user whether they want a summary saved back to that session, and confirming which session_id it should attach to (from a prior search_sessions / get_session_context result). ' +
+      'The summary should capture decisions made, conclusions reached, and any action items relevant to that session\'s work.',
+    inputSchema: {
+      session_id: z.string().describe('The cc-deck sessionId this summary should attach to (from search_sessions / get_session_context).'),
+      summary: z.string().min(1).max(8000).describe('A concise summary of the outcomes/decisions/action-items from this conversation, written for the other session to pick up.'),
+    },
+  }, async ({ session_id, summary }) => {
+    if (!isSessionId(session_id)) return text('Invalid session_id.');
+    try { await addNote(session_id, summary); }
+    catch (e) { return text(`Could not save: ${e.message}`); }
+    return text('Saved. This summary will surface in that cc-deck session the next time the user opens or resumes it.');
   });
 
   return server;

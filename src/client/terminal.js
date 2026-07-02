@@ -316,14 +316,36 @@ const KEYS = [
   { label: '⎘', paste: true, title: 'Paste from clipboard' },
 ];
 
-// Paste the device clipboard into the active session as a bracketed paste (so
-// multi-line text is delivered intact, not submitted line-by-line).
-async function pasteClipboard() {
-  try {
-    const text = await navigator.clipboard.readText();
-    if (text) activeWs()?.send(`\x1b[200~${text}\x1b[201~`);
-  } catch { /* clipboard blocked */ }
-  panes.get(currentSession)?.term.focus();
+// Paste into the active session as a bracketed paste (multi-line stays intact).
+// iOS PWAs frequently block navigator.clipboard.readText() (esp. content copied
+// from another app), so the reliable path is a real focused field the OS can
+// paste into; the async clipboard API is just a fast auto-fill when it works.
+function pasteClipboard() {
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `<div class="modal" style="max-width:440px">
+    <h2>Paste</h2>
+    <p class="faint">Long-press the box → <b>Paste</b>, then Send. (On desktop, just press ⌘/Ctrl+V into the terminal.)</p>
+    <textarea id="pb-ta" rows="4" style="width:100%;resize:vertical" placeholder="paste here…"></textarea>
+    <div class="modal-actions"><button id="pb-cancel">Cancel</button><button class="primary" id="pb-send">Send</button></div>
+  </div>`;
+  document.body.appendChild(bg);
+  const ta = bg.querySelector('#pb-ta');
+  ta.focus(); // synchronous, inside the tap gesture, so iOS raises the keyboard
+  let sent = false;
+  const close = () => { bg.remove(); panes.get(currentSession)?.term.focus(); };
+  const send = () => {
+    if (sent) return; sent = true;
+    const v = ta.value;
+    if (v) activeWs()?.send(`\x1b[200~${v}\x1b[201~`);
+    close();
+  };
+  bg.querySelector('#pb-cancel').addEventListener('click', close);
+  bg.querySelector('#pb-send').addEventListener('click', send);
+  bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
+  ta.addEventListener('paste', () => setTimeout(send, 30)); // auto-send after a native paste
+  // Fast path: if the clipboard API is allowed, auto-fill + send instantly.
+  navigator.clipboard?.readText?.().then((t) => { if (t && !sent) { ta.value = t; send(); } }).catch(() => {});
 }
 const keybar = document.getElementById('keybar');
 keybar.innerHTML = KEYS.map((k, i) =>
