@@ -34,6 +34,8 @@ export const config = {
   tmuxSocket: process.env.CCDECK_TMUX_SOCKET || 'ccdeck',
   // Command launched inside each new session.
   launchCommand: process.env.CCDECK_LAUNCH || 'claude',
+  // Bearer token gating the MCP endpoint (/mcp). Empty = MCP disabled.
+  mcpToken: process.env.CCDECK_MCP_TOKEN || '',
   cookieName: 'ccdeck',
   cookieMaxAge: 60 * 60 * 24 * 30, // 30 days (seconds)
 };

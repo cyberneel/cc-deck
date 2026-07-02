@@ -21,7 +21,7 @@ function threadToMarkdown(title, messages) {
 }
 
 // Summarize a transcript into a concise handoff via headless `claude -p`.
-function summarize(text) {
+export function summarize(text) {
   return new Promise((resolve, reject) => {
     const prompt =
       'You are writing a CONTEXT HANDOFF so a new Claude Code session can pick up this work with full understanding. ' +

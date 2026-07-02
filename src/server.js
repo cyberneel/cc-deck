@@ -3,6 +3,7 @@ import { dirname, join, resolve, sep, basename, relative } from 'node:path';
 import { statSync, createWriteStream, createReadStream } from 'node:fs';
 import { mkdir, stat, readdir, rm, access } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
+import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyCookie from '@fastify/cookie';
@@ -28,6 +29,8 @@ import { listHistory, claudeLiveMeta } from './history.js';
 import { buildGraph, buildThread } from './graph.js';
 import { runHandoff } from './handoff.js';
 import { listArtifacts, deleteArtifacts } from './storage.js';
+import { createMcpServer } from './mcp.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
 // Claude's own session name (custom /rename title, else its auto-title), and the
@@ -84,6 +87,7 @@ await app.register(fastifyStatic, {
 const PUBLIC_PATHS = new Set([
   '/login.html', '/login.css', '/api/login', '/favicon.ico', '/sw.js',
   '/manifest.webmanifest', '/icon-180.png', '/icon-192.png', '/icon-512.png',
+  '/mcp', // MCP endpoint does its own bearer-token auth (below)
 ]);
 
 function isAuthed(req) {
@@ -379,6 +383,47 @@ app.post('/api/storage/delete', async (req, reply) => {
     return reply.code(err.statusCode || 500).send({ error: err.message });
   }
 });
+
+// ---- MCP endpoint (remote Model Context Protocol, Streamable HTTP) ----
+// Lets another Claude (claude.ai, Claude Code, …) search + pull context from your
+// past sessions. Bearer-gated; disabled unless CCDECK_MCP_TOKEN is set. Stateful:
+// initialize creates a session (server+transport) keyed by Mcp-Session-Id.
+const mcpSessions = new Map(); // sessionId -> { server, transport }
+function mcpAuthed(req) {
+  return !!config.mcpToken && (req.headers.authorization || '') === `Bearer ${config.mcpToken}`;
+}
+app.post('/mcp', async (req, reply) => {
+  if (!mcpAuthed(req)) return reply.code(401).send({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized' } });
+  const sid = req.headers['mcp-session-id'];
+  const isInit = req.body && !Array.isArray(req.body) && req.body.method === 'initialize';
+  let transport;
+  if (sid && mcpSessions.has(sid)) {
+    transport = mcpSessions.get(sid).transport;
+  } else if (!sid && isInit) {
+    const server = createMcpServer();
+    transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
+      onsessioninitialized: (id) => mcpSessions.set(id, { server, transport }),
+    });
+    transport.onclose = () => { if (transport.sessionId) mcpSessions.delete(transport.sessionId); };
+    await server.connect(transport);
+  } else {
+    return reply.code(400).send({ jsonrpc: '2.0', id: null, error: { code: -32000, message: 'No valid session ID' } });
+  }
+  reply.hijack();
+  await transport.handleRequest(req.raw, reply.raw, req.body);
+});
+// GET = server→client SSE stream; DELETE = end session. Both need a live session.
+async function mcpBySession(req, reply) {
+  if (!mcpAuthed(req)) return reply.code(401).send({ error: 'Unauthorized' });
+  const sid = req.headers['mcp-session-id'];
+  const entry = sid && mcpSessions.get(sid);
+  if (!entry) return reply.code(400).send({ error: 'No valid session ID' });
+  reply.hijack();
+  await entry.transport.handleRequest(req.raw, reply.raw);
+}
+app.get('/mcp', mcpBySession);
+app.delete('/mcp', mcpBySession);
 
 // ---- Filesystem picker ----
 app.get('/api/fs', async (req, reply) => {

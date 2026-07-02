@@ -1,0 +1,152 @@
+// cc-deck MCP server: exposes your past Claude session transcripts as tools so
+// another Claude (claude.ai web/mobile, Claude Code, etc.) can search them and
+// pull relevant context. Reuses the transcript machinery from graph/handoff/history.
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { readdir, readFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { buildGraph, buildThread, isSessionId } from './graph.js';
+import { listHistory } from './history.js';
+import { summarize } from './handoff.js';
+
+const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
+const READ_CAP = 1_000_000; // bytes read per transcript when searching
+
+function contentText(content) {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) return content.filter((p) => p && p.type === 'text' && p.text).map((p) => p.text).join('\n');
+  return '';
+}
+function isNoise(t) {
+  return /^\s*<(command-name|command-message|local-command|user-memory|system-reminder|bash-input|bash-stdout|bash-stderr)/.test(t) ||
+    /^\s*Caveat: The messages below/.test(t) || /^\s*\[Request interrupted/.test(t) || !t.trim();
+}
+
+// Parse a transcript's readable text + metadata from raw JSONL text.
+function parseTranscript(text) {
+  let cwd = '', gitBranch = '', custom = null, ai = null, first = '';
+  const chunks = [];
+  for (const line of text.split('\n')) {
+    if (!line) continue;
+    let o; try { o = JSON.parse(line); } catch { continue; }
+    if (!cwd && o.cwd) cwd = o.cwd;
+    if (!gitBranch && o.gitBranch) gitBranch = o.gitBranch;
+    if (o.type === 'custom-title' && o.customTitle) custom = o.customTitle;
+    else if (o.type === 'ai-title' && o.aiTitle) ai = o.aiTitle;
+    else if (o.customTitle) custom = o.customTitle;
+    else if (o.aiTitle) ai = o.aiTitle;
+    if ((o.type === 'user' || o.type === 'assistant') && !o.isSidechain && o.message) {
+      const t = contentText(o.message.content);
+      if (t && !isNoise(t)) { chunks.push(t); if (!first && o.type === 'user') first = t.replace(/\s+/g, ' ').trim().slice(0, 120); }
+    }
+  }
+  return { cwd, gitBranch, title: custom || ai || first || '(untitled session)', body: chunks.join('\n') };
+}
+
+async function allTranscripts() {
+  const out = [];
+  let dirs;
+  try { dirs = await readdir(PROJECTS_DIR, { withFileTypes: true }); } catch { return out; }
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue;
+    let names; try { names = await readdir(join(PROJECTS_DIR, d.name)); } catch { continue; }
+    for (const n of names) {
+      if (!n.endsWith('.jsonl')) continue;
+      const id = n.slice(0, -6);
+      if (!isSessionId(id)) continue;
+      const file = join(PROJECTS_DIR, d.name, n);
+      const s = await stat(file).catch(() => null);
+      if (s && s.isFile() && s.size >= 200) out.push({ id, file, mtime: s.mtimeMs, size: s.size });
+    }
+  }
+  out.sort((a, b) => b.mtime - a.mtime);
+  return out;
+}
+
+async function searchSessions(query, limit) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const files = await allTranscripts();
+  const results = [];
+  for (const f of files) {
+    if (results.length >= limit) break;
+    let text;
+    try { text = (await readFile(f.file, 'utf8')).slice(0, READ_CAP); } catch { continue; }
+    if (!words.every((w) => text.toLowerCase().includes(w))) continue; // cheap pre-filter
+    const meta = parseTranscript(text);
+    const hay = meta.body.toLowerCase();
+    const idx = hay.indexOf(words[0]);
+    if (idx === -1 && !words.every((w) => meta.title.toLowerCase().includes(w))) continue; // matched only in JSON noise
+    const at = idx === -1 ? 0 : idx;
+    const snippet = meta.body.slice(Math.max(0, at - 140), at + 220).replace(/\s+/g, ' ').trim();
+    results.push({
+      sessionId: f.id, title: meta.title, cwd: meta.cwd, gitBranch: meta.gitBranch,
+      lastModified: new Date(f.mtime).toISOString(), snippet,
+    });
+  }
+  return results;
+}
+
+async function getContext(sessionId, format, maxChars) {
+  const g = await buildGraph(sessionId); // throws 404 if not found
+  const head = g.nodes.find((n) => n.current) || g.nodes[g.nodes.length - 1];
+  if (!head) return `Session ${sessionId} has no conversation content.`;
+  const { messages } = await buildThread(sessionId, head.id);
+  const header = `# ${g.title}\n_dir: ${g.cwd || '?'}${g.gitBranch ? ' · branch: ' + g.gitBranch : ''} · ${messages.length} messages_\n\n`;
+  if (format === 'summary') {
+    const text = messages.map((m) => `${m.role === 'user' ? 'User' : 'Claude'}: ${m.text}`).join('\n\n').slice(0, 120_000);
+    return header + (await summarize(text));
+  }
+  const body = messages.map((m) => `## ${m.role === 'user' ? 'User' : 'Claude'}\n${m.text}`).join('\n\n');
+  const capped = body.length > maxChars ? body.slice(0, maxChars) + '\n\n…[truncated; ask for format:"summary" for the whole thing]' : body;
+  return header + capped;
+}
+
+const text = (t) => ({ content: [{ type: 'text', text: t }] });
+
+export function createMcpServer() {
+  const server = new McpServer({ name: 'cc-deck', version: '1.0.0' });
+
+  server.registerTool('search_sessions', {
+    title: 'Search past cc-deck sessions',
+    description: "Search the user's past Claude Code (cc-deck) session transcripts by keyword to find sessions relevant to the current question. Returns matching sessions with a snippet and a sessionId you can pass to get_session_context.",
+    inputSchema: {
+      query: z.string().min(1).max(200).describe('Keywords to search for across session transcripts (e.g. "logsync annotations", "proto field ids").'),
+      limit: z.number().int().min(1).max(25).optional().describe('Max results (default 8).'),
+    },
+  }, async ({ query, limit }) => {
+    const r = await searchSessions(query, limit || 8);
+    if (!r.length) return text(`No sessions matched "${query}".`);
+    return text(r.map((s, i) =>
+      `${i + 1}. ${s.title}\n   sessionId: ${s.sessionId}\n   dir: ${s.cwd || '?'}${s.gitBranch ? ' · ' + s.gitBranch : ''} · ${s.lastModified.slice(0, 10)}\n   …${s.snippet}…`).join('\n\n'));
+  });
+
+  server.registerTool('list_recent_sessions', {
+    title: 'List recent cc-deck sessions',
+    description: "List the user's most recent Claude Code (cc-deck) sessions (title, directory, date). Use to see what they've been working on lately.",
+    inputSchema: { limit: z.number().int().min(1).max(40).optional().describe('How many (default 15).') },
+  }, async ({ limit }) => {
+    const { sessions } = await listHistory();
+    const top = sessions.slice(0, limit || 15);
+    if (!top.length) return text('No past sessions found.');
+    return text(top.map((s, i) =>
+      `${i + 1}. ${s.title}\n   sessionId: ${s.sessionId}\n   dir: ${s.cwd || '?'}${s.gitBranch ? ' · ' + s.gitBranch : ''} · ${new Date(s.lastModified).toISOString().slice(0, 10)}`).join('\n\n'));
+  });
+
+  server.registerTool('get_session_context', {
+    title: 'Get context from a cc-deck session',
+    description: "Fetch the content of a specific past session so you can use it as context. format 'summary' returns a concise AI briefing (goal, decisions, current state, files, next steps); format 'transcript' returns the raw conversation (truncated).",
+    inputSchema: {
+      session_id: z.string().describe('The sessionId from search_sessions / list_recent_sessions.'),
+      format: z.enum(['summary', 'transcript']).optional().describe("'summary' (default) or 'transcript'."),
+      max_chars: z.number().int().min(2000).max(120000).optional().describe('For transcript format, cap on characters (default 40000).'),
+    },
+  }, async ({ session_id, format, max_chars }) => {
+    if (!isSessionId(session_id)) return text('Invalid session_id.');
+    try { return text(await getContext(session_id, format || 'summary', max_chars || 40000)); }
+    catch (e) { return text(`Could not load session: ${e.message}`); }
+  });
+
+  return server;
+}
