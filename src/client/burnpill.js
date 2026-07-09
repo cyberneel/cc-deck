@@ -19,20 +19,25 @@ export function renderBurnPill(btn, burn) {
   btn.style.display = '';
 }
 
+// behind_pace = using LESS than budget (safe) → 🟢; ahead_pace = burning faster
+// than budget (at risk) → 🔥; on_pace → 🟡.
+const paceEmoji = (st) => (st === 'ahead_pace' ? '🔥' : st === 'on_pace' ? '🟡' : '🟢');
+const trendEmoji = (t) => (/high|crit|fast/i.test(t || '') ? '🔥' : /mod/i.test(t || '') ? '🟡' : '🟢');
+
 function detailHtml(b) {
   const lim = b.limits || {};
   const card = (name, l) => {
     if (!l) return '';
     const pct = (l.utilization || 0) * 100;
     const resets = l.resets_in_minutes != null ? `${l.resets_in_minutes}m` : l.resets_in_hours != null ? `${l.resets_in_hours.toFixed(0)}h` : '—';
-    return `<div class="limit"><div class="limit-top"><span>${name}</span><span>${pct.toFixed(0)}%</span></div>
+    return `<div class="limit"><div class="limit-top"><span>${name}</span><span>${paceEmoji(l.status)} ${pct.toFixed(0)}%</span></div>
       <div class="limit-bar"><div class="limit-fill" style="width:${Math.min(100, pct)}%"></div></div>
       <div class="faint">resets in ${resets} · budget pace ${((l.budget_pace || 0) * 100).toFixed(0)}%</div></div>`;
   };
   const br = b.burn_rate;
   return `<div class="burn-pop-title">Plan limits <span class="faint">· ccburn</span></div>
     ${card('Session (5h)', lim.session)}${card('Weekly', lim.weekly)}${lim.monthly ? card('Monthly', lim.monthly) : ''}
-    ${br ? `<div class="faint" style="margin-top:2px">🔥 ${Number(br.percent_per_hour).toFixed(1)}%/h (${esc(br.trend || '')})${br.estimated_minutes_to_100 ? ` · ~${Math.round(br.estimated_minutes_to_100 / 60 * 10) / 10}h to 100%` : ''}</div>` : ''}
+    ${br ? `<div class="faint" style="margin-top:2px">${trendEmoji(br.trend)} burn ${Number(br.percent_per_hour).toFixed(1)}%/h (${esc(br.trend || '')})${br.estimated_minutes_to_100 ? ` · ~${Math.round(br.estimated_minutes_to_100 / 60 * 10) / 10}h to 100%` : ''}</div>` : ''}
     ${b.recommendation ? `<div class="faint">${esc(String(b.recommendation).replace(/_/g, ' '))}</div>` : ''}`;
 }
 
