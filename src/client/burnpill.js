@@ -46,7 +46,16 @@ export async function openBurnPopover(btn, burn, refresh) {
   p.innerHTML = burn && burn.available ? detailHtml(burn) : '<div class="faint">ccburn unavailable</div>';
   const r = btn.getBoundingClientRect();
   p.style.top = `${r.bottom + 6}px`;
-  p.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+  if (window.matchMedia('(max-width: 700px)').matches) {
+    // Narrow screens: center under the bar + clamp to viewport (anchoring to the
+    // button's edge overflows off-screen).
+    p.style.left = '50%';
+    p.style.right = 'auto';
+    p.style.transform = 'translateX(-50%)';
+    p.style.width = 'min(340px, calc(100vw - 16px))';
+  } else {
+    p.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+  }
   document.body.appendChild(p);
   setTimeout(() => document.addEventListener('click', function h() { p.remove(); document.removeEventListener('click', h); }, { once: true }), 0);
   if (refresh) {
