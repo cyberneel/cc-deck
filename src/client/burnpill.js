@@ -14,15 +14,18 @@ export function renderBurnPill(btn, burn) {
   if (!btn) return;
   if (!burn || !burn.available) { btn.style.display = 'none'; return; }
   const s = burn.limits?.session, w = burn.limits?.weekly;
-  btn.innerHTML = `<span class="bp-seg ${burnCls(s)}">${pctOf(s) ?? '–'}%</span><span class="bp-sep">·</span><span class="bp-seg ${burnCls(w)}">${pctOf(w) ?? '–'}%</span>`;
+  btn.innerHTML = `<span class="bp-emoji">${paceEmoji(overallPace(burn))}</span><span class="bp-seg ${burnCls(s)}">${pctOf(s) ?? '–'}%</span><span class="bp-sep">·</span><span class="bp-seg ${burnCls(w)}">${pctOf(w) ?? '–'}%</span>`;
   btn.title = `Session ${pctOf(s)}% · Weekly ${pctOf(w)}% used (ccburn) — tap for detail`;
   btn.style.display = '';
 }
 
-// behind_pace = using LESS than budget (safe) → 🟢; ahead_pace = burning faster
-// than budget (at risk) → 🔥; on_pace → 🟡.
-const paceEmoji = (st) => (st === 'ahead_pace' ? '🔥' : st === 'on_pace' ? '🟡' : '🟢');
-const trendEmoji = (t) => (/high|crit|fast/i.test(t || '') ? '🔥' : /mod/i.test(t || '') ? '🟡' : '🟢');
+// ccburn's own pace legend (its README): 🧊 behind pace · 🔥 on pace · 🚨 too hot.
+export const paceEmoji = (st) => (st === 'ahead_pace' ? '🚨' : st === 'on_pace' ? '🔥' : '🧊');
+const PACE_RANK = { behind_pace: 0, on_pace: 1, ahead_pace: 2 };
+export function overallPace(burn) {
+  const st = [burn?.limits?.session?.status, burn?.limits?.weekly?.status, burn?.limits?.monthly?.status].filter(Boolean);
+  return st.sort((a, b) => (PACE_RANK[b] ?? 0) - (PACE_RANK[a] ?? 0))[0] || 'behind_pace';
+}
 
 function detailHtml(b) {
   const lim = b.limits || {};
@@ -37,7 +40,7 @@ function detailHtml(b) {
   const br = b.burn_rate;
   return `<div class="burn-pop-title">Plan limits <span class="faint">· ccburn</span></div>
     ${card('Session (5h)', lim.session)}${card('Weekly', lim.weekly)}${lim.monthly ? card('Monthly', lim.monthly) : ''}
-    ${br ? `<div class="faint" style="margin-top:2px">${trendEmoji(br.trend)} burn ${Number(br.percent_per_hour).toFixed(1)}%/h (${esc(br.trend || '')})${br.estimated_minutes_to_100 ? ` · ~${Math.round(br.estimated_minutes_to_100 / 60 * 10) / 10}h to 100%` : ''}</div>` : ''}
+    ${br ? `<div class="faint" style="margin-top:2px">${paceEmoji(b.limits?.[br.limit]?.status)} burn ${Number(br.percent_per_hour).toFixed(1)}%/h (${esc(br.trend || '')})${br.estimated_minutes_to_100 ? ` · ~${Math.round(br.estimated_minutes_to_100 / 60 * 10) / 10}h to 100%` : ''}</div>` : ''}
     ${b.recommendation ? `<div class="faint">${esc(String(b.recommendation).replace(/_/g, ' '))}</div>` : ''}`;
 }
 

@@ -549,8 +549,8 @@ function tokensFmt(n) {
   return String(n);
 }
 function paceEmoji(s) {
-  // behind_pace = under budget (safe) 🟢 · on_pace 🟡 · ahead_pace = burning fast 🔥
-  return s === 'ahead_pace' ? '🔥' : s === 'on_pace' ? '🟡' : '🟢';
+  // ccburn's own legend: 🧊 behind pace · 🔥 on pace · 🚨 burning too hot.
+  return s === 'ahead_pace' ? '🚨' : s === 'on_pace' ? '🔥' : '🧊';
 }
 
 async function loadUsage() {
