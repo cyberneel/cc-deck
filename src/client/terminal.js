@@ -6,7 +6,7 @@ import css from './styles.css';
 import { registerServiceWorker, applyUpdate } from './swreg.js';
 import { openShare } from './graph.js';
 import { openNewModal as openNewModalShared } from './newsession.js';
-import { pickFiles, sendFiles } from './upload.js';
+import { pickFiles, sendFiles, toast } from './upload.js';
 import { fetchBurn, renderBurnPill, openBurnPopover } from './burnpill.js';
 
 const styleEl = document.createElement('style');
@@ -315,8 +315,42 @@ const KEYS = [
   { label: '↓', seq: '\x1b[B', repeat: true },
   { label: '→', seq: '\x1b[C', repeat: true },
   { label: '^C', seq: '\x03' },
+  { label: '⧉', copy: true, title: 'Copy on-screen text' },
   { label: '⎘', paste: true, title: 'Paste from clipboard' },
 ];
+
+// Copy the terminal's on-screen text out — xterm is a canvas so there's no native
+// selection on touch; show it in a real (selectable) field to Copy-all or
+// long-press-select. Uses xterm's buffer (the visible screen incl. scrollback).
+function openCopyBox() {
+  const term = panes.get(currentSession)?.term;
+  if (!term) return;
+  const buf = term.buffer.active;
+  const out = [];
+  for (let i = 0; i < buf.length; i++) out.push(buf.getLine(i)?.translateToString(true) ?? '');
+  const textVal = out.join('\n').replace(/[ \t]+$/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `<div class="modal" style="max-width:480px">
+    <h2>Copy</h2>
+    <p class="faint">Long-press to select text and use the OS <b>Copy</b>, or tap “Copy all”.</p>
+    <textarea id="cp-ta" readonly rows="9" style="width:100%;resize:vertical;font-family:var(--mono);font-size:12px"></textarea>
+    <div class="modal-actions"><button id="cp-close">Close</button><button class="primary" id="cp-all">Copy all</button></div>
+  </div>`;
+  document.body.appendChild(bg);
+  const ta = bg.querySelector('#cp-ta');
+  ta.value = textVal || '(empty)';
+  const close = () => { bg.remove(); panes.get(currentSession)?.term.focus(); };
+  bg.querySelector('#cp-close').addEventListener('click', close);
+  bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
+  bg.querySelector('#cp-all').addEventListener('click', async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(textVal); ok = true; } catch { /* */ }
+    if (!ok) { try { ta.removeAttribute('readonly'); ta.focus(); ta.setSelectionRange(0, ta.value.length); ok = document.execCommand('copy'); ta.setAttribute('readonly', ''); } catch { /* */ } }
+    toast(ok ? 'Copied to clipboard' : 'Select the text and use the OS Copy');
+    if (ok) close();
+  });
+}
 
 // Paste into the active session as a bracketed paste (multi-line stays intact).
 // iOS PWAs frequently block navigator.clipboard.readText() (esp. content copied
@@ -372,6 +406,7 @@ keybar.querySelectorAll('button').forEach((btn) => {
     if (k.ctrl) { ctrlArm = !ctrlArm; updateCtrlBtn(); }
     else if (k.meta) { metaArm = !metaArm; updateMetaBtn(); }
     else if (k.paste) { pasteClipboard(); }
+    else if (k.copy) { openCopyBox(); }
     else sendKey(k.seq);
   });
 });
