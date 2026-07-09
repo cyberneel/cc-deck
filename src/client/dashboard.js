@@ -6,6 +6,7 @@ import { openStorage } from './storage.js';
 import { renderFiles } from './files.js';
 import { toast } from './upload.js';
 import { openNotes } from './notes.js';
+import { fetchBurn, renderBurnPill, openBurnPopover } from './burnpill.js';
 
 // Inject shared styles.
 const styleEl = document.createElement('style');
@@ -193,6 +194,7 @@ function render() {
         <button data-tab="files" class="${tab === 'files' ? 'active' : ''}">Files</button>
       </div>
       <div class="spacer"></div>
+      <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
       <button class="primary" id="new-btn" title="New session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New session'}</button>
       <button id="storage-btn" class="icon" title="Storage &amp; cleanup">🗄</button>
       <button id="reload-btn" class="icon" title="Reload app">↻</button>
@@ -245,6 +247,9 @@ function render() {
     document.getElementById('search-clear').style.display = 'none';
     renderBody();
   });
+  const burnBtn = document.getElementById('burn-btn');
+  renderBurnPill(burnBtn, burnData);
+  burnBtn.addEventListener('click', (e) => { e.stopPropagation(); openBurnPopover(burnBtn, burnData, async () => { await loadBurn(); return burnData; }); });
   document.getElementById('new-btn').addEventListener('click', openNewModal);
   document.getElementById('storage-btn').addEventListener('click', openStorage);
   document.getElementById('reload-btn').addEventListener('click', () => applyUpdate(pendingWorker));
@@ -556,6 +561,7 @@ async function loadUsageData() {
 }
 async function loadBurn() {
   try { burnData = await api('/api/burn'); } catch { /* */ }
+  renderBurnPill(document.getElementById('burn-btn'), burnData); // top-bar quick view
   if (tab === 'usage') renderUsage();
 }
 
@@ -716,7 +722,9 @@ function openNewModal() {
   render();
   refreshHistory(); // populate the "Past sessions" stat + history tab data
   if (tab === 'usage') loadUsage();
+  loadBurn(); // top-bar ccburn pill (all tabs)
   checkVersion();
   setInterval(refresh, 4000);
+  setInterval(loadBurn, 60_000);
   setInterval(checkVersion, 30000);
 })();

@@ -7,6 +7,7 @@ import { registerServiceWorker, applyUpdate } from './swreg.js';
 import { openShare } from './graph.js';
 import { openNewModal as openNewModalShared } from './newsession.js';
 import { pickFiles, sendFiles } from './upload.js';
+import { fetchBurn, renderBurnPill, openBurnPopover } from './burnpill.js';
 
 const styleEl = document.createElement('style');
 styleEl.textContent = css;
@@ -378,51 +379,8 @@ keybar.querySelectorAll('button').forEach((btn) => {
 // ---- ccburn quick-view (plan limits) in the top bar ----
 let burn = null;
 const burnBtn = document.getElementById('burn-btn');
-const pctOf = (l) => (l ? Math.round((l.utilization || 0) * 100) : null);
-const burnCls = (l) => { if (!l) return ''; const p = (l.utilization || 0) * 100; return p >= 90 ? 'burn-crit' : l.status === 'ahead_pace' ? 'burn-warn' : 'burn-ok'; };
-async function loadBurn() {
-  try { burn = await api('/api/burn'); } catch { /* */ }
-  renderBurnPill();
-}
-function renderBurnPill() {
-  if (!burn || !burn.available) { burnBtn.style.display = 'none'; return; }
-  const s = burn.limits?.session, w = burn.limits?.weekly;
-  burnBtn.innerHTML = `<span class="bp-seg ${burnCls(s)}">${pctOf(s) ?? '–'}%</span><span class="bp-sep">·</span><span class="bp-seg ${burnCls(w)}">${pctOf(w) ?? '–'}%</span>`;
-  burnBtn.title = `Session ${pctOf(s)}% · Weekly ${pctOf(w)}% used (ccburn) — tap for detail`;
-  burnBtn.style.display = '';
-}
-function burnDetailHtml(b) {
-  const lim = b.limits || {};
-  const card = (name, l) => {
-    if (!l) return '';
-    const pct = (l.utilization || 0) * 100;
-    const resets = l.resets_in_minutes != null ? `${l.resets_in_minutes}m` : l.resets_in_hours != null ? `${l.resets_in_hours.toFixed(0)}h` : '—';
-    return `<div class="limit"><div class="limit-top"><span>${name}</span><span>${pct.toFixed(0)}%</span></div>
-      <div class="limit-bar"><div class="limit-fill" style="width:${Math.min(100, pct)}%"></div></div>
-      <div class="faint">resets in ${resets} · budget pace ${((l.budget_pace || 0) * 100).toFixed(0)}%</div></div>`;
-  };
-  const br = b.burn_rate;
-  return `<div class="burn-pop-title">Plan limits <span class="faint">· ccburn</span></div>
-    ${card('Session (5h)', lim.session)}${card('Weekly', lim.weekly)}${lim.monthly ? card('Monthly', lim.monthly) : ''}
-    ${br ? `<div class="faint" style="margin-top:2px">🔥 ${Number(br.percent_per_hour).toFixed(1)}%/h (${esc(br.trend || '')})${br.estimated_minutes_to_100 ? ` · ~${Math.round(br.estimated_minutes_to_100 / 60 * 10) / 10}h to 100%` : ''}</div>` : ''}
-    ${b.recommendation ? `<div class="faint">${esc(String(b.recommendation).replace(/_/g, ' '))}</div>` : ''}`;
-}
-burnBtn.addEventListener('click', async (e) => {
-  e.stopPropagation();
-  const open = document.getElementById('burn-pop');
-  if (open) { open.remove(); return; }
-  const p = document.createElement('div');
-  p.id = 'burn-pop'; p.className = 'burn-pop';
-  p.innerHTML = burn && burn.available ? burnDetailHtml(burn) : '<div class="faint">ccburn unavailable</div>';
-  const r = burnBtn.getBoundingClientRect();
-  p.style.top = `${r.bottom + 6}px`;
-  p.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
-  document.body.appendChild(p);
-  setTimeout(() => document.addEventListener('click', function h() { p.remove(); document.removeEventListener('click', h); }, { once: true }), 0);
-  await loadBurn(); // refresh while open
-  const still = document.getElementById('burn-pop');
-  if (still && burn && burn.available) still.innerHTML = burnDetailHtml(burn);
-});
+async function loadBurn() { burn = await fetchBurn(); renderBurnPill(burnBtn, burn); return burn; }
+burnBtn.addEventListener('click', (e) => { e.stopPropagation(); openBurnPopover(burnBtn, burn, loadBurn); });
 loadBurn();
 setInterval(loadBurn, 60_000);
 
