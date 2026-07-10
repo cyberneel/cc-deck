@@ -196,7 +196,7 @@ function render() {
       <div class="spacer"></div>
       <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
       <button class="primary" id="new-btn" title="New session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New session'}</button>
-      <button id="snapshot-btn" class="icon" title="Snapshot sessions (restore after a reboot)">💾</button>
+      <button id="snapshot-btn" class="icon" title="Snapshot sessions (restore after a reboot)">💾<span class="snap-age" id="snap-age"></span></button>
       <button id="storage-btn" class="icon" title="Storage &amp; cleanup">🗄</button>
       <button id="reload-btn" class="icon" title="Reload app">↻</button>
       <button id="logout-btn" title="Log out">⏻</button>
@@ -253,6 +253,7 @@ function render() {
   burnBtn.addEventListener('click', (e) => { e.stopPropagation(); openBurnPopover(burnBtn, burnData, async () => { await loadBurn(); return burnData; }); });
   document.getElementById('new-btn').addEventListener('click', openNewModal);
   document.getElementById('storage-btn').addEventListener('click', openStorage);
+  renderSnapAge();
   document.getElementById('snapshot-btn').addEventListener('click', async (e) => {
     const b = e.currentTarget;
     b.disabled = true;
@@ -260,6 +261,7 @@ function render() {
       const r = await api('/api/restore/snapshot', { method: 'POST' });
       const safe = !r.busy;
       toast(`💾 Snapshot saved · ${r.count} session${r.count === 1 ? '' : 's'} · ${safe ? '✓ all idle — safe to reboot' : `⚠ ${r.busy} still working — let them finish first`}`);
+      loadSnap();
     } catch (err) { toast('Snapshot failed: ' + err.message); }
     finally { b.disabled = false; }
   });
@@ -560,8 +562,8 @@ function tokensFmt(n) {
   return String(n);
 }
 function paceEmoji(s) {
-  // ccburn's own legend: 🧊 behind pace · 🔥 on pace · 🚨 burning too hot.
-  return s === 'ahead_pace' ? '🚨' : s === 'on_pace' ? '🔥' : '🧊';
+  // ccburn's legend (match by keyword; its strings are e.g. "ahead_of_pace").
+  return /ahead/.test(s || '') ? '🚨' : /behind/.test(s || '') ? '🧊' : '🔥';
 }
 
 async function loadUsage() {
@@ -576,6 +578,25 @@ async function loadBurn() {
   renderBurnPill(document.getElementById('burn-btn'), burnData); // top-bar quick view
   if (tab === 'usage') renderUsage();
 }
+
+// ---- last-snapshot age indicator (next to the 💾 button) ----
+let lastSnap = null;
+function ageShort(ms) {
+  if (ms < 45_000) return 'now';
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
+  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h`;
+  return `${Math.round(ms / 86_400_000)}d`;
+}
+function renderSnapAge() {
+  const el = document.getElementById('snap-age');
+  const btn = document.getElementById('snapshot-btn');
+  if (!el || !btn) return;
+  if (!lastSnap || !lastSnap.at) { el.textContent = ''; btn.title = 'Snapshot sessions (restore after a reboot)'; return; }
+  const age = ageShort(Date.now() - lastSnap.at);
+  el.textContent = age;
+  btn.title = `Last snapshot: ${lastSnap.count} session${lastSnap.count === 1 ? '' : 's'}, ${age} ago · click to snapshot now`;
+}
+async function loadSnap() { try { lastSnap = await api('/api/restore'); } catch { /* */ } renderSnapAge(); }
 
 function renderUsage() {
   const c = document.getElementById('cards');
@@ -735,8 +756,10 @@ function openNewModal() {
   refreshHistory(); // populate the "Past sessions" stat + history tab data
   if (tab === 'usage') loadUsage();
   loadBurn(); // top-bar ccburn pill (all tabs)
+  loadSnap(); // last-snapshot age indicator
   checkVersion();
   setInterval(refresh, 4000);
   setInterval(loadBurn, 60_000);
+  setInterval(loadSnap, 60_000);
   setInterval(checkVersion, 30000);
 })();

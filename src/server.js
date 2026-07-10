@@ -34,7 +34,7 @@ import { createMcpServer } from './mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as oauth from './oauth.js';
 import { consumeNotesSeed, listPending, pendingCounts, readPending } from './notes.js';
-import { captureSnapshot, restoreIfBoot } from './restore.js';
+import { captureSnapshot, restoreIfBoot, loadSnapshot } from './restore.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
 // Claude's own session name (custom /rename title, else its auto-title), and the
@@ -549,6 +549,12 @@ app.get('/api/usage', async (req, reply) => {
   } catch (err) {
     return reply.code(500).send({ error: err.message });
   }
+});
+
+// Metadata about the last snapshot (for the "last snapshot" indicator).
+app.get('/api/restore', async () => {
+  const snap = await loadSnapshot();
+  return { at: snap?.at || null, count: snap?.sessions?.length || 0 };
 });
 
 // Snapshot the active sessions now (so they're restored on next startup/reboot).

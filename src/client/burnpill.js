@@ -3,7 +3,10 @@
 // the two can't drift.
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pctOf = (l) => (l ? Math.round((l.utilization || 0) * 100) : null);
-const burnCls = (l) => { if (!l) return ''; const p = (l.utilization || 0) * 100; return p >= 90 ? 'burn-crit' : l.status === 'ahead_pace' ? 'burn-warn' : 'burn-ok'; };
+// ccburn status strings are e.g. "behind_pace" / "on_pace" / "ahead_of_pace" —
+// match by keyword so a wording change doesn't break it.
+const paceRank = (st) => (/ahead/.test(st || '') ? 2 : /behind/.test(st || '') ? 0 : 1);
+const burnCls = (l) => { if (!l) return ''; const p = (l.utilization || 0) * 100; return p >= 90 ? 'burn-crit' : /ahead/.test(l.status || '') ? 'burn-warn' : 'burn-ok'; };
 
 export async function fetchBurn() {
   try { const r = await fetch('/api/burn'); if (r.ok) return await r.json(); } catch { /* */ }
@@ -20,11 +23,10 @@ export function renderBurnPill(btn, burn) {
 }
 
 // ccburn's own pace legend (its README): 🧊 behind pace · 🔥 on pace · 🚨 too hot.
-export const paceEmoji = (st) => (st === 'ahead_pace' ? '🚨' : st === 'on_pace' ? '🔥' : '🧊');
-const PACE_RANK = { behind_pace: 0, on_pace: 1, ahead_pace: 2 };
+export const paceEmoji = (st) => { const r = paceRank(st); return r === 2 ? '🚨' : r === 0 ? '🧊' : '🔥'; };
 export function overallPace(burn) {
   const st = [burn?.limits?.session?.status, burn?.limits?.weekly?.status, burn?.limits?.monthly?.status].filter(Boolean);
-  return st.sort((a, b) => (PACE_RANK[b] ?? 0) - (PACE_RANK[a] ?? 0))[0] || 'behind_pace';
+  return st.sort((a, b) => paceRank(b) - paceRank(a))[0] || 'behind_pace';
 }
 
 function detailHtml(b) {
