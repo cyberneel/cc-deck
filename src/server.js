@@ -34,6 +34,7 @@ import { createMcpServer } from './mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as oauth from './oauth.js';
 import { consumeNotesSeed, listPending, pendingCounts, readPending } from './notes.js';
+import { captureSnapshot, restoreIfBoot } from './restore.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
 // Claude's own session name (custom /rename title, else its auto-title), and the
@@ -550,6 +551,12 @@ app.get('/api/usage', async (req, reply) => {
   }
 });
 
+// Snapshot the active sessions now (so they're restored on next startup/reboot).
+app.post('/api/restore/snapshot', async (req, reply) => {
+  try { return { count: await captureSnapshot() }; }
+  catch (err) { return reply.code(500).send({ error: err.message }); }
+});
+
 // ---- WebSocket: terminal attach ----
 app.register(async (instance) => {
   instance.get('/ws/attach', { websocket: true }, (socket, req) => {
@@ -561,7 +568,28 @@ const address = await app.listen({ port: config.port, host: config.bind });
 app.log.info(`cc-deck listening on ${address} (roots: ${config.roots.join(', ')})`);
 
 // Keep cc-deck's dedicated tmux server alive even when it has no sessions.
-initServer().catch(() => {});
+await initServer().catch(() => {});
+
+// On a fresh boot (no sessions running), restore the sessions that were active
+// before the box went down; then keep a periodic snapshot as a safety net.
+restoreIfBoot()
+  .then((r) => {
+    if (r?.restored) app.log.info(`restored ${r.restored}/${r.total} session(s) from snapshot`);
+    else if (r?.reason) app.log.info(`session restore skipped: ${r.reason}`);
+  })
+  .catch((e) => app.log.warn(`session restore failed: ${e.message}`))
+  .finally(() => { setInterval(() => captureSnapshot().catch(() => {}), 120_000); });
+
+// Snapshot on graceful stop (systemctl stop / reboot) so nothing is lost.
+let ccdeckStopping = false;
+async function snapshotAndExit() {
+  if (ccdeckStopping) return;
+  ccdeckStopping = true;
+  try { await Promise.race([captureSnapshot(), new Promise((r) => setTimeout(r, 5000))]); } catch { /* */ }
+  process.exit(0);
+}
+process.on('SIGTERM', snapshotAndExit);
+process.on('SIGINT', snapshotAndExit);
 
 // Warm the pricing cache in the background so the first Usage load is instant.
 getPricing()

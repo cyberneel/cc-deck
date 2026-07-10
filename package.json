@@ -20,6 +20,7 @@
     "setup": "bash setup.sh",
     "build": "node esbuild.config.js",
     "start": "node src/server.js",
+    "snapshot": "node scripts/snapshot.mjs",
     "dev": "node esbuild.config.js --watch & node --watch src/server.js"
   },
   "dependencies": {
