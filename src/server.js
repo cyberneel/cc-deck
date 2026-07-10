@@ -552,9 +552,15 @@ app.get('/api/usage', async (req, reply) => {
 });
 
 // Snapshot the active sessions now (so they're restored on next startup/reboot).
+// Also reports how many are still "working" (in-flight) so the UI can tell you
+// whether it's safe to reboot for a clean restore.
 app.post('/api/restore/snapshot', async (req, reply) => {
-  try { return { count: await captureSnapshot() }; }
-  catch (err) { return reply.code(500).send({ error: err.message }); }
+  try {
+    const count = await captureSnapshot();
+    let busy = 0;
+    try { busy = (await enrichedSessions()).filter((s) => s.claudeStatus === 'busy').length; } catch { /* */ }
+    return { count, busy };
+  } catch (err) { return reply.code(500).send({ error: err.message }); }
 });
 
 // ---- WebSocket: terminal attach ----

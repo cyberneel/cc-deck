@@ -196,6 +196,7 @@ function render() {
       <div class="spacer"></div>
       <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
       <button class="primary" id="new-btn" title="New session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New session'}</button>
+      <button id="snapshot-btn" class="icon" title="Snapshot sessions (restore after a reboot)">💾</button>
       <button id="storage-btn" class="icon" title="Storage &amp; cleanup">🗄</button>
       <button id="reload-btn" class="icon" title="Reload app">↻</button>
       <button id="logout-btn" title="Log out">⏻</button>
@@ -252,6 +253,16 @@ function render() {
   burnBtn.addEventListener('click', (e) => { e.stopPropagation(); openBurnPopover(burnBtn, burnData, async () => { await loadBurn(); return burnData; }); });
   document.getElementById('new-btn').addEventListener('click', openNewModal);
   document.getElementById('storage-btn').addEventListener('click', openStorage);
+  document.getElementById('snapshot-btn').addEventListener('click', async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true;
+    try {
+      const r = await api('/api/restore/snapshot', { method: 'POST' });
+      const safe = !r.busy;
+      toast(`💾 Snapshot saved · ${r.count} session${r.count === 1 ? '' : 's'} · ${safe ? '✓ all idle — safe to reboot' : `⚠ ${r.busy} still working — let them finish first`}`);
+    } catch (err) { toast('Snapshot failed: ' + err.message); }
+    finally { b.disabled = false; }
+  });
   document.getElementById('reload-btn').addEventListener('click', () => applyUpdate(pendingWorker));
   document.getElementById('logout-btn').addEventListener('click', async () => {
     await api('/api/logout', { method: 'POST' });
