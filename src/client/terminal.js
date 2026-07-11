@@ -5,6 +5,7 @@ import { CanvasAddon } from '@xterm/addon-canvas';
 import css from './styles.css';
 import { registerServiceWorker, applyUpdate } from './swreg.js';
 import { openShare } from './graph.js';
+import { openNotes } from './notes.js';
 import { openNewModal as openNewModalShared } from './newsession.js';
 import { pickFiles, sendFiles, toast } from './upload.js';
 import { fetchBurn, renderBurnPill, openBurnPopover } from './burnpill.js';
@@ -583,6 +584,7 @@ function renderSidebar() {
     return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''}" data-name="${esc(s.name)}">
       <span class="sb-dot ${statusDot(s)}"></span>
       <span class="sb-meta"><span class="sb-title">${esc(s.title)}</span><span class="sb-dir">${esc(baseName(s.dir))}</span></span>
+      ${s.noteCount ? `<button class="sb-note" title="${s.noteCount} update(s) from outside chats — view / apply" data-note="${esc(s.name)}">📝${s.noteCount}</button>` : ''}
       ${att ? '<span class="sb-attn" title="Needs your attention">●</span>' : num}
       <div class="sb-actions">
         ${s.liveSessionId ? `<button class="sb-share" title="Share this session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
@@ -592,7 +594,13 @@ function renderSidebar() {
     </div>`;
   }).join('') || '<div class="faint" style="padding:12px">No active sessions</div>';
   list.querySelectorAll('.sb-item').forEach((el) =>
-    el.addEventListener('click', (e) => { if (!e.target.closest('.sb-kill, .sb-rename, .sb-share')) switchTo(el.dataset.name); }));
+    el.addEventListener('click', (e) => { if (!e.target.closest('.sb-kill, .sb-rename, .sb-share, .sb-note')) switchTo(el.dataset.name); }));
+  list.querySelectorAll('.sb-note').forEach((b) =>
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const s = sessions.find((x) => x.name === b.dataset.note);
+      if (s) openNotes(s.liveSessionId || s.resumedFrom, s.name, refreshSessions);
+    }));
   list.querySelectorAll('.sb-rename').forEach((b) =>
     b.addEventListener('click', (e) => { e.stopPropagation(); renameSessionFromSidebar(b.dataset.rename); }));
   list.querySelectorAll('.sb-kill').forEach((b) =>
