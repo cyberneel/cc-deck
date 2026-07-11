@@ -13,12 +13,17 @@ const FILE = process.env.CCDECK_RESTORE_FILE || join(DIR, 'restore.json');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Write a snapshot of the currently-active sessions (atomic). Returns the count.
-export async function captureSnapshot() {
+// skipIfEmpty: don't clobber a good snapshot with an empty one — used on shutdown,
+// where a reboot teardown race can make listSessions() return 0 mid-kill. In that
+// case we keep the last periodic snapshot instead of wiping it (the real bug that
+// lost sessions across `sudo reboot`).
+export async function captureSnapshot({ skipIfEmpty = false } = {}) {
   const sessions = await listSessions();
   try { matchAgents(sessions, await getAgents()); } catch { /* resume ids best-effort */ }
   const entries = sessions
     .filter((s) => s.dir)
     .map((s) => ({ dir: s.dir, title: s.title, resume: s.liveSessionId || s.resumedFrom || null }));
+  if (!entries.length && skipIfEmpty) return -1; // keep last-good snapshot
   await mkdir(DIR, { recursive: true });
   const tmp = `${FILE}.tmp`;
   await writeFile(tmp, JSON.stringify({ at: Date.now(), version: 1, sessions: entries }, null, 2));

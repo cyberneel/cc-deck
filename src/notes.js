@@ -4,7 +4,7 @@
 // elsewhere. Stored as markdown files keyed by the Claude sessionId. A pending
 // note is `<sessionId>-<ts>.md`; once delivered it's renamed to `.md.done` (the
 // file stays so Claude can Read it, but it won't be injected again).
-import { mkdir, writeFile, readdir, rename, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, rename, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -31,6 +31,8 @@ export async function listPending(sessionId) {
   return names.filter((n) => n.startsWith(`${sessionId}-`) && n.endsWith('.md')).map((n) => join(NOTES_DIR, n));
 }
 
+const MAX_DATE_MS = 8.64e15; // largest value a JS Date accepts
+
 // Read pending note contents for a session (for the viewer), newest first.
 export async function readPending(sessionId) {
   const files = await listPending(sessionId);
@@ -40,10 +42,29 @@ export async function readPending(sessionId) {
     const ms = parseInt(base.slice(sessionId.length + 1, -3), 36);
     let text = '';
     try { text = await readFile(f, 'utf8'); } catch { continue; }
-    out.push({ savedAt: Number.isFinite(ms) ? new Date(ms).toISOString() : null, text });
+    // The ts is base-36 (addNote writes Date.now().toString(36)); if a filename
+    // doesn't conform, fall back to the file's mtime so it never shows "invalid time".
+    let savedAt = null;
+    if (Number.isFinite(ms) && ms > 0 && ms < MAX_DATE_MS) savedAt = new Date(ms).toISOString();
+    else { try { savedAt = (await stat(f)).mtime.toISOString(); } catch { /* leave null */ } }
+    out.push({ savedAt, text });
   }
   out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
   return out;
+}
+
+// A cc-deck session's Claude id can change (resume/fork/reboot recreate it);
+// resumedFrom (the @ccdeck_resume tmux option) is the stable anchor. Match notes
+// across the whole lineage so they don't get orphaned when the live id changes.
+const uniq = (ids) => [...new Set(ids.filter(Boolean))];
+export function countNotes(counts, ids) { return uniq(ids).reduce((n, id) => n + (counts.get(id) || 0), 0); }
+export async function readPendingMany(ids) {
+  const out = (await Promise.all(uniq(ids).map(readPending))).flat();
+  return out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+}
+export async function consumeNotesSeedMany(ids) {
+  const seeds = (await Promise.all(uniq(ids).map(consumeNotesSeed))).filter(Boolean);
+  return seeds.length ? seeds.join('\n') : null;
 }
 
 // Count of pending notes per session (one readdir), for badges.

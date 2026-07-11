@@ -33,7 +33,11 @@ import { listArtifacts, deleteArtifacts } from './storage.js';
 import { createMcpServer } from './mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as oauth from './oauth.js';
-import { consumeNotesSeed, listPending, pendingCounts, readPending } from './notes.js';
+import { consumeNotesSeed, consumeNotesSeedMany, pendingCounts, readPending, readPendingMany, countNotes } from './notes.js';
+
+// A session's Claude id lineage: the live id (changes on resume/fork/reboot) plus
+// resumedFrom (the stable @ccdeck_resume anchor). Notes are matched across all of it.
+const lineageIds = (s) => [s?.liveSessionId, s?.resumedFrom];
 import { captureSnapshot, restoreIfBoot, loadSnapshot } from './restore.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
@@ -49,7 +53,7 @@ async function enrichedSessions() {
       const m = await claudeLiveMeta(s.dir, s.liveSessionId);
       if (m.title) s.title = m.title;
       if (m.mode) s.mode = m.mode;
-      s.noteCount = notes.get(s.liveSessionId) || 0;
+      s.noteCount = countNotes(notes, lineageIds(s));
     }));
   } catch { /* degrade */ }
   return sessions;
@@ -195,10 +199,16 @@ app.get('/api/history', async () => {
   }
 });
 
-// Read pending external notes for a session (for the note viewer).
+// Read pending external notes for a session (for the note viewer). If the id
+// belongs to a running session's lineage, show notes for the whole lineage (so
+// the viewer matches the badge count even after the live id changed on resume).
 app.get('/api/notes/:sessionId', async (req, reply) => {
-  try { return { notes: await readPending(req.params.sessionId) }; }
-  catch (err) { return reply.code(err.statusCode || 500).send({ error: err.message }); }
+  try {
+    const id = req.params.sessionId;
+    let s;
+    try { s = (await enrichedSessions()).find((x) => lineageIds(x).includes(id)); } catch { /* offline */ }
+    return { notes: s ? await readPendingMany(lineageIds(s)) : await readPending(id) };
+  } catch (err) { return reply.code(err.statusCode || 500).send({ error: err.message }); }
 });
 
 app.delete('/api/sessions/:name', async (req, reply) => {
@@ -214,9 +224,8 @@ app.delete('/api/sessions/:name', async (req, reply) => {
 app.post('/api/sessions/:name/apply-notes', async (req, reply) => {
   try {
     const s = (await enrichedSessions()).find((x) => x.name === req.params.name);
-    const id = s?.liveSessionId;
-    if (!id) return reply.code(400).send({ error: 'No live Claude session to apply notes to' });
-    const seed = await consumeNotesSeed(id);
+    if (!s?.liveSessionId) return reply.code(400).send({ error: 'No live Claude session to apply notes to' });
+    const seed = await consumeNotesSeedMany(lineageIds(s));
     if (!seed) return { applied: 0 };
     await sendText(req.params.name, seed);
     return { applied: 1 };
@@ -597,7 +606,7 @@ let ccdeckStopping = false;
 async function snapshotAndExit() {
   if (ccdeckStopping) return;
   ccdeckStopping = true;
-  try { await Promise.race([captureSnapshot(), new Promise((r) => setTimeout(r, 5000))]); } catch { /* */ }
+  try { await Promise.race([captureSnapshot({ skipIfEmpty: true }), new Promise((r) => setTimeout(r, 5000))]); } catch { /* */ }
   process.exit(0);
 }
 process.on('SIGTERM', snapshotAndExit);
