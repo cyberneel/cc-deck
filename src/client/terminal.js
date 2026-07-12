@@ -46,6 +46,7 @@ document.body.innerHTML = `
     <aside id="sidebar">
       <div class="sb-head"><span>Sessions</span><button id="sb-collapse" class="icon" title="Collapse">«</button></div>
       <button id="sb-new" class="sb-new">+ New session</button>
+      <button id="sb-resume" class="sb-new sb-resume">↩ Resume a session</button>
       <div id="sb-list"></div>
       <div class="sb-foot faint">Alt+\` to cycle · Alt+1–9 to jump</div>
     </aside>
@@ -259,7 +260,45 @@ document.getElementById('sb-backdrop').addEventListener('click', () => {
   sidebarOpen = false; localStorage.setItem('ccdeck.sidebar', 'closed'); applySidebar();
 });
 document.getElementById('sb-new').addEventListener('click', openNewModal);
+document.getElementById('sb-resume').addEventListener('click', openResumeModal);
 document.getElementById('reload-btn').addEventListener('click', () => applyUpdate(pendingWorker));
+
+// Resume a past session: filterable list of on-disk sessions (History) → resume.
+async function openResumeModal() {
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `<div class="modal" style="max-width:520px">
+    <h2>Resume a session</h2>
+    <input id="rs-filter" placeholder="filter by title / directory…" spellcheck="false" autocomplete="off" style="margin-bottom:6px" />
+    <div id="rs-list" class="seed-list"><div class="faint" style="padding:8px">Loading…</div></div>
+    <div class="modal-actions"><button id="rs-cancel">Cancel</button></div>
+  </div>`;
+  document.body.appendChild(bg);
+  const close = () => bg.remove();
+  bg.querySelector('#rs-cancel').addEventListener('click', close);
+  bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
+  const list = bg.querySelector('#rs-list');
+  let items = [];
+  try { items = (await api('/api/history')).sessions.filter((s) => s.cwd); }
+  catch (e) { list.innerHTML = `<div class="faint" style="padding:8px">${esc(e.message)}</div>`; return; }
+  list.innerHTML = items.map((s) =>
+    `<div class="seed-item" data-id="${esc(s.sessionId)}" data-dir="${esc(s.cwd)}" data-title="${esc(s.title)}">
+      <span class="seed-item-main"><span class="seed-item-title">${esc(s.title)}</span><span class="seed-item-meta faint">${esc(s.cwd)}${s.gitBranch ? ' · ' + esc(s.gitBranch) : ''}</span></span>
+    </div>`).join('') || '<div class="faint" style="padding:8px">No past sessions.</div>';
+  bg.querySelector('#rs-filter').addEventListener('input', (e) => {
+    const q = e.target.value.toLowerCase();
+    list.querySelectorAll('.seed-item').forEach((el) => { el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+  });
+  list.querySelectorAll('.seed-item').forEach((el) => el.addEventListener('click', async () => {
+    el.style.opacity = '.5';
+    try {
+      const { name } = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ dir: el.dataset.dir, title: el.dataset.title, resume: el.dataset.id }) });
+      close();
+      await refreshSessions();
+      switchTo(name);
+    } catch (e) { el.style.opacity = ''; toast('Resume failed: ' + e.message); }
+  }));
+}
 
 // ---- new session modal (shared with the dashboard) ----
 let cfg = null;
