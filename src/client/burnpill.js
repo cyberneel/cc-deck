@@ -24,9 +24,14 @@ export function renderBurnPill(btn, burn) {
 
 // ccburn's own pace legend (its README): 🧊 behind pace · 🔥 on pace · 🚨 too hot.
 export const paceEmoji = (st) => { const r = paceRank(st); return r === 2 ? '🚨' : r === 0 ? '🧊' : '🔥'; };
+// Pill emoji = the 5h SESSION pace (what ccburn headlines and what the popover's
+// session row shows), but escalate to 🚨 if ANY window is actually ahead of pace
+// so a real over-burn still surfaces. (Avoids a barely-started weekly at "on_pace"
+// flipping the pill to 🔥 while your session is chill.)
 export function overallPace(burn) {
-  const st = [burn?.limits?.session?.status, burn?.limits?.weekly?.status, burn?.limits?.monthly?.status].filter(Boolean);
-  return st.sort((a, b) => paceRank(b) - paceRank(a))[0] || 'behind_pace';
+  const L = burn?.limits || {};
+  const all = [L.session?.status, L.weekly?.status, L.monthly?.status].filter(Boolean);
+  return all.find((s) => /ahead/.test(s)) || L.session?.status || all[0] || 'behind_pace';
 }
 
 function detailHtml(b) {
