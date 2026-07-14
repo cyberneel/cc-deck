@@ -23,22 +23,14 @@ function eventCost(e, rate) {
 }
 
 let cache = { at: 0, data: null };
-const TTL_MS = 60_000;
+let refreshing = false;
+const TTL_MS = 5 * 60_000; // 5 min — usage doesn't need to be fresher than this
 
-// Walk every transcript once, pulling (timestamp, model, usage) from assistant
-// messages, and build a flat list of events. Cached for a minute.
-async function collectEvents() {
-  if (cache.data && Date.now() - cache.at < TTL_MS) return cache.data;
-
+// Scan every transcript once (reads ~hundreds of MB), building a flat event list.
+async function scanEvents() {
   const events = [];
   let projectDirs = [];
-  try {
-    projectDirs = await readdir(PROJECTS_DIR, { withFileTypes: true });
-  } catch {
-    cache = { at: Date.now(), data: events };
-    return events;
-  }
-
+  try { projectDirs = await readdir(PROJECTS_DIR, { withFileTypes: true }); } catch { return events; }
   for (const d of projectDirs) {
     if (!d.isDirectory()) continue;
     let names = [];
@@ -48,8 +40,25 @@ async function collectEvents() {
       await readFileEvents(join(PROJECTS_DIR, d.name, name), events);
     }
   }
-  cache = { at: Date.now(), data: events };
   return events;
+}
+
+// Stale-while-revalidate: serve the cached events instantly and refresh in the
+// background, so a full re-scan never sits on the request path (which stalls the
+// event loop and queues other endpoints like /api/burn). Only the first-ever
+// load blocks. ponytail: SWR + coarse TTL; add per-file mtime skip only if the
+// background re-scan still bites.
+async function collectEvents() {
+  const stale = !cache.data || Date.now() - cache.at >= TTL_MS;
+  if (cache.data) {
+    if (stale && !refreshing) {
+      refreshing = true;
+      scanEvents().then((ev) => { cache = { at: Date.now(), data: ev }; }).finally(() => { refreshing = false; });
+    }
+    return cache.data;
+  }
+  cache = { at: Date.now(), data: await scanEvents() };
+  return cache.data;
 }
 
 function readFileEvents(file, events) {
