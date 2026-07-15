@@ -57,6 +57,7 @@ document.body.innerHTML = `
         <a href="/" title="Back to dashboard">←</a>
         <span class="title" id="title">${currentSession || 'session'}</span>
         <div class="spacer" style="flex:1"></div>
+        <button id="notes-btn" class="icon" title="Updates from outside chats" style="display:none"></button>
         <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
         <button id="upload-btn" class="icon" title="Send files / folder to this session">📎</button>
         <button id="reload-btn" class="icon" title="Reload app">↻</button>
@@ -613,6 +614,22 @@ async function refreshSessions() {
 // share/branch glyph (inline SVG → renders identically everywhere)
 const SHARE_ICON = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h5v5M14 2 7 9M12 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3.5"/></svg>';
 
+// Top-bar note badge for the CURRENT session (kept out of the hover-actions
+// overlay). Driven from the sessions list on every refresh + switch.
+function updateNotesBtn() {
+  const btn = document.getElementById('notes-btn');
+  const s = sessions.find((x) => x.name === currentSession);
+  const n = s?.noteCount || 0;
+  if (!n) { btn.style.display = 'none'; return; }
+  btn.textContent = `📝${n}`;
+  btn.title = `${n} update(s) from outside chats — view / apply`;
+  btn.style.display = '';
+}
+document.getElementById('notes-btn').addEventListener('click', () => {
+  const s = sessions.find((x) => x.name === currentSession);
+  if (s) openNotes(s.liveSessionId || s.resumedFrom, s.name, refreshSessions);
+});
+
 function renderSidebar() {
   const list = document.getElementById('sb-list');
   const ordered = orderedSessions();
@@ -623,7 +640,6 @@ function renderSidebar() {
     return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''}" data-name="${esc(s.name)}">
       <span class="sb-dot ${statusDot(s)}"></span>
       <span class="sb-meta"><span class="sb-title">${esc(s.title)}</span><span class="sb-dir">${esc(baseName(s.dir))}</span></span>
-      ${s.noteCount ? `<button class="sb-note" title="${s.noteCount} update(s) from outside chats — view / apply" data-note="${esc(s.name)}">📝${s.noteCount}</button>` : ''}
       ${att ? '<span class="sb-attn" title="Needs your attention">●</span>' : num}
       <div class="sb-actions">
         ${s.liveSessionId ? `<button class="sb-share" title="Share this session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
@@ -633,13 +649,8 @@ function renderSidebar() {
     </div>`;
   }).join('') || '<div class="faint" style="padding:12px">No active sessions</div>';
   list.querySelectorAll('.sb-item').forEach((el) =>
-    el.addEventListener('click', (e) => { if (!e.target.closest('.sb-kill, .sb-rename, .sb-share, .sb-note')) switchTo(el.dataset.name); }));
-  list.querySelectorAll('.sb-note').forEach((b) =>
-    b.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const s = sessions.find((x) => x.name === b.dataset.note);
-      if (s) openNotes(s.liveSessionId || s.resumedFrom, s.name, refreshSessions);
-    }));
+    el.addEventListener('click', (e) => { if (!e.target.closest('.sb-kill, .sb-rename, .sb-share')) switchTo(el.dataset.name); }));
+  updateNotesBtn();
   list.querySelectorAll('.sb-rename').forEach((b) =>
     b.addEventListener('click', (e) => { e.stopPropagation(); renameSessionFromSidebar(b.dataset.rename); }));
   list.querySelectorAll('.sb-kill').forEach((b) =>
