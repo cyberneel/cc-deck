@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { readdir } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
@@ -24,22 +24,38 @@ function eventCost(e, rate) {
 
 let cache = { at: 0, data: null };
 let refreshing = false;
-const TTL_MS = 5 * 60_000; // 5 min — usage doesn't need to be fresher than this
+const TTL_MS = 60_000; // scans are cheap now (only changed files re-read), so keep it fresh
 
-// Scan every transcript once (reads ~hundreds of MB), building a flat event list.
-async function scanEvents() {
+// Parsed events per transcript, keyed by mtime+size — so a scan only re-reads the
+// handful of files that actually changed, not all ~250MB every time.
+const fileCache = new Map(); // path -> { key, events }
+
+export async function scanEvents() {
   const events = [];
   let projectDirs = [];
   try { projectDirs = await readdir(PROJECTS_DIR, { withFileTypes: true }); } catch { return events; }
+  const seen = new Set();
   for (const d of projectDirs) {
     if (!d.isDirectory()) continue;
     let names = [];
     try { names = await readdir(join(PROJECTS_DIR, d.name)); } catch { continue; }
     for (const name of names) {
       if (!name.endsWith('.jsonl')) continue;
-      await readFileEvents(join(PROJECTS_DIR, d.name, name), events);
+      const file = join(PROJECTS_DIR, d.name, name);
+      let s; try { s = await stat(file); } catch { continue; }
+      seen.add(file);
+      const key = `${s.mtimeMs}:${s.size}`;
+      let hit = fileCache.get(file);
+      if (!hit || hit.key !== key) {
+        const ev = [];
+        await readFileEvents(file, ev); // only unchanged-miss re-reads
+        hit = { key, events: ev };
+        fileCache.set(file, hit);
+      }
+      for (const e of hit.events) events.push(e);
     }
   }
+  for (const k of fileCache.keys()) if (!seen.has(k)) fileCache.delete(k); // forget deleted files
   return events;
 }
 
