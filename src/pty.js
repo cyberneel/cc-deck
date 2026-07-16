@@ -6,6 +6,11 @@ const { spawn } = pkg;
 
 // Last window size we applied per session, to skip redundant resize-window calls.
 const appliedSize = new Map();
+// The device (socket) that last actively interacted with a session — it "owns"
+// the shared tmux window size. Prevents two attached clients (e.g. desktop + the
+// mobile PWA) from fighting over the window size on passive resizes, which makes
+// tmux reflow repeatedly and duplicates/garbles the on-screen text.
+const sessionOwner = new Map();
 
 // Alternate-screen enable/disable sequences. In "fast" scroll mode we strip
 // these so tmux renders on xterm's main buffer, which keeps a local scrollback
@@ -92,13 +97,17 @@ export function attachHandler(socket, req) {
           curCols = clampInt(obj.cols, curCols, 20, 500);
           curRows = clampInt(obj.rows, curRows, 5, 300);
           pty.resize(curCols, curRows); // size THIS client's terminal (render correctly)
-          // Only the active/foreground pane flags `active` -> drive the window size
-          // to this device. Background warm panes resize their own client only.
-          if (obj.active) sizeWindowToClient();
+          // A passive resize only drives the SHARED window if this device already
+          // owns it (or nobody does) — otherwise the non-active device would fight
+          // the active one on every viewport twitch. Real interaction takes over
+          // ownership below.
+          const owner = sessionOwner.get(session);
+          if (obj.active && (!owner || owner === socket)) { sessionOwner.set(session, socket); sizeWindowToClient(); }
           return;
         }
         if (obj.type === 'input' && typeof obj.data === 'string') {
-          sizeWindowToClient(); // typing = this device is the active one
+          sessionOwner.set(session, socket); // typing = this is the device in use
+          sizeWindowToClient();
           pty.write(obj.data);
           return;
         }
@@ -106,11 +115,13 @@ export function attachHandler(socket, req) {
         // Not JSON — fall through and treat as input.
       }
     }
-    sizeWindowToClient(); // raw keystrokes/scroll = active interaction on this device
+    sessionOwner.set(session, socket); // raw keystrokes/scroll = active interaction here
+    sizeWindowToClient();
     pty.write(msg);
   });
 
   const cleanup = () => {
+    if (sessionOwner.get(session) === socket) sessionOwner.delete(session);
     try {
       pty.kill(); // Detaches the tmux client; the session keeps running.
     } catch {
