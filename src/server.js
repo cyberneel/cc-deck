@@ -451,6 +451,12 @@ function mcpAuthed(req) {
   if (config.mcpToken && tok === config.mcpToken) return true;
   return !!oauth.verifyAccessToken(tok);
 }
+// True only for the static-bearer (Friday / Claude Code), not OAuth connectors —
+// gates the session-control tools that spawn/drive real claude processes.
+function mcpIsStatic(req) {
+  const h = req.headers.authorization || '';
+  return h.startsWith('Bearer ') && !!config.mcpToken && h.slice(7) === config.mcpToken;
+}
 function mcpUnauthorized(req, reply) {
   reply.header('WWW-Authenticate', `Bearer resource_metadata="${oauth.baseUrl(req)}/.well-known/oauth-protected-resource"`);
   return reply.code(401).send({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized' } });
@@ -490,7 +496,7 @@ app.post('/mcp', async (req, reply) => {
   if (sid && mcpSessions.has(sid)) {
     transport = mcpSessions.get(sid).transport;
   } else if (!sid && isInit) {
-    const server = createMcpServer();
+    const server = createMcpServer({ sessionControl: mcpIsStatic(req) });
     transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => mcpSessions.set(id, { server, transport }),

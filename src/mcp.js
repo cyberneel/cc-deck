@@ -10,6 +10,15 @@ import { buildGraph, buildThread, isSessionId } from './graph.js';
 import { listHistory } from './history.js';
 import { summarize } from './handoff.js';
 import { addNote } from './notes.js';
+import { createSession, sendText, listSessions } from './tmux.js';
+import { getAgents, matchAgents } from './agents.js';
+
+// Find a RUNNING session by any id in its lineage (live id or resumedFrom).
+async function findLiveSession(id) {
+  const sessions = await listSessions();
+  try { matchAgents(sessions, await getAgents()); } catch { /* */ }
+  return sessions.find((s) => s.liveSessionId === id || s.resumedFrom === id);
+}
 
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 const READ_CAP = 1_000_000; // bytes read per transcript when searching
@@ -123,7 +132,7 @@ async function getContext(sessionId, format, maxChars) {
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
 
-export function createMcpServer() {
+export function createMcpServer({ sessionControl = false } = {}) {
   const server = new McpServer({ name: 'cc-deck', version: '1.0.0' });
 
   server.registerTool('search_sessions', {
@@ -182,6 +191,40 @@ export function createMcpServer() {
     catch (e) { return text(`Could not save: ${e.message}`); }
     return text('Saved. This summary will surface in that cc-deck session the next time the user opens or resumes it.');
   });
+
+  // Session-control tools (spawn/drive real claude processes) — only exposed to
+  // the static-bearer caller (Friday / Claude Code), never OAuth connectors.
+  if (sessionControl) {
+    server.registerTool('create_session', {
+      title: 'Start a cc-deck coding session',
+      description: 'Launch a new cc-deck (Claude Code) session in a repo directory, seeded with a task/context prompt that is typed into Claude once it boots. Use to spin up work on a task.',
+      inputSchema: {
+        dir: z.string().describe('Absolute path to the repo/working directory (must be under an allowed root).'),
+        prompt: z.string().min(1).describe('The task + context to type into Claude after it boots.'),
+        title: z.string().optional().describe('Short session title; defaults to the folder name.'),
+      },
+    }, async ({ dir, prompt, title }) => {
+      try {
+        const name = await createSession({ dir, title, seed: prompt });
+        return text(redact(`Started session ${name} in ${dir}. It's booting; its Claude sessionId will appear shortly via list_recent_sessions.`));
+      } catch (e) { return text(`Could not start session: ${e.message}`); }
+    });
+
+    server.registerTool('send_to_session', {
+      title: 'Send input to a running cc-deck session',
+      description: 'Type a line into an already-running cc-deck session (a live nudge, submitted with Enter). The session must be active — resume it in cc-deck first if not.',
+      inputSchema: {
+        session_id: z.string().describe('A Claude session id (as used by list_recent_sessions / get_session_context).'),
+        text: z.string().min(1).describe('The text to send; it is submitted with Enter.'),
+      },
+    }, async ({ session_id, text: line }) => {
+      if (!isSessionId(session_id)) return text('Invalid session_id.');
+      const s = await findLiveSession(session_id);
+      if (!s) return text('Session not active — resume it in cc-deck first.');
+      try { await sendText(s.name, line); return text(redact(`Sent to "${s.title || s.name}".`)); }
+      catch (e) { return text(`Could not send: ${e.message}`); }
+    });
+  }
 
   return server;
 }
