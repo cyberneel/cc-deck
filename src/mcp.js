@@ -3,9 +3,10 @@
 // pull relevant context. Reuses the transcript machinery from graph/handoff/history.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { readdir, readFile, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readdir, readFile, stat, mkdir } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { config } from './config.js';
 import { buildGraph, buildThread, isSessionId } from './graph.js';
 import { listHistory } from './history.js';
 import { summarize } from './handoff.js';
@@ -205,9 +206,16 @@ export function createMcpServer({ sessionControl = false } = {}) {
       },
     }, async ({ dir, prompt, title }) => {
       try {
-        const name = await createSession({ dir, title, seed: prompt });
-        return text(redact(`Started session ${name} in ${dir}. It's booting; its Claude sessionId will appear shortly via list_recent_sessions.`));
-      } catch (e) { return text(`Could not start session: ${e.message}`); }
+        // Auto-create the target dir if it's UNDER an allowed root but missing
+        // (the common "new project folder" case). Never mkdir outside a root —
+        // createSession's resolveAllowedDir still refuses those.
+        const abs = resolve(dir);
+        if (config.roots.some((r) => abs === r || abs.startsWith(r + '/'))) {
+          await mkdir(abs, { recursive: true });
+        }
+        const name = await createSession({ dir: abs, title, seed: prompt });
+        return text(redact(`Started session ${name} in ${abs}. It's booting; its Claude sessionId will appear shortly via list_recent_sessions.`));
+      } catch (e) { return text(`ERROR: could not start session — ${e.message}`); }
     });
 
     server.registerTool('send_to_session', {
@@ -218,11 +226,11 @@ export function createMcpServer({ sessionControl = false } = {}) {
         text: z.string().min(1).describe('The text to send; it is submitted with Enter.'),
       },
     }, async ({ session_id, text: line }) => {
-      if (!isSessionId(session_id)) return text('Invalid session_id.');
+      if (!isSessionId(session_id)) return text('ERROR: invalid session_id.');
       const s = await findLiveSession(session_id);
-      if (!s) return text('Session not active — resume it in cc-deck first.');
+      if (!s) return text('ERROR: session not active — resume it in cc-deck first.');
       try { await sendText(s.name, line); return text(redact(`Sent to "${s.title || s.name}".`)); }
-      catch (e) { return text(`Could not send: ${e.message}`); }
+      catch (e) { return text(`ERROR: could not send — ${e.message}`); }
     });
   }
 
