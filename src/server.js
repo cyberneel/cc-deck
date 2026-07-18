@@ -449,6 +449,7 @@ function mcpAuthed(req) {
   if (!h.startsWith('Bearer ')) return false;
   const tok = h.slice(7);
   if (config.mcpToken && tok === config.mcpToken) return true;
+  if (config.mcpTokenReadonly && tok === config.mcpTokenReadonly) return true;
   return !!oauth.verifyAccessToken(tok);
 }
 // True only for the static-bearer (Friday / Claude Code), not OAuth connectors —

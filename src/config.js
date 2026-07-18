@@ -36,6 +36,12 @@ export const config = {
   launchCommand: process.env.CCDECK_LAUNCH || 'claude',
   // Bearer token gating the MCP endpoint (/mcp). Empty = MCP disabled.
   mcpToken: process.env.CCDECK_MCP_TOKEN || '',
+  // Read-only bearer: same /mcp endpoint but WITHOUT the session-control tools
+  // (create/send). Used to auto-wire launched sessions so they can search + leave
+  // handoff notes, but can't start or drive other sessions.
+  mcpTokenReadonly: process.env.CCDECK_MCP_TOKEN_READONLY || '',
+  // Auto-wire every new session with the read-only cc-deck MCP + a handoff nudge.
+  sessionMcp: /^(1|on|true|yes)$/i.test(process.env.CCDECK_SESSION_MCP || ''),
   // Public origin for OAuth metadata (e.g. https://claude.cyberneel.com). Derived
   // from request headers if unset — set it if the derived host is ever wrong.
   publicUrl: process.env.CCDECK_PUBLIC_URL || '',

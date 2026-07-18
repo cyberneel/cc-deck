@@ -1,9 +1,25 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { stat, readdir, mkdir } from 'node:fs/promises';
+import { stat, readdir, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
+import { homedir } from 'node:os';
 import crypto from 'node:crypto';
 import { config } from './config.js';
+
+const SESSION_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'session-mcp.json');
+const SESSION_NUDGE = "You're one of several cc-deck sessions the user runs in parallel. Before substantial work you may use the cc-deck tools (search_sessions, get_session_context) to check whether related work already lives in another session; if a request clearly belongs to a different session, prefer leaving a handoff note (save_session_summary) over duplicating it here. You cannot start or drive other sessions yourself.";
+
+// Launch flags to wire a new session with the READ-ONLY cc-deck MCP + a handoff
+// nudge (only when enabled). Loopback URL — no Cloudflare/OAuth needed on-box.
+async function sessionMcpFlags() {
+  if (!config.sessionMcp || !config.mcpTokenReadonly) return '';
+  const cfg = { mcpServers: { 'cc-deck': { type: 'http', url: `http://127.0.0.1:${config.port}/mcp`, headers: { Authorization: `Bearer ${config.mcpTokenReadonly}` } } } };
+  try {
+    await mkdir(join(homedir(), '.claude', 'cc-deck'), { recursive: true });
+    await writeFile(SESSION_MCP_PATH, JSON.stringify(cfg));
+  } catch { return ''; }
+  return ` --mcp-config ${SESSION_MCP_PATH} --append-system-prompt '${SESSION_NUDGE}'`;
+}
 
 const exec = promisify(execFile);
 
@@ -203,6 +219,7 @@ export async function createSession({ dir, title, resume, fork, seed }) {
   await styleSession(name);
   // Launch the CLI inside the login shell so the session survives if claude exits.
   // Prefix COLORTERM=truecolor so Claude emits 24-bit color (diffs, highlights).
+  launch += await sessionMcpFlags(); // handoff-aware: read-only cc-deck MCP + nudge
   await tmux(['send-keys', '-t', name, `COLORTERM=truecolor ${launch}`, 'Enter']);
   // Once Claude has booted: name a fresh titled session (so the name shows in
   // Claude and `claude --resume`) and/or type a seed prompt. Background.
