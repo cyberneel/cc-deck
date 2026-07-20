@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import { config } from './config.js';
 
 const SESSION_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'session-mcp.json');
-const SESSION_NUDGE = "You're one of several cc-deck sessions the user runs in parallel. Before substantial work you may use the cc-deck tools (search_sessions, get_session_context) to check whether related work already lives in another session; if a request clearly belongs to a different session, prefer leaving a handoff note (save_session_summary) over duplicating it here. You cannot start or drive other sessions yourself.";
+const SESSION_NUDGE = "You are one of several cc-deck sessions the user runs in parallel. Before substantial work you may use the cc-deck tools (search_sessions, get_session_context) to check whether related work already lives in another session; if a request clearly belongs to a different session, prefer leaving a handoff note (save_session_summary) over duplicating it here. You cannot start or drive other sessions yourself.";
 
 // Launch flags to wire a new session with the READ-ONLY cc-deck MCP + a handoff
 // nudge (only when enabled). Loopback URL — no Cloudflare/OAuth needed on-box.
@@ -18,7 +18,11 @@ async function sessionMcpFlags() {
     await mkdir(join(homedir(), '.claude', 'cc-deck'), { recursive: true });
     await writeFile(SESSION_MCP_PATH, JSON.stringify(cfg));
   } catch { return ''; }
-  return ` --mcp-config ${SESSION_MCP_PATH} --append-system-prompt '${SESSION_NUDGE}'`;
+  // Single-quote for the shell (send-keys types this into the login shell). Escape
+  // any ' in the nudge as '\'' so an apostrophe can't break out of the quoting and
+  // turn the rest of the prompt into stray shell tokens (that broke every launch).
+  const nudge = SESSION_NUDGE.replace(/'/g, "'\\''");
+  return ` --mcp-config ${SESSION_MCP_PATH} --append-system-prompt '${nudge}'`;
 }
 
 const exec = promisify(execFile);
