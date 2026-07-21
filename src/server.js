@@ -155,7 +155,7 @@ app.get('/api/sessions', async () => {
 });
 
 app.post('/api/sessions', async (req, reply) => {
-  const { dir, title, resume, fork } = req.body || {};
+  const { dir, title, resume, fork, browser } = req.body || {};
   if (!dir) return reply.code(400).send({ error: 'dir is required' });
   try {
     // Don't launch a duplicate: if the session being resumed is already running,
@@ -171,7 +171,7 @@ app.post('/api/sessions', async (req, reply) => {
     // Resuming a session? Seed it with any external notes saved from outside chats
     // so it picks up what happened elsewhere (consumed so it won't re-inject).
     const seed = resume && !fork ? await consumeNotesSeed(resume) : undefined;
-    const name = await createSession({ dir, title, resume, fork, seed });
+    const name = await createSession({ dir, title, resume, fork, seed, browser });
     return { name };
   } catch (err) {
     return reply.code(err.statusCode || 500).send({ error: err.message });
@@ -282,6 +282,7 @@ app.post('/api/handoff', async (req, reply) => {
       scope: b.scope === 'thread' ? 'thread' : 'summary',
       dest: b.dest === 'running' ? 'running' : 'new',
       targetSession: b.targetSession, targetDir: b.targetDir, title: b.title,
+      browser: !!b.browser,
     });
   } catch (err) {
     return reply.code(err.statusCode || 500).send({ error: err.message });

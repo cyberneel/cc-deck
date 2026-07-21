@@ -107,6 +107,6 @@ export async function runHandoff(opts) {
   // default: new session
   const dir = opts.targetDir || opts.cwd;
   if (!dir) throw err(400, 'no target directory for the new session');
-  const name = await createSession({ dir, title: opts.title ? `${opts.title} (ctx)` : undefined, seed: note });
+  const name = await createSession({ dir, title: opts.title ? `${opts.title} (ctx)` : undefined, seed: note, browser: opts.browser });
   return { ...built, dest: 'new', name };
 }

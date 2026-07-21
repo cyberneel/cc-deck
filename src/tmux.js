@@ -7,6 +7,15 @@ import crypto from 'node:crypto';
 import { config } from './config.js';
 
 const SESSION_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'session-mcp.json');
+const BROWSER_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'browser-mcp.json');
+
+// On-demand: attach chrome-devtools-mcp (Friday's logged-in Chromium via CDP) when
+// a session opts in. Guard on the file existing — a missing --mcp-config aborts the
+// whole launch. Non-strict, so it adds to the session's other MCPs.
+async function browserMcpFlag() {
+  try { await stat(BROWSER_MCP_PATH); } catch { return ''; }
+  return ` --mcp-config ${BROWSER_MCP_PATH}`;
+}
 const SESSION_NUDGE = "You are one of several cc-deck sessions the user runs in parallel. Before substantial work you may use the cc-deck tools (search_sessions, get_session_context) to check whether related work already lives in another session; if a request clearly belongs to a different session, prefer leaving a handoff note (save_session_summary) over duplicating it here. You cannot start or drive other sessions yourself.";
 
 // Launch flags to wire a new session with the READ-ONLY cc-deck MCP + a handoff
@@ -189,7 +198,7 @@ export async function sendText(name, text) {
   await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
 }
 
-export async function createSession({ dir, title, resume, fork, seed }) {
+export async function createSession({ dir, title, resume, fork, seed, browser }) {
   const abs = await resolveAllowedDir(dir);
   const id = `${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
   const name = `${config.prefix}${id}`;
@@ -224,6 +233,7 @@ export async function createSession({ dir, title, resume, fork, seed }) {
   // Launch the CLI inside the login shell so the session survives if claude exits.
   // Prefix COLORTERM=truecolor so Claude emits 24-bit color (diffs, highlights).
   launch += await sessionMcpFlags(); // handoff-aware: read-only cc-deck MCP + nudge
+  if (browser) launch += await browserMcpFlag(); // opt-in: drive Friday's Chrome
   await tmux(['send-keys', '-t', name, `COLORTERM=truecolor ${launch}`, 'Enter']);
   // Once Claude has booted: name a fresh titled session (so the name shows in
   // Claude and `claude --resume`) and/or type a seed prompt. Background.

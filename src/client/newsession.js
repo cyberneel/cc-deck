@@ -27,6 +27,13 @@ export function openNewModal({ api, cfg = {}, onCreated }) {
         <label>Title <span class="faint">(optional)</span></label>
         <input id="title-input" placeholder="defaults to the folder name" spellcheck="false" />
       </div>
+      <div class="field">
+        <label>Browser access <span class="faint">(optional)</span></label>
+        <select id="browser-mode">
+          <option value="">None</option>
+          <option value="1">Attach Friday's logged-in Chrome</option>
+        </select>
+      </div>
       ${SEED_FIELD_HTML}
       <div class="error" id="modal-error"></div>
       <div class="modal-actions">
@@ -86,15 +93,16 @@ export function openNewModal({ api, cfg = {}, onCreated }) {
     btn.disabled = true;
     try {
       const title = bg.querySelector('#title-input').value;
+      const browser = bg.querySelector('#browser-mode').value === '1';
       let name;
       if (seed) {
         btn.textContent = seed.scope === 'summary' ? 'Generating context…' : 'Preparing…';
         ({ name } = await api('/api/handoff', {
           method: 'POST',
-          body: JSON.stringify({ sources: seed.sources, scope: seed.scope, dest: 'new', targetDir: dirInput.value, title }),
+          body: JSON.stringify({ sources: seed.sources, scope: seed.scope, dest: 'new', targetDir: dirInput.value, title, browser }),
         }));
       } else {
-        ({ name } = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ dir: dirInput.value, title }) }));
+        ({ name } = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ dir: dirInput.value, title, browser }) }));
       }
       close();
       onCreated(name);
