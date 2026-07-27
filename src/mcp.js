@@ -194,7 +194,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
   });
 
   // Session-control tools (spawn/drive real claude processes) — only exposed to
-  // the static-bearer caller (Friday / Claude Code), never OAuth connectors.
+  // the static-bearer caller (e.g. Claude Code / a headless agent), never OAuth connectors.
   if (sessionControl) {
     server.registerTool('create_session', {
       title: 'Start a cc-deck coding session',

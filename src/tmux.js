@@ -9,7 +9,7 @@ import { config } from './config.js';
 const SESSION_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'session-mcp.json');
 const BROWSER_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'browser-mcp.json');
 
-// On-demand: attach chrome-devtools-mcp (Friday's logged-in Chromium via CDP) when
+// On-demand: attach chrome-devtools-mcp (a logged-in Chromium via CDP) when
 // a session opts in. Guard on the file existing — a missing --mcp-config aborts the
 // whole launch. Non-strict, so it adds to the session's other MCPs.
 async function browserMcpFlag() {
@@ -233,7 +233,7 @@ export async function createSession({ dir, title, resume, fork, seed, browser })
   // Launch the CLI inside the login shell so the session survives if claude exits.
   // Prefix COLORTERM=truecolor so Claude emits 24-bit color (diffs, highlights).
   launch += await sessionMcpFlags(); // handoff-aware: read-only cc-deck MCP + nudge
-  if (browser) launch += await browserMcpFlag(); // opt-in: drive Friday's Chrome
+  if (browser) launch += await browserMcpFlag(); // opt-in: drive a logged-in Chrome
   await tmux(['send-keys', '-t', name, `COLORTERM=truecolor ${launch}`, 'Enter']);
   // Once Claude has booted: name a fresh titled session (so the name shows in
   // Claude and `claude --resume`) and/or type a seed prompt. Background.

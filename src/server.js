@@ -453,7 +453,7 @@ function mcpAuthed(req) {
   if (config.mcpTokenReadonly && tok === config.mcpTokenReadonly) return true;
   return !!oauth.verifyAccessToken(tok);
 }
-// True only for the static-bearer (Friday / Claude Code), not OAuth connectors —
+// True only for the static-bearer (e.g. Claude Code / a headless agent), not OAuth connectors —
 // gates the session-control tools that spawn/drive real claude processes.
 function mcpIsStatic(req) {
   const h = req.headers.authorization || '';

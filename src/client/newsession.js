@@ -31,7 +31,7 @@ export function openNewModal({ api, cfg = {}, onCreated }) {
         <label>Browser access <span class="faint">(optional)</span></label>
         <select id="browser-mode">
           <option value="">None</option>
-          <option value="1">Attach Friday's logged-in Chrome</option>
+          <option value="1">Attach a logged-in Chrome (CDP)</option>
         </select>
       </div>
       ${SEED_FIELD_HTML}

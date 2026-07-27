@@ -42,7 +42,7 @@ export const config = {
   mcpTokenReadonly: process.env.CCDECK_MCP_TOKEN_READONLY || '',
   // Auto-wire every new session with the read-only cc-deck MCP + a handoff nudge.
   sessionMcp: /^(1|on|true|yes)$/i.test(process.env.CCDECK_SESSION_MCP || ''),
-  // Public origin for OAuth metadata (e.g. https://claude.cyberneel.com). Derived
+  // Public origin for OAuth metadata (e.g. https://claude.example.com). Derived
   // from request headers if unset — set it if the derived host is ever wrong.
   publicUrl: process.env.CCDECK_PUBLIC_URL || '',
   cookieName: 'ccdeck',
