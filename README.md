@@ -326,6 +326,13 @@ scripts/           snapshot CLI + screenshot generator
 setup.sh           one-command installer
 ```
 
+## Contributing
+
+Issues and PRs welcome — cc-deck aims to stay small and dependency-light. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for dev setup and conventions, and the
+[Code of Conduct](CODE_OF_CONDUCT.md). Please report security issues privately per
+[SECURITY.md](SECURITY.md), not as a public issue.
+
 ## License
 
 [Apache-2.0](LICENSE).
