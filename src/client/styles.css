@@ -83,6 +83,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--accent); }
 .brand { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 9px; }
 .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
 .spacer { flex: 1; }
+.menu-btn { display: none; } /* hamburger — mobile only (see media query) */
 .toggle { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .toggle button { border: none; border-radius: 0; background: var(--bg); color: var(--text-dim); }
 .toggle button.active { background: var(--bg-card); color: var(--text); }
@@ -383,13 +384,22 @@ select:focus { outline: none; border-color: var(--accent); }
 /* ===================== mobile ===================== */
 @media (max-width: 700px) {
   /* dashboard */
-  .topbar { padding: max(12px, env(safe-area-inset-top)) 14px 12px; gap: 10px; }
+  .topbar { padding: max(12px, env(safe-area-inset-top)) 12px 12px; gap: 6px; }
   .topbar .brand { display: none; }
-  /* Let the tab strip absorb+scroll the overflow so the right-side controls
-     (burn pill, New, and the icon buttons) always stay on screen. The spacer's
-     flex:1 would otherwise shove them off the right edge on narrow widths. */
-  .topbar .spacer { display: none; }
-  .toggle.tabs { flex: 1 1 auto; min-width: 0; }
+  .topbar button.icon { padding: 6px 7px; }
+  /* Tabs collapse into a hamburger dropdown so the strip can't squish and the
+     right-side controls (burn pill, New, icons) always stay on screen. */
+  .menu-btn { display: inline-flex; align-items: center; flex: 0 0 auto; }
+  .toggle.tabs {
+    position: absolute; top: calc(100% - 4px); left: 12px; z-index: 30;
+    flex-direction: column; align-items: stretch; gap: 2px;
+    padding: 6px; min-width: 168px; overflow: visible;
+    background: var(--bg-elev); border: 1px solid var(--border);
+    border-radius: 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    display: none;
+  }
+  .toggle.tabs.open { display: flex; }
+  .toggle.tabs button { width: 100%; text-align: left; white-space: nowrap; padding: 10px 12px; }
   .toggle.tabs button { padding: 8px 11px; }
   #new-btn { padding: 8px 12px; white-space: nowrap; font-size: 16px; line-height: 1; }
   .wrap { padding: 14px; }

@@ -187,7 +187,8 @@ function render() {
   app.innerHTML = `
     <div class="topbar">
       <div class="brand"><span class="dot"></span> cc-deck</div>
-      <div class="toggle tabs">
+      <button id="menu-btn" class="icon menu-btn" title="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
+      <div class="toggle tabs" id="tabs">
         <button data-tab="active" class="${tab === 'active' ? 'active' : ''}">Active</button>
         <button data-tab="history" class="${tab === 'history' ? 'active' : ''}">History</button>
         <button data-tab="usage" class="${tab === 'usage' ? 'active' : ''}">Usage</button>
@@ -223,11 +224,29 @@ function render() {
     b.addEventListener('click', () => {
       tab = b.dataset.tab;
       localStorage.setItem('ccdeck.tab', tab);
-      render();
+      render(); // rebuilds the topbar, so the mobile dropdown closes on its own
       if (tab === 'history' && !historyLoaded) refreshHistory();
       if (tab === 'usage') loadUsage();
     }),
   );
+  // Mobile: the tabs collapse into a hamburger dropdown. Toggle it, and close on
+  // an outside tap (listener is added per-open and removed on close, so no stacking).
+  const menuBtn = document.getElementById('menu-btn');
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const tabsEl = document.getElementById('tabs');
+    const open = tabsEl.classList.toggle('open');
+    menuBtn.setAttribute('aria-expanded', String(open));
+    if (open) {
+      const close = (ev) => {
+        if (tabsEl.contains(ev.target) || ev.target === menuBtn) return;
+        tabsEl.classList.remove('open');
+        menuBtn.setAttribute('aria-expanded', 'false');
+        document.removeEventListener('click', close);
+      };
+      setTimeout(() => document.addEventListener('click', close), 0);
+    }
+  });
   app.querySelectorAll('#view-toggle button').forEach((b) =>
     b.addEventListener('click', () => {
       view = b.dataset.view;
