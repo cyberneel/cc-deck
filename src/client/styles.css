@@ -385,7 +385,11 @@ select:focus { outline: none; border-color: var(--accent); }
   /* dashboard */
   .topbar { padding: max(12px, env(safe-area-inset-top)) 14px 12px; gap: 10px; }
   .topbar .brand { display: none; }
-  .toggle.tabs { flex-shrink: 0; }
+  /* Let the tab strip absorb+scroll the overflow so the right-side controls
+     (burn pill, New, and the icon buttons) always stay on screen. The spacer's
+     flex:1 would otherwise shove them off the right edge on narrow widths. */
+  .topbar .spacer { display: none; }
+  .toggle.tabs { flex: 1 1 auto; min-width: 0; }
   .toggle.tabs button { padding: 8px 11px; }
   #new-btn { padding: 8px 12px; white-space: nowrap; font-size: 16px; line-height: 1; }
   .wrap { padding: 14px; }
