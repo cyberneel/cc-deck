@@ -95,18 +95,31 @@ function seedNote(file) {
 //  dest: 'new'      -> launch a new session (in targetDir, default source cwd) seeded with the context
 //        'running'  -> inject into an existing cc-deck session (targetSession)
 export async function runHandoff(opts) {
-  const built = await buildHandoffFile(opts);
-  const note = seedNote(built.file);
+  // Validate source ids up front (cheap) so bad input still fails fast with a 400.
+  const sources = (Array.isArray(opts.sources) && opts.sources.length)
+    ? opts.sources
+    : [{ sourceId: opts.sourceId }];
+  for (const s of sources) if (!isSessionId(s.sourceId)) throw err(400, 'invalid source session id');
 
+  // The handoff can run a `claude -p` summary that takes up to 120s — long enough to
+  // 504 behind a proxy. So resolve the destination session NOW (fast) and build +
+  // inject the context in the BACKGROUND, so the request returns immediately.
   if (opts.dest === 'running') {
     const target = opts.targetSession;
     if (!isManagedName(target) || !(await sessionExists(target))) throw err(400, 'target session not found');
-    await sendText(target, note);
-    return { ...built, dest: 'running', name: target };
+    buildHandoffFile(opts).then(
+      (built) => sendText(target, seedNote(built.file)),
+      (e) => sendText(target, `cc-deck could not build the context handoff: ${e.message}`).catch(() => {}),
+    );
+    return { dest: 'running', name: target, pending: true };
   }
-  // default: new session
+  // default: new session — create it now, seed it once the background build resolves.
+  // createSession's scheduleBoot waits for Claude's prompt and accepts a Promise seed,
+  // so rename-then-seed stays ordered and there's no second scheduler racing it.
   const dir = opts.targetDir || opts.cwd;
   if (!dir) throw err(400, 'no target directory for the new session');
-  const name = await createSession({ dir, title: opts.title ? `${opts.title} (ctx)` : undefined, seed: note, browser: opts.browser });
-  return { ...built, dest: 'new', name };
+  const seedP = buildHandoffFile(opts).then((built) => seedNote(built.file));
+  seedP.catch(() => {}); // scheduleBoot awaits + handles the real failure; this silences the pre-await window
+  const name = await createSession({ dir, title: opts.title ? `${opts.title} (ctx)` : undefined, seed: seedP, browser: opts.browser });
+  return { dest: 'new', name, pending: true };
 }

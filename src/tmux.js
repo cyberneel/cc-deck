@@ -179,8 +179,16 @@ async function scheduleBoot(name, { rename, seed }) {
       }
       if (seed) {
         if (rename) await sleep(600); // let the /rename submit first
-        await tmux(['send-keys', '-l', '-t', name, seed]).catch(() => {});
-        await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
+        // seed may be a Promise (a handoff summary still building in the background) —
+        // resolve it here, after Claude is up, so a slow `claude -p` never blocks the
+        // HTTP request. On failure, drop a note instead of leaving the session silent.
+        let seedText;
+        try { seedText = seed && typeof seed.then === 'function' ? await seed : seed; }
+        catch (e) { seedText = `cc-deck could not build the context handoff: ${e && e.message ? e.message : e}`; }
+        if (seedText) {
+          await tmux(['send-keys', '-l', '-t', name, String(seedText)]).catch(() => {});
+          await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
+        }
       }
       return;
     }
