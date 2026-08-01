@@ -356,6 +356,7 @@ const KEYS = [
   { label: '↓', seq: '\x1b[B', repeat: true },
   { label: '→', seq: '\x1b[C', repeat: true },
   { label: '^C', seq: '\x03' },
+  { label: '🎤', dictate: true, title: 'Dictate or type a message, then send' },
   { label: '⧉', copy: true, title: 'Copy on-screen text' },
   { label: '⎘', paste: true, title: 'Paste from clipboard' },
 ];
@@ -424,6 +425,41 @@ function pasteClipboard() {
   // Fast path: if the clipboard API is allowed, auto-fill + send instantly.
   navigator.clipboard?.readText?.().then((t) => { if (t && !sent) { ta.value = t; send(); } }).catch(() => {});
 }
+// Dictate/type a message in a normal textarea, then send it to the terminal.
+// iOS keyboard dictation garbles input typed straight into xterm (each word
+// doubles), but works correctly in a plain <textarea> — so compose here (tap the
+// keyboard's mic to dictate), review, then send it to the session as one paste.
+function composeAndSend() {
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `<div class="modal" style="max-width:440px">
+    <h2>Speak or type</h2>
+    <p class="faint">Tap the 🎤 on your keyboard to dictate (or just type), then <b>Send</b> — dictation doubles words when typed straight into the terminal, but is clean here.</p>
+    <textarea id="cs-ta" rows="4" style="width:100%;resize:vertical" placeholder="Speak or type your message…"></textarea>
+    <div class="modal-actions">
+      <label class="faint" style="margin-right:auto;display:flex;align-items:center;gap:6px"><input type="checkbox" id="cs-submit" checked> submit ⏎</label>
+      <button id="cs-cancel">Cancel</button><button class="primary" id="cs-send">Send</button>
+    </div>
+  </div>`;
+  document.body.appendChild(bg);
+  const ta = bg.querySelector('#cs-ta');
+  ta.focus(); // synchronous, inside the tap gesture, so iOS raises the keyboard
+  let sent = false;
+  const close = () => { bg.remove(); panes.get(currentSession)?.term.focus(); };
+  const send = () => {
+    if (sent) return; sent = true;
+    const v = ta.value;
+    if (v) {
+      activeWs()?.send(`\x1b[200~${v}\x1b[201~`); // bracketed paste keeps multi-line intact
+      if (bg.querySelector('#cs-submit').checked) activeWs()?.send('\r'); // submit to Claude
+    }
+    close();
+  };
+  bg.querySelector('#cs-cancel').addEventListener('click', close);
+  bg.querySelector('#cs-send').addEventListener('click', send);
+  bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
+}
+
 const keybar = document.getElementById('keybar');
 keybar.innerHTML = KEYS.map((k, i) =>
   `<button ${k.ctrl ? 'id="kb-ctrl"' : ''}${k.meta ? 'id="kb-meta"' : ''} data-i="${i}" title="${k.title || ''}">${k.label}</button>`).join('');
@@ -446,6 +482,7 @@ keybar.querySelectorAll('button').forEach((btn) => {
     e.preventDefault();
     if (k.ctrl) { ctrlArm = !ctrlArm; updateCtrlBtn(); }
     else if (k.meta) { metaArm = !metaArm; updateMetaBtn(); }
+    else if (k.dictate) { composeAndSend(); }
     else if (k.paste) { pasteClipboard(); }
     else if (k.copy) { openCopyBox(); }
     else sendKey(k.seq);
