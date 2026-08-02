@@ -332,6 +332,8 @@ select:focus { outline: none; border-color: var(--accent); }
 .bp-seg.burn-warn { color: var(--accent); }
 .bp-seg.burn-crit { color: #ff8d85; }
 .bp-sep { color: var(--text-faint); }
+.bp-scoped { display: contents; } /* model-scoped weekly segs (e.g. Fable); hidden on mobile */
+@media (max-width: 700px) { .bp-scoped { display: none; } } /* keep the phone top bar uncluttered — Fable stays in the popover */
 .snap-age { font-size: 9px; color: var(--text-faint); margin-left: 2px; vertical-align: top; }
 .burn-pop { position: fixed; z-index: 250; min-width: 250px; max-width: 320px; padding: 13px 15px; background: var(--glass-strong); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-stroke); border-radius: 13px; box-shadow: var(--glass-hi), 0 16px 44px rgba(0,0,0,.5); }
 .burn-pop-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
@@ -387,6 +389,7 @@ select:focus { outline: none; border-color: var(--accent); }
   .topbar { padding: max(12px, env(safe-area-inset-top)) 12px 12px; gap: 6px; }
   .topbar .brand { display: none; }
   .topbar button.icon { padding: 6px 7px; }
+  .burn-pill { padding: 5px 7px; gap: 4px; } /* keep the pill compact so all controls fit narrow phones */
   /* Tabs collapse into a hamburger dropdown so the strip can't squish and the
      right-side controls (burn pill, New, icons) always stay on screen. */
   .menu-btn { display: inline-flex; align-items: center; flex: 0 0 auto; }

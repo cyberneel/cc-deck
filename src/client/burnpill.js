@@ -17,8 +17,13 @@ export function renderBurnPill(btn, burn) {
   if (!btn) return;
   if (!burn || !burn.available) { btn.style.display = 'none'; return; }
   const s = burn.limits?.session, w = burn.limits?.weekly;
-  btn.innerHTML = `<span class="bp-emoji">${paceEmoji(overallPace(burn))}</span><span class="bp-seg ${burnCls(s)}">${pctOf(s) ?? '–'}%</span><span class="bp-sep">·</span><span class="bp-seg ${burnCls(w)}">${pctOf(w) ?? '–'}%</span>`;
-  btn.title = `Session ${pctOf(s)}% · Weekly ${pctOf(w)}% used (ccburn) — tap for detail`;
+  const scoped = burn.scopedWeekly || []; // model-scoped weeklies (e.g. Fable, cap = ½ overall)
+  // Wrapped in .bp-scoped so the face can drop these on narrow screens (they'd
+  // overflow the top bar); the popover still lists them. display:contents keeps
+  // the inner spans as flex items on desktop.
+  const scSegs = scoped.map((x) => `<span class="bp-scoped"><span class="bp-sep">·</span><span class="bp-seg ${burnCls(x)}" title="${esc(x.model)} weekly">${pctOf(x) ?? '–'}%</span></span>`).join('');
+  btn.innerHTML = `<span class="bp-emoji">${paceEmoji(overallPace(burn))}</span><span class="bp-seg ${burnCls(s)}">${pctOf(s) ?? '–'}%</span><span class="bp-sep">·</span><span class="bp-seg ${burnCls(w)}">${pctOf(w) ?? '–'}%</span>${scSegs}`;
+  btn.title = `Session ${pctOf(s)}% · Weekly ${pctOf(w)}%${scoped.map((x) => ` · ${x.model} ${pctOf(x)}%`).join('')} used (ccburn) — tap for detail`;
   btn.style.display = '';
 }
 
@@ -30,7 +35,7 @@ export const paceEmoji = (st) => { const r = paceRank(st); return r === 2 ? '�
 // flipping the pill to 🔥 while your session is chill.)
 export function overallPace(burn) {
   const L = burn?.limits || {};
-  const all = [L.session?.status, L.weekly?.status, L.monthly?.status].filter(Boolean);
+  const all = [L.session?.status, L.weekly?.status, L.monthly?.status, ...(burn?.scopedWeekly || []).map((s) => s.status)].filter(Boolean);
   return all.find((s) => /ahead/.test(s)) || L.session?.status || all[0] || 'behind_pace';
 }
 
@@ -46,7 +51,7 @@ function detailHtml(b) {
   };
   const br = b.burn_rate;
   return `<div class="burn-pop-title">Plan limits <span class="faint">· ccburn</span></div>
-    ${card('Session (5h)', lim.session)}${card('Weekly', lim.weekly)}${lim.monthly ? card('Monthly', lim.monthly) : ''}
+    ${card('Session (5h)', lim.session)}${card('Weekly', lim.weekly)}${(b.scopedWeekly || []).map((s) => card(`${esc(s.model)} weekly <span class="faint">(½ cap)</span>`, s)).join('')}${lim.monthly ? card('Monthly', lim.monthly) : ''}
     ${br ? `<div class="faint" style="margin-top:2px">${paceEmoji(b.limits?.[br.limit]?.status)} burn ${Number(br.percent_per_hour).toFixed(1)}%/h (${esc(br.trend || '')})${br.estimated_minutes_to_100 ? ` · ~${Math.round(br.estimated_minutes_to_100 / 60 * 10) / 10}h to 100%` : ''}</div>` : ''}
     ${b.recommendation ? `<div class="faint">${esc(String(b.recommendation).replace(/_/g, ' '))}</div>` : ''}`;
 }
