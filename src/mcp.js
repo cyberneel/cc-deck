@@ -193,6 +193,39 @@ export function createMcpServer({ sessionControl = false } = {}) {
     return text('Saved. This summary will surface in that cc-deck session the next time the user opens or resumes it.');
   });
 
+  server.registerTool('list_sessions', {
+    title: 'List active cc-deck sessions with live status',
+    description:
+      "List the user's currently ACTIVE cc-deck (Claude Code) sessions with live, structured status — for detecting state transitions (a session finishing, waiting for the user, or exiting). " +
+      'Returns a JSON array; poll and diff the `status`/`needs_input` fields to notice transitions. Each item: ' +
+      '{ session_id, name, title, dir, status, needs_input, waiting_for, attached, last_activity }. ' +
+      "`status` is one of: running (Claude is working), waiting_input (blocked on the user — a prompt/permission/question), idle (at its prompt, not working), done (Claude exited, the shell remains). " +
+      '`name` is stable for the session\'s lifetime; `session_id` is the live Claude id (changes across resume/fork) or null if Claude isn\'t running.',
+    inputSchema: {},
+  }, async () => {
+    const sessions = await listSessions();
+    try { matchAgents(sessions, await getAgents()); } catch { /* claude agents unavailable → status degrades to idle/done */ }
+    const out = sessions.map((s) => {
+      const claudeAlive = s.paneCommand === 'claude' || !!s.liveSessionId;
+      const status = !claudeAlive ? 'done'
+        : s.claudeStatus === 'busy' ? 'running'
+        : s.waitingFor ? 'waiting_input'
+        : 'idle';
+      return {
+        session_id: s.liveSessionId || s.resumedFrom || null,
+        name: s.name,
+        title: redact(s.title),
+        dir: s.dir,
+        status,
+        needs_input: status === 'waiting_input',
+        waiting_for: s.waitingFor || null,
+        attached: s.attached,
+        last_activity: s.lastActivity ? new Date(s.lastActivity).toISOString() : null,
+      };
+    });
+    return text(JSON.stringify(out, null, 2));
+  });
+
   // Session-control tools (spawn/drive real claude processes) — only exposed to
   // the static-bearer caller (e.g. Claude Code / a headless agent), never OAuth connectors.
   if (sessionControl) {

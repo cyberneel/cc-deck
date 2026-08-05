@@ -183,6 +183,7 @@ clients can work with your sessions. Three auth paths, three privilege levels:
 
 - `search_sessions` — keyword-search past transcripts; returns matching snippets (secrets redacted).
 - `list_recent_sessions` — most-recent sessions with title/dir/date.
+- `list_sessions` — currently **active** sessions with live, structured status (`running` / `waiting_input` / `idle` / `done`, plus `needs_input`, `last_activity`) — poll and diff to detect transitions (a session finishing, waiting on you, or exiting).
 - `get_session_context` — read a session as an AI `summary` or a truncated `transcript`.
 - `save_session_summary` — leave a handoff note on a session's lineage (surfaces on next open/resume).
 - `create_session` — launch a new session in a directory (auto-creates it under a root). **Static bearer only.**
