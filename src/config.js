@@ -34,6 +34,10 @@ export const config = {
   tmuxSocket: process.env.CCDECK_TMUX_SOCKET || 'ccdeck',
   // Command launched inside each new session.
   launchCommand: process.env.CCDECK_LAUNCH || 'claude',
+  // Permission mode each new session starts in (Claude's --permission-mode):
+  // acceptEdits | auto | plan | bypassPermissions | manual | default. Empty =
+  // Claude's own default. The user can still cycle with shift+tab in-session.
+  permissionMode: (process.env.CCDECK_PERMISSION_MODE || '').trim(),
   // Bearer token gating the MCP endpoint (/mcp). Empty = MCP disabled.
   mcpToken: process.env.CCDECK_MCP_TOKEN || '',
   // Read-only bearer: same /mcp endpoint but WITHOUT the session-control tools

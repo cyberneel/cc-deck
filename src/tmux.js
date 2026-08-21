@@ -240,6 +240,11 @@ export async function createSession({ dir, title, resume, fork, seed, browser })
   await styleSession(name);
   // Launch the CLI inside the login shell so the session survives if claude exits.
   // Prefix COLORTERM=truecolor so Claude emits 24-bit color (diffs, highlights).
+  // Start in a configured permission mode (e.g. "auto"). Validated against Claude's
+  // known modes so a stray env value can't break the launch line.
+  if (/^(acceptEdits|auto|plan|bypassPermissions|manual|default)$/.test(config.permissionMode)) {
+    launch += ` --permission-mode ${config.permissionMode}`;
+  }
   launch += await sessionMcpFlags(); // handoff-aware: read-only cc-deck MCP + nudge
   if (browser) launch += await browserMcpFlag(); // opt-in: drive a logged-in Chrome
   await tmux(['send-keys', '-t', name, `COLORTERM=truecolor ${launch}`, 'Enter']);
