@@ -38,6 +38,18 @@ export const config = {
   // acceptEdits | auto | plan | bypassPermissions | manual | default. Empty =
   // Claude's own default. The user can still cycle with shift+tab in-session.
   permissionMode: (process.env.CCDECK_PERMISSION_MODE || '').trim(),
+  // Remote hosts whose tmux sessions cc-deck lists + attaches over SSH (tailnet).
+  // Comma/space-separated entries: "sshTarget" or "label=sshTarget"
+  // (e.g. "laptop=cyber@laptop.tailnet.ts.net dell-arch-cyber"). Needs key-based SSH.
+  remoteHosts: (process.env.CCDECK_REMOTE_HOSTS || '')
+    .split(/[,\s]+/).map((s) => s.trim()).filter(Boolean)
+    .map((entry) => {
+      const eq = entry.indexOf('=');
+      const label = (eq > 0 ? entry.slice(0, eq) : entry.split('@').pop()).replace(/[^A-Za-z0-9_.-]/g, '');
+      const sshTarget = eq > 0 ? entry.slice(eq + 1) : entry;
+      return { label, sshTarget };
+    })
+    .filter((h) => h.label && h.sshTarget),
   // Bearer token gating the MCP endpoint (/mcp). Empty = MCP disabled.
   mcpToken: process.env.CCDECK_MCP_TOKEN || '',
   // Read-only bearer: same /mcp endpoint but WITHOUT the session-control tools

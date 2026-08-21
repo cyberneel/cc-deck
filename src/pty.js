@@ -1,6 +1,7 @@
 import pkg from 'node-pty';
 import { isRequestAuthed } from './auth.js';
 import { isManagedName, setMouse, resizeWindow, TMUX_ARGS } from './tmux.js';
+import { resolveRemote, isRemoteSessionName, SSH_OPTS } from './remote.js';
 
 const { spawn } = pkg;
 
@@ -27,7 +28,25 @@ export function attachHandler(socket, req) {
 
   const url = new URL(req.url, 'http://localhost');
   const session = url.searchParams.get('session');
-  if (!isManagedName(session)) {
+
+  // A remote session id is "remote:<hostLabel>:<tmuxName>" — attach to a tmux
+  // session on another tailnet host over SSH. It reuses the whole data/resize
+  // loop below; only the spawned command differs. Resize propagates to the remote
+  // tmux via SSH's SIGWINCH forwarding, so we skip the local shared-window logic.
+  const remote = typeof session === 'string' && session.startsWith('remote:');
+  let spawnCmd, spawnArgs;
+  if (remote) {
+    const firstColon = session.indexOf(':', 7);
+    const label = session.slice(7, firstColon);
+    const tmuxName = session.slice(firstColon + 1);
+    const h = resolveRemote(label);
+    if (!h || !isRemoteSessionName(tmuxName)) { socket.close(4400, 'invalid remote session'); return; }
+    spawnCmd = 'ssh';
+    spawnArgs = ['-tt', ...SSH_OPTS, h.sshTarget, `tmux attach -t ${tmuxName}`];
+  } else if (isManagedName(session)) {
+    spawnCmd = 'tmux';
+    spawnArgs = [...TMUX_ARGS, 'attach', '-t', session];
+  } else {
     socket.close(4400, 'invalid session');
     return;
   }
@@ -37,8 +56,11 @@ export function attachHandler(socket, req) {
   const cols = curCols, rows = curRows;
   const fast = url.searchParams.get('scroll') === 'fast';
 
-  // Size the tmux window to THIS client (the device interacting), deduped.
+  // Size the tmux window to THIS client (the device interacting), deduped. For a
+  // remote session, pty.resize already reaches the remote tmux over SSH, so this
+  // local-tmux call is a no-op there.
   const sizeWindowToClient = () => {
+    if (remote) return;
     const key = `${curCols}x${curRows}`;
     if (appliedSize.get(session) === key) return;
     appliedSize.set(session, key);
@@ -51,11 +73,12 @@ export function attachHandler(socket, req) {
 
   // tmux scroll: mouse ON (wheel → copy-mode). fast scroll: mouse OFF (wheel
   // scrolls xterm's local buffer instead). Applies to existing sessions too.
-  setMouse(session, !fast).catch(() => {});
+  // (Local only — we don't reconfigure a remote host's tmux.)
+  if (!remote) setMouse(session, !fast).catch(() => {});
 
   let pty;
   try {
-    pty = spawn('tmux', [...TMUX_ARGS, 'attach', '-t', session], {
+    pty = spawn(spawnCmd, spawnArgs, {
       name: 'xterm-256color',
       cols,
       rows,

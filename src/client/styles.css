@@ -332,6 +332,8 @@ select:focus { outline: none; border-color: var(--accent); }
 .bp-seg.burn-warn { color: var(--accent); }
 .bp-seg.burn-crit { color: #ff8d85; }
 .bp-sep { color: var(--text-faint); }
+.sb-remote-tag { font-size: 10px; font-family: var(--mono); color: var(--text-dim); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; white-space: nowrap; }
+.sb-item.remote .sb-title::before { content: '⇢ '; color: var(--text-faint); } /* mark cross-host (SSH) sessions */
 .bp-scoped { display: contents; } /* model-scoped weekly segs (e.g. Fable); hidden on mobile */
 @media (max-width: 700px) { .bp-scoped { display: none; } } /* keep the phone top bar uncluttered — Fable stays in the popover */
 .snap-age { font-size: 9px; color: var(--text-faint); margin-left: 2px; vertical-align: top; }

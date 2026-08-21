@@ -65,6 +65,9 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
   resumed lineages are readable.
 - **Files & uploads** — browse/download/delete files under your roots, and drag-drop files or
   whole folders straight into a session's working directory.
+- **Remote sessions (over SSH)** — list and attach **tmux sessions on other tailnet hosts**
+  (a laptop, another box) right in the terminal sidebar, tagged by host. Attach-only for now
+  (no rename/kill/notes). See [Remote sessions](#remote-sessions-on-other-hosts).
 
 ### Usage & cost
 - **Usage tab — ROI on your plan** — pick your plan (Pro / Max 5× / Max 20× / custom) and
@@ -157,6 +160,8 @@ for the full annotated list.
 | `CCDECK_ROOTS` | `$HOME` | Colon-separated dirs sessions may launch/browse under. |
 | `CCDECK_EXCLUDE_DIRS` | — | Colon-separated dirs to hide from the History tab (e.g. where another app runs `claude -p` headlessly). |
 | `CCDECK_LAUNCH` | `claude` | Command run in each new session. |
+| `CCDECK_PERMISSION_MODE` | — | Permission mode new sessions start in (`acceptEdits`/`auto`/`plan`/…). Empty = Claude's default. |
+| `CCDECK_REMOTE_HOSTS` | — | Hosts whose tmux sessions to list+attach over SSH (see [Remote sessions](#remote-sessions-on-other-hosts)). |
 | `CCDECK_TMUX_SOCKET` | `ccdeck` | Dedicated tmux `-L` socket name. |
 | `CCDECK_MCP_TOKEN` | — | Static bearer for the MCP endpoint. Empty = the bearer path is off. Enables the session-control tools (`create_session`/`send_to_session`). |
 | `CCDECK_MCP_TOKEN_READONLY` | — | Read-only MCP bearer (search + leave-note only). Used to auto-wire sessions. |
@@ -216,6 +221,33 @@ yourself, e.g.:
 
 (Launch Chrome with `--remote-debugging-port=9222`. Only one client should *drive* the browser at
 a time.) The option is inert if the file doesn't exist.
+
+## Remote sessions on other hosts
+
+cc-deck can also list and attach **tmux sessions running on other machines** (a laptop that
+stayed on, another box) — reached over SSH, ideally across your tailnet. They appear in the
+terminal sidebar tagged by host, and clicking one attaches through the browser like a local
+session. It's **attach-only** for now (no rename/kill/notes).
+
+```bash
+# in .env — comma/space-separated; "sshTarget" or "label=sshTarget"
+CCDECK_REMOTE_HOSTS=laptop=cyber@laptop.tailnet.ts.net dell-box
+```
+
+Two prerequisites, because a session is only remotely attachable if its terminal is shareable:
+
+1. **Key-based SSH** from the cc-deck host to each remote host (cc-deck uses `BatchMode=yes`, so
+   it never hangs on a password/host-key prompt — set up keys first).
+2. **The remote session must run inside tmux.** A bare `claude` in a plain terminal has a PTY
+   owned by that terminal — nothing else can attach to it. So start remote work like:
+
+   ```bash
+   tmux new -s work claude       # then it shows up in cc-deck as "work" on that host
+   ```
+
+cc-deck lists the remote's tmux sessions with `ssh <host> tmux list-sessions` and attaches with
+`ssh -t <host> tmux attach`; resize propagates over SSH. Empty by default — set
+`CCDECK_REMOTE_HOSTS` to enable.
 
 ## Serve it on your tailnet (TLS, no open ports)
 
@@ -318,6 +350,7 @@ src/usage.js       token usage + API-equivalent cost from transcripts (ROI), mti
 src/pricing.js     live Anthropic token pricing (LiteLLM dataset, disk-cached + fallback)
 src/burn.js        shells out to `ccburn --json` for live plan-limit utilization
 src/restore.js     snapshot active sessions + restore them after a host reboot
+src/remote.js      list + attach tmux sessions on other hosts over SSH (CCDECK_REMOTE_HOSTS)
 src/storage.js     retention hub — inventory + selective delete of artifacts/transcripts
 src/config.js      env config
 src/client/*.js    dashboard + terminal + PWA (bundled by esbuild into public/)

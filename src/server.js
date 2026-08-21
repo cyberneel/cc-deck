@@ -59,6 +59,7 @@ async function enrichedSessions() {
   return sessions;
 }
 import { getBurn } from './burn.js';
+import { listRemoteSessions } from './remote.js';
 import { getUsage } from './usage.js';
 import { getPricing } from './pricing.js';
 
@@ -152,6 +153,13 @@ app.post('/api/logout', async (req, reply) => {
 // ---- Session API ----
 app.get('/api/sessions', async () => {
   return { sessions: await enrichedSessions() };
+});
+
+// tmux sessions on other tailnet hosts (CCDECK_REMOTE_HOSTS), listed over SSH.
+// Attach via /ws/attach?session=remote:<host>:<name>. Read-only listing; the
+// heavy session actions (kill/rename/notes) stay local-only for now.
+app.get('/api/remote/sessions', async () => {
+  return { hosts: config.remoteHosts.map((h) => h.label), sessions: await listRemoteSessions() };
 });
 
 app.post('/api/sessions', async (req, reply) => {

@@ -36,6 +36,7 @@ function bumpMru(name) {
 if (currentSession) bumpMru(currentSession);
 
 let sessions = [];
+let remoteCache = []; // tmux sessions on other tailnet hosts (attach-only), polled separately
 // Sessions that need your attention (blocked on you, or just finished). Cleared
 // when you view them or they start working again.
 const attention = new Set();
@@ -611,6 +612,7 @@ async function api(path, opts = {}) {
 function isLive(s) { return !!s.liveSessionId || /node|claude/i.test(s.paneCommand || '') || (s.lastActivity && Date.now() - s.lastActivity < 15000); }
 // Status dot color: accent=needs you, green=working, blue=ready/your turn, grey=idle.
 function statusDot(s) {
+  if (s.remote) return s.attached ? 'live' : 'ready'; // no claude status over SSH — show reachability
   if (s.waitingFor) return 'attn';
   if (s.claudeStatus === 'busy') return 'live';
   if (s.claudeStatus === 'idle') return 'ready';
@@ -631,7 +633,7 @@ function mruOrderedExisting() {
 async function refreshSessions() {
   try {
     const { sessions: list } = await api('/api/sessions');
-    sessions = list;
+    sessions = list.concat(remoteCache); // remote sessions ride along (inert in the status logic below)
     // Flag a session for attention when it's blocked on you (waitingFor) or it
     // just finished (busy -> idle). Clear when it resumes working. Current session
     // is never flagged (you're looking at it). Background output alone doesn't flag.
@@ -646,6 +648,19 @@ async function refreshSessions() {
     titleEl.textContent = titleOf(currentSession);
     renderSidebar();
   } catch { /* */ }
+}
+
+// Poll remote tmux sessions (over SSH, server-side) on their own cadence so a
+// slow/unreachable host never stalls the local session refresh. Attach-only.
+async function refreshRemote() {
+  let next;
+  // name := the remote id ("remote:<host>:<tmux>"), so every s.name code path
+  // (sidebar, switchTo, panes, the /ws/attach URL) works unchanged.
+  try { const r = await api('/api/remote/sessions'); next = (r.sessions || []).filter((s) => !s.error && s.id).map((s) => ({ ...s, name: s.id })); }
+  catch { return; } // keep the last good list on a hiccup
+  remoteCache = next;
+  sessions = sessions.filter((s) => !s.remote).concat(remoteCache);
+  renderSidebar();
 }
 
 // share/branch glyph (inline SVG → renders identically everywhere)
@@ -674,15 +689,18 @@ function renderSidebar() {
     const cur = s.name === currentSession;
     const att = needsAttention(s);
     const num = i < 9 ? `<span class="sb-num">${i + 1}</span>` : '';
-    return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''}" data-name="${esc(s.name)}">
-      <span class="sb-dot ${statusDot(s)}"></span>
-      <span class="sb-meta"><span class="sb-title">${esc(s.title)}</span><span class="sb-dir">${esc(baseName(s.dir))}</span></span>
-      ${att ? '<span class="sb-attn" title="Needs your attention">●</span>' : num}
-      <div class="sb-actions">
-        ${s.liveSessionId ? `<button class="sb-share" title="Share this session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
+    const dirLine = s.remote ? `${esc(s.host)} · ${esc(baseName(s.dir))}` : esc(baseName(s.dir));
+    // Remote sessions (over SSH) are attach-only for now — no rename/kill/share.
+    const actions = s.remote
+      ? `<span class="sb-remote-tag" title="Remote tmux session on ${esc(s.host)} — attach only">${esc(s.paneCommand || 'remote')}</span>`
+      : `${s.liveSessionId ? `<button class="sb-share" title="Share this session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
         <button class="sb-rename" title="Rename session" data-rename="${esc(s.name)}">✎</button>
-        <button class="sb-kill" title="Kill session" data-kill="${esc(s.name)}">✕</button>
-      </div>
+        <button class="sb-kill" title="Kill session" data-kill="${esc(s.name)}">✕</button>`;
+    return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''} ${s.remote ? 'remote' : ''}" data-name="${esc(s.name)}">
+      <span class="sb-dot ${statusDot(s)}"></span>
+      <span class="sb-meta"><span class="sb-title">${esc(s.title)}</span><span class="sb-dir">${dirLine}</span></span>
+      ${att ? '<span class="sb-attn" title="Needs your attention">●</span>' : num}
+      <div class="sb-actions">${actions}</div>
     </div>`;
   }).join('') || '<div class="faint" style="padding:12px">No active sessions</div>';
   list.querySelectorAll('.sb-item').forEach((el) =>
@@ -824,6 +842,8 @@ if (!currentSession) {
   applySidebar();
   refreshSessions().then(reconcileWarm); // preload the recent sessions
   setInterval(refreshSessions, 3000);
+  refreshRemote(); // remote tmux sessions (if any hosts configured) — slower cadence
+  setInterval(refreshRemote, 10000);
   checkVersion();
   setInterval(checkVersion, 30000);
 }
