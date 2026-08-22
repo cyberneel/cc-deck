@@ -624,6 +624,9 @@ function needsAttention(s) {
 function titleOf(name) { return sessions.find((s) => s.name === name)?.title || name; }
 function baseName(p) { if (!p) return ''; return p.replace(/\/$/, '').split('/').slice(-2).join('/'); }
 function orderedSessions() { return [...sessions].sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0)); }
+// Sidebar/jump order: native sessions first, then remote — each activity-sorted.
+// The single source of truth for both the rendered grouping and Alt+1–9 numbering.
+function groupedSessions() { const a = orderedSessions(); return [...a.filter((s) => !s.remote), ...a.filter((s) => s.remote)]; }
 function mruOrderedExisting() {
   const names = new Set(sessions.map((s) => s.name));
   const inMru = mru.filter((n) => names.has(n));
@@ -682,27 +685,39 @@ document.getElementById('notes-btn').addEventListener('click', () => {
   if (s) openNotes(s.liveSessionId || s.resumedFrom, s.name, refreshSessions);
 });
 
-function renderSidebar() {
-  const list = document.getElementById('sb-list');
-  const ordered = orderedSessions();
-  list.innerHTML = ordered.map((s, i) => {
-    const cur = s.name === currentSession;
-    const att = needsAttention(s);
-    const num = i < 9 ? `<span class="sb-num">${i + 1}</span>` : '';
-    const dirLine = s.remote ? `${esc(s.host)} · ${esc(baseName(s.dir))}` : esc(baseName(s.dir));
-    // Remote sessions (over SSH) are attach-only for now — no rename/kill/share.
-    const actions = s.remote
-      ? `<span class="sb-remote-tag" title="Remote tmux session on ${esc(s.host)} — attach only">${esc(s.paneCommand || 'remote')}</span>`
-      : `${s.liveSessionId ? `<button class="sb-share" title="Share this session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
+function sidebarItemHtml(s, i) {
+  const cur = s.name === currentSession;
+  const att = needsAttention(s);
+  const num = i < 9 ? `<span class="sb-num">${i + 1}</span>` : '';
+  const dirLine = s.remote ? `${esc(s.host)} · ${esc(baseName(s.dir))}` : esc(baseName(s.dir));
+  // Remote sessions (over SSH) are attach-only for now — no rename/kill/share.
+  const actions = s.remote
+    ? `<span class="sb-remote-tag" title="Remote tmux session on ${esc(s.host)} — attach only">${esc(s.paneCommand || 'remote')}</span>`
+    : `${s.liveSessionId ? `<button class="sb-share" title="Share this session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
         <button class="sb-rename" title="Rename session" data-rename="${esc(s.name)}">✎</button>
         <button class="sb-kill" title="Kill session" data-kill="${esc(s.name)}">✕</button>`;
-    return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''} ${s.remote ? 'remote' : ''}" data-name="${esc(s.name)}">
+  return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''} ${s.remote ? 'remote' : ''}" data-name="${esc(s.name)}">
       <span class="sb-dot ${statusDot(s)}"></span>
       <span class="sb-meta"><span class="sb-title">${esc(s.title)}</span><span class="sb-dir">${dirLine}</span></span>
       ${att ? '<span class="sb-attn" title="Needs your attention">●</span>' : num}
       <div class="sb-actions">${actions}</div>
     </div>`;
-  }).join('') || '<div class="faint" style="padding:12px">No active sessions</div>';
+}
+
+function renderSidebar() {
+  const list = document.getElementById('sb-list');
+  const ordered = orderedSessions();
+  const local = ordered.filter((s) => !s.remote);
+  const remote = ordered.filter((s) => s.remote);
+  const group = (label) => `<div class="sb-group">${esc(label)}</div>`;
+  // Numbering is continuous across the grouped order (native then remote) so it
+  // matches groupedSessions() / Alt+1–9. Headers only appear once remotes exist.
+  let idx = 0;
+  let html = '';
+  if (remote.length && local.length) html += group('Native');
+  html += local.map((s) => sidebarItemHtml(s, idx++)).join('');
+  if (remote.length) { html += group('Remote'); html += remote.map((s) => sidebarItemHtml(s, idx++)).join(''); }
+  list.innerHTML = html || '<div class="faint" style="padding:12px">No active sessions</div>';
   list.querySelectorAll('.sb-item').forEach((el) =>
     el.addEventListener('click', (e) => { if (!e.target.closest('.sb-kill, .sb-rename, .sb-share')) switchTo(el.dataset.name); }));
   updateNotesBtn();
@@ -739,7 +754,7 @@ async function killSessionFromSidebar(name) {
   if (panes.has(name)) disposePane(name);
   await refreshSessions();
   if (name === currentSession) {
-    const next = orderedSessions()[0]; // killed one is gone from the list now
+    const next = groupedSessions()[0]; // killed one is gone from the list now (prefers a native session)
     if (next) switchTo(next.name); // currentSession is still the (dead) name, so this proceeds
     else location.href = '/'; // nothing left to show
   }
@@ -801,7 +816,7 @@ window.addEventListener('keydown', (e) => {
   if (e.altKey && e.code === 'Backquote') { e.preventDefault(); cycle('Alt', e.shiftKey); return; }
   if (e.ctrlKey && e.key === 'Tab') { e.preventDefault(); cycle('Control', e.shiftKey); return; }
   if (switching && e.key === 'Escape') { sw.style.display = 'none'; switching = false; switchMod = null; e.preventDefault(); return; }
-  if (e.altKey && /^[1-9]$/.test(e.key)) { const t = orderedSessions()[Number(e.key) - 1]; if (t) { e.preventDefault(); switchTo(t.name); } }
+  if (e.altKey && /^[1-9]$/.test(e.key)) { const t = groupedSessions()[Number(e.key) - 1]; if (t) { e.preventDefault(); switchTo(t.name); } }
 }, true);
 window.addEventListener('keyup', (e) => {
   if (!switching || !switchMod) return;
