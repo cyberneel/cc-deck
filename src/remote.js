@@ -23,6 +23,12 @@ export const isRemoteSessionName = (n) => typeof n === 'string' && /^[A-Za-z0-9_
 let cache = { at: 0, data: [] };
 const TTL_MS = 5000;
 
+// Only surface remote tmux sessions actually running a CLI/claude, so a session
+// that drops back to a bare shell when you quit claude disappears (instead of
+// lingering as a "normal shell without claude"). claude reports its pane command
+// as `claude` or `node` (it's a node CLI), same heuristic cc-deck uses locally.
+const isCliCommand = (c) => /^(claude|node)$/i.test((c || '').trim());
+
 async function listHost(h) {
   try {
     // `tmux list-sessions` on a host with no server exits non-zero — treat as "no sessions".
@@ -34,7 +40,7 @@ async function listHost(h) {
         title: name, dir: cwd || '', paneCommand: cmd || '',
         attached: Number(attached) > 0, lastActivity: Number(activity) * 1000 || null,
       };
-    });
+    }).filter((s) => isCliCommand(s.paneCommand));
   } catch (e) {
     const msg = (e.stderr || e.message || '').toString();
     if (/no server running|no sessions/i.test(msg)) return []; // reachable, just idle
