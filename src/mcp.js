@@ -13,6 +13,7 @@ import { summarize } from './handoff.js';
 import { addNote } from './notes.js';
 import { createSession, sendText, listSessions } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
+import { listTabs, claimTab, releaseTab } from './browser.js';
 
 // Find a RUNNING session by any id in its lineage (live id or resumedFrom).
 async function findLiveSession(id) {
@@ -225,6 +226,33 @@ export function createMcpServer({ sessionControl = false } = {}) {
     });
     return text(JSON.stringify(out, null, 2));
   });
+
+  // Shared-browser broker: a visible lock registry over the one logged-in browser,
+  // so many sessions (and Friday) coordinate instead of fighting over tabs. Read/
+  // coordination tools — available to any authed caller (the auto-wired sessions).
+  if (config.sessionBrowser) {
+    server.registerTool('browser_tabs', {
+      title: 'List shared-browser tabs + who has them',
+      description: "See every tab in the SHARED logged-in browser and who has claimed it (the visible lock registry). Call this BEFORE touching the browser so you don't disturb tabs other cc-deck sessions or Friday rely on. Returns JSON: [{ target_id, title, url, claimed_by, claimed_since }].",
+      inputSchema: {},
+    }, async () => { try { return text(JSON.stringify(await listTabs(), null, 2)); } catch (e) { return text('Shared browser unavailable: ' + e.message); } });
+
+    server.registerTool('browser_claim', {
+      title: 'Claim a shared-browser tab',
+      description: "Register a tab you are driving in the SHARED browser so other sessions/Friday see it's in use. Open your OWN tab first (chrome new_page) and navigate it, then claim it by target_id or url with a short note. Never claim or drive a tab someone else already claimed — open your own instead.",
+      inputSchema: {
+        note: z.string().min(1).max(200).describe('Short description of what you are using the tab for (shown to other agents).'),
+        target_id: z.string().optional().describe('The tab target id (from browser_tabs).'),
+        url: z.string().optional().describe('Or identify the tab by the url you navigated it to.'),
+      },
+    }, async ({ note, target_id, url }) => { try { return text(JSON.stringify(await claimTab({ note, target_id, url }))); } catch (e) { return text('Could not claim: ' + e.message); } });
+
+    server.registerTool('browser_release', {
+      title: 'Release a shared-browser tab',
+      description: 'Free a tab you previously claimed (call when done, then close it with chrome close_page). Identify by target_id or url.',
+      inputSchema: { target_id: z.string().optional(), url: z.string().optional() },
+    }, async ({ target_id, url }) => { try { return text(JSON.stringify(await releaseTab({ target_id, url }))); } catch (e) { return text('Could not release: ' + e.message); } });
+  }
 
   // Session-control tools (spawn/drive real claude processes) — only exposed to
   // the static-bearer caller (e.g. Claude Code / a headless agent), never OAuth connectors.

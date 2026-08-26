@@ -162,6 +162,8 @@ for the full annotated list.
 | `CCDECK_LAUNCH` | `claude` | Command run in each new session. |
 | `CCDECK_PERMISSION_MODE` | — | Permission mode new sessions start in (`acceptEdits`/`auto`/`plan`/…). Empty = Claude's default. |
 | `CCDECK_REMOTE_HOSTS` | — | Hosts whose tmux sessions to list+attach over SSH (see [Remote sessions](#remote-sessions-on-other-hosts)). |
+| `CCDECK_SESSION_BROWSER` | off | `on` auto-wires every session with the shared logged-in browser + a coordination nudge (lock registry). |
+| `CCDECK_BROWSER_CDP` | `http://127.0.0.1:9222` | CDP endpoint of that shared browser. |
 | `CCDECK_TMUX_SOCKET` | `ccdeck` | Dedicated tmux `-L` socket name. |
 | `CCDECK_MCP_TOKEN` | — | Static bearer for the MCP endpoint. Empty = the bearer path is off. Enables the session-control tools (`create_session`/`send_to_session`). |
 | `CCDECK_MCP_TOKEN_READONLY` | — | Read-only MCP bearer (search + leave-note only). Used to auto-wire sessions. |
@@ -189,6 +191,7 @@ clients can work with your sessions. Three auth paths, three privilege levels:
 - `search_sessions` — keyword-search past transcripts; returns matching snippets (secrets redacted).
 - `list_recent_sessions` — most-recent sessions with title/dir/date.
 - `list_sessions` — currently **active** sessions with live, structured status (`running` / `waiting_input` / `idle` / `done`, plus `needs_input`, `last_activity`) — poll and diff to detect transitions (a session finishing, waiting on you, or exiting).
+- `browser_tabs` / `browser_claim` / `browser_release` — the shared-browser lock registry (only when `CCDECK_SESSION_BROWSER=on`): see every tab and who holds it, claim the tab you're driving, release it. Lets many sessions (and Friday) share one logged-in browser without colliding.
 - `get_session_context` — read a session as an AI `summary` or a truncated `transcript`.
 - `save_session_summary` — leave a handoff note on a session's lineage (surfaces on next open/resume).
 - `create_session` — launch a new session in a directory (auto-creates it under a root). **Static bearer only.**
@@ -208,19 +211,23 @@ read-only MCP pre-wired (loopback URL, read-only bearer) plus a one-line system-
 sessions can discover related work and hand off through notes instead of duplicating it. They
 **cannot** start or drive other sessions — that stays operator-only via the static bearer.
 
-**Browser access** — the New Session dialog has a *Browser access* dropdown. Choosing it launches
-the session with an extra `--mcp-config ~/.claude/cc-deck/browser-mcp.json`, which attaches
-[`chrome-devtools-mcp`](https://github.com/ChromeDevTools/chrome-devtools-mcp) to a Chrome you're
-already logged into (over CDP), so the session can drive that browser. Create that config file
-yourself, e.g.:
+**Shared browser + lock registry** — cc-deck can attach sessions to a **single, already-logged-in
+Chrome** (over CDP) so they can read/act on authenticated pages — and coordinate so they don't
+fight over it. Two ways in:
 
-```json
-{ "mcpServers": { "chrome": { "command": "npx",
-  "args": ["chrome-devtools-mcp@latest", "--browser-url", "http://127.0.0.1:9222"] } } }
-```
+- *Per session:* the New Session dialog's *Browser access* dropdown launches just that session with
+  [`chrome-devtools-mcp`](https://github.com/ChromeDevTools/chrome-devtools-mcp).
+- *Every session:* `CCDECK_SESSION_BROWSER=on` auto-wires the shared browser + a coordination nudge
+  into all new sessions.
 
-(Launch Chrome with `--remote-debugging-port=9222`. Only one client should *drive* the browser at
-a time.) The option is inert if the file doesn't exist.
+Because CDP is multi-tab, collisions only happen when two drivers act on the **same** tab. So
+cc-deck runs a **visible lock registry** (one in-memory registry in the always-on server, exposed
+via the `browser_tabs` / `browser_claim` / `browser_release` MCP tools). The nudge tells each
+session to: check `browser_tabs` → open its **own** tab (`new_page`) → `browser_claim` it → work
+only there → never touch tabs it didn't open (those hold other agents' logins) → `browser_release`
+when done. Friday can call the same tools to see/avoid session tabs. Point cc-deck at the browser
+with `CCDECK_BROWSER_CDP` (default `http://127.0.0.1:9222`); launch that Chrome with
+`--remote-debugging-port=9222`.
 
 ## Remote sessions on other hosts
 
@@ -351,6 +358,7 @@ src/pricing.js     live Anthropic token pricing (LiteLLM dataset, disk-cached + 
 src/burn.js        shells out to `ccburn --json` for live plan-limit utilization
 src/restore.js     snapshot active sessions + restore them after a host reboot
 src/remote.js      list + attach tmux sessions on other hosts over SSH (CCDECK_REMOTE_HOSTS)
+src/browser.js     shared-browser lock registry (browser_tabs/claim/release over CDP)
 src/storage.js     retention hub — inventory + selective delete of artifacts/transcripts
 src/config.js      env config
 src/client/*.js    dashboard + terminal + PWA (bundled by esbuild into public/)

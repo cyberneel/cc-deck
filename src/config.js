@@ -58,6 +58,12 @@ export const config = {
   mcpTokenReadonly: process.env.CCDECK_MCP_TOKEN_READONLY || '',
   // Auto-wire every new session with the read-only cc-deck MCP + a handoff nudge.
   sessionMcp: /^(1|on|true|yes)$/i.test(process.env.CCDECK_SESSION_MCP || ''),
+  // Auto-wire every new session with the SHARED logged-in browser (chrome-devtools-mcp
+  // → browserCdp) + a coordination nudge, so sessions (and Friday) share one browser
+  // without colliding — each works in its own tab via cc-deck's browser broker/registry.
+  sessionBrowser: /^(1|on|true|yes)$/i.test(process.env.CCDECK_SESSION_BROWSER || ''),
+  // CDP endpoint of that shared browser (the one cc-deck's broker manages + sessions attach to).
+  browserCdp: process.env.CCDECK_BROWSER_CDP || 'http://127.0.0.1:9222',
   // Public origin for OAuth metadata (e.g. https://claude.example.com). Derived
   // from request headers if unset — set it if the derived host is ever wrong.
   publicUrl: process.env.CCDECK_PUBLIC_URL || '',

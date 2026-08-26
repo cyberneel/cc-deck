@@ -9,29 +9,32 @@ import { config } from './config.js';
 const SESSION_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'session-mcp.json');
 const BROWSER_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'browser-mcp.json');
 
-// On-demand: attach chrome-devtools-mcp (a logged-in Chromium via CDP) when
-// a session opts in. Guard on the file existing — a missing --mcp-config aborts the
-// whole launch. Non-strict, so it adds to the session's other MCPs.
-async function browserMcpFlag() {
-  try { await stat(BROWSER_MCP_PATH); } catch { return ''; }
-  return ` --mcp-config ${BROWSER_MCP_PATH}`;
-}
 const SESSION_NUDGE = "You are one of several cc-deck sessions the user runs in parallel. Before substantial work you may use the cc-deck tools (search_sessions, get_session_context) to check whether related work already lives in another session; if a request clearly belongs to a different session, prefer leaving a handoff note (save_session_summary) over duplicating it here. You cannot start or drive other sessions yourself.";
+const BROWSER_NUDGE = "You can drive a shared, already-logged-in Chrome via the chrome-* tools — it is SHARED with other cc-deck sessions and with Friday, so coordinate through cc-deck's broker: call browser_tabs to see what is open and who has each tab; do your work in your OWN tab (chrome new_page, navigate it, then browser_claim it with a short note); NEVER navigate, click, or close a tab you did not open (those hold other agents' logged-in work); when finished, close your tab (chrome close_page) and browser_release it.";
 
-// Launch flags to wire a new session with the READ-ONLY cc-deck MCP + a handoff
-// nudge (only when enabled). Loopback URL — no Cloudflare/OAuth needed on-box.
-async function sessionMcpFlags() {
-  if (!config.sessionMcp || !config.mcpTokenReadonly) return '';
-  const cfg = { mcpServers: { 'cc-deck': { type: 'http', url: `http://127.0.0.1:${config.port}/mcp`, headers: { Authorization: `Bearer ${config.mcpTokenReadonly}` } } } };
-  try {
-    await mkdir(join(homedir(), '.claude', 'cc-deck'), { recursive: true });
-    await writeFile(SESSION_MCP_PATH, JSON.stringify(cfg));
-  } catch { return ''; }
-  // Single-quote for the shell (send-keys types this into the login shell). Escape
-  // any ' in the nudge as '\'' so an apostrophe can't break out of the quoting and
-  // turn the rest of the prompt into stray shell tokens (that broke every launch).
-  const nudge = SESSION_NUDGE.replace(/'/g, "'\\''");
-  return ` --mcp-config ${SESSION_MCP_PATH} --append-system-prompt '${nudge}'`;
+// Launch flags: wire the read-only cc-deck MCP (handoff-aware) and — when enabled
+// globally (config.sessionBrowser) or per session (the New-session browser toggle) —
+// the shared logged-in browser (chrome-devtools-mcp) + a coordination nudge. Both
+// nudges share ONE --append-system-prompt so they don't clobber each other.
+async function sessionFlags(browser) {
+  let flags = '';
+  const nudges = [];
+  const ensureDir = () => mkdir(join(homedir(), '.claude', 'cc-deck'), { recursive: true });
+  if (config.sessionMcp && config.mcpTokenReadonly) {
+    const cfg = { mcpServers: { 'cc-deck': { type: 'http', url: `http://127.0.0.1:${config.port}/mcp`, headers: { Authorization: `Bearer ${config.mcpTokenReadonly}` } } } };
+    try { await ensureDir(); await writeFile(SESSION_MCP_PATH, JSON.stringify(cfg)); flags += ` --mcp-config ${SESSION_MCP_PATH}`; nudges.push(SESSION_NUDGE); } catch { /* skip cc-deck MCP */ }
+  }
+  if (config.sessionBrowser || browser) {
+    const cfg = { mcpServers: { chrome: { command: 'npx', args: ['chrome-devtools-mcp@latest', '--browser-url', config.browserCdp] } } };
+    try { await ensureDir(); await writeFile(BROWSER_MCP_PATH, JSON.stringify(cfg)); flags += ` --mcp-config ${BROWSER_MCP_PATH}`; if (config.sessionMcp) nudges.push(BROWSER_NUDGE); } catch { /* skip browser */ }
+  }
+  if (nudges.length) {
+    // Single-quote for the shell (send-keys types this into the login shell); escape
+    // any ' as '\'' so an apostrophe can't break out of the quoting.
+    const nudge = nudges.join(' ').replace(/'/g, "'\\''");
+    flags += ` --append-system-prompt '${nudge}'`;
+  }
+  return flags;
 }
 
 const exec = promisify(execFile);
@@ -245,8 +248,7 @@ export async function createSession({ dir, title, resume, fork, seed, browser })
   if (/^(acceptEdits|auto|plan|bypassPermissions|manual|default)$/.test(config.permissionMode)) {
     launch += ` --permission-mode ${config.permissionMode}`;
   }
-  launch += await sessionMcpFlags(); // handoff-aware: read-only cc-deck MCP + nudge
-  if (browser) launch += await browserMcpFlag(); // opt-in: drive a logged-in Chrome
+  launch += await sessionFlags(browser); // cc-deck MCP + optional shared browser + combined nudge
   await tmux(['send-keys', '-t', name, `COLORTERM=truecolor ${launch}`, 'Enter']);
   // Once Claude has booted: name a fresh titled session (so the name shows in
   // Claude and `claude --resume`) and/or type a seed prompt. Background.
