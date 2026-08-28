@@ -39,6 +39,7 @@ import { consumeNotesSeed, consumeNotesSeedMany, pendingCounts, readPending, rea
 // resumedFrom (the stable @ccdeck_resume anchor). Notes are matched across all of it.
 const lineageIds = (s) => [s?.liveSessionId, s?.resumedFrom];
 import { captureSnapshot, restoreIfBoot, loadSnapshot } from './restore.js';
+import { startReachMonitor } from './reach-emit.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
 // Claude's own session name (custom /rename title, else its auto-title), and the
@@ -606,6 +607,10 @@ app.log.info(`cc-deck listening on ${address} (roots: ${config.roots.join(', ')}
 
 // Keep cc-deck's dedicated tmux server alive even when it has no sessions.
 await initServer().catch(() => {});
+
+// Push session-state transitions to Friday the instant they happen (opt-in; no-op unless
+// CCDECK_FRIDAY_REACH_URL is set) — so Friday reacts without polling.
+startReachMonitor();
 
 // On a fresh boot (no sessions running), restore the sessions that were active
 // before the box went down; then keep a periodic snapshot as a safety net.

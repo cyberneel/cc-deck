@@ -67,6 +67,14 @@ export const config = {
   // Public origin for OAuth metadata (e.g. https://claude.example.com). Derived
   // from request headers if unset — set it if the derived host is ever wrong.
   publicUrl: process.env.CCDECK_PUBLIC_URL || '',
+  // Push session-state transitions to Friday's Reach Manager (POST to the url) the instant
+  // they happen, so Friday reacts without polling cc-deck. OPT-IN: unset url = disabled
+  // (cc-deck runs standalone). Point url at Friday's /api/reach and password at its app
+  // password. e.g. CCDECK_FRIDAY_REACH_URL=http://127.0.0.1:8790/api/reach
+  fridayReach: {
+    url: process.env.CCDECK_FRIDAY_REACH_URL || '',
+    password: process.env.CCDECK_FRIDAY_REACH_PASSWORD || '',
+  },
   cookieName: 'ccdeck',
   cookieMaxAge: 60 * 60 * 24 * 30, // 30 days (seconds)
 };
