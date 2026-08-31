@@ -1,0 +1,31 @@
+# cc-deck via Docker — works the same on Windows, macOS, and Linux.
+#
+# 1. Set a password + secret (create a .env next to this file):
+#      CCDECK_PASSWORD=choose-one
+#      CCDECK_SECRET=<64 hex chars>      # `openssl rand -hex 32`
+# 2. Point the workspace volume below at the code you want sessions to work in.
+# 3. `docker compose up -d`, then log the CLIs in once:
+#      docker compose exec cc-deck claude      # then /login
+#      docker compose exec cc-deck codex login
+# 4. Open http://127.0.0.1:8787
+services:
+  cc-deck:
+    build: .
+    # Or use a published image instead of building:  image: ghcr.io/cyberneel/cc-deck:latest
+    restart: unless-stopped
+    # Host-only by default. Drop the 127.0.0.1 prefix only behind your own auth layer.
+    ports:
+      - "127.0.0.1:8787:8787"
+    environment:
+      CCDECK_PASSWORD: ${CCDECK_PASSWORD:?set CCDECK_PASSWORD in a .env}
+      CCDECK_SECRET: ${CCDECK_SECRET:?set CCDECK_SECRET (openssl rand -hex 32) in a .env}
+      CCDECK_ROOTS: /workspace
+      # Optional extras (see .env.example):
+      # CCDECK_PERMISSION_MODE: auto
+    volumes:
+      # Your projects — edit the left side to your code directory (Windows: C:\path\to\code).
+      - ./workspace:/workspace
+      # Persists CLI auth (~/.claude, ~/.codex) + cc-deck notes/restore across restarts.
+      - ccdeck-home:/home/node
+volumes:
+  ccdeck-home:

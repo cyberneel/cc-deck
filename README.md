@@ -146,6 +146,37 @@ npm start
 Rebuild the frontend after editing anything in `src/client/` with `npm run build`
 (or `npm run dev` for watch mode + server auto-restart).
 
+## Run with Docker (Windows, macOS, Linux)
+
+cc-deck needs Linux + tmux + `node-pty`, which is awkward on Windows/macOS — so the container
+does it for you (Docker Desktop runs the Linux VM). The image **bundles the Claude Code and Codex
+CLIs**, so sessions launch inside the container against a folder you mount.
+
+```bash
+# 1. create a .env next to docker-compose.yml
+printf 'CCDECK_PASSWORD=%s\nCCDECK_SECRET=%s\n' 'choose-a-password' "$(openssl rand -hex 32)" > .env
+# 2. point the workspace at your code (edit ./workspace in docker-compose.yml), then:
+docker compose up -d
+# 3. log the CLIs in once (stored in a volume, so it persists):
+docker compose exec cc-deck claude       # then /login
+docker compose exec cc-deck codex login
+# 4. open http://127.0.0.1:8787
+```
+
+- **Your projects**: bind-mount them at `/workspace` (that's `CCDECK_ROOTS`). Edit the `./workspace`
+  line in `docker-compose.yml` to your code directory (on Windows, e.g. `C:\Users\you\code`).
+- **Persistence**: CLI auth (`~/.claude`, `~/.codex`) and cc-deck's notes/restore live in the
+  `ccdeck-home` named volume, so they survive `docker compose down`/`up`. Sessions run while the
+  container is up; on restart, cc-deck relaunches them from its snapshot.
+- **Exposure**: the port maps to `127.0.0.1` only. Put it behind Tailscale/Cloudflare (below) for
+  remote access — don't drop the `127.0.0.1` prefix without an auth layer.
+- **Host-specific features off by default**: the [shared browser](#multiple-clis-claude-and-codex)
+  (CDP) and [remote SSH sessions](#remote-sessions-on-other-hosts) reach host resources, so they
+  need extra wiring in a container — the core (managing Claude/Codex sessions on your mounted code)
+  works out of the box.
+
+To build the image yourself instead of via compose: `docker build -t cc-deck .`
+
 ## Configuration (`.env`)
 
 Only the first two are required; everything else has a sensible default. See `.env.example`
