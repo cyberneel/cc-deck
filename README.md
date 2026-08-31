@@ -1,6 +1,6 @@
 # cc-deck
 
-A self-hosted web dashboard for your **Claude CLI** sessions. See every running session
+A self-hosted web dashboard for your **coding-CLI** sessions (Claude Code and Codex). See every running session
 in a grid/list/grouped view, launch a new `claude` in any directory, resume or fork past
 conversations, and click into a fast, smooth in-browser terminal — the real CLI, no wrapper.
 Sessions can hand context to each other through notes, and cc-deck exposes an **MCP endpoint**
@@ -159,7 +159,9 @@ for the full annotated list.
 | `CCDECK_BIND` | `127.0.0.1` | Bind address — keep loopback so the raw port isn't exposed. |
 | `CCDECK_ROOTS` | `$HOME` | Colon-separated dirs sessions may launch/browse under. |
 | `CCDECK_EXCLUDE_DIRS` | — | Colon-separated dirs to hide from the History tab (e.g. where another app runs `claude -p` headlessly). |
-| `CCDECK_LAUNCH` | `claude` | Command run in each new session. |
+| `CCDECK_LAUNCH` | `claude` | Command for the **Claude** CLI provider. |
+| `CCDECK_CODEX_LAUNCH` | `codex` | Command for the **Codex** CLI provider (cc-deck is multi-CLI; see [Multiple CLIs](#multiple-clis-claude-and-codex)). |
+| `CCDECK_CODEX_APPROVAL` | — | Default Codex approval policy new Codex sessions start in (its "permission mode"). Empty = Codex default. |
 | `CCDECK_PERMISSION_MODE` | — | Permission mode new sessions start in (`acceptEdits`/`auto`/`plan`/…). Empty = Claude's default. |
 | `CCDECK_REMOTE_HOSTS` | — | Hosts whose tmux sessions to list+attach over SSH (see [Remote sessions](#remote-sessions-on-other-hosts)). |
 | `CCDECK_SESSION_BROWSER` | off | `on` auto-wires every session with the shared logged-in browser + a coordination nudge (lock registry). |
@@ -241,6 +243,28 @@ with an `X-App-Password` header. Only that one transition is pushed (everything 
 polling), and it's best-effort: if the webhook is down the event is dropped and the poll is the
 backstop. Built for [Friday](https://github.com/cyberneel/friday)'s Reach Manager, but it's just a
 webhook — empty url = disabled (cc-deck runs fully standalone).
+
+## Multiple CLIs (Claude and Codex)
+
+cc-deck is **CLI-agnostic**: each session records which CLI it runs, and a small provider
+(`src/providers/`) owns everything tool-specific. The New Session dialog has a **CLI** picker
+(shown when more than one provider is available); sessions are badged by CLI in the sidebar and
+grid. Adding another CLI is one provider file.
+
+- **Claude** (`claude`) — the default. Full feature set: live status dots, History-tab resume/fork,
+  usage/ROI, notes/handoff + the shared-browser auto-wire.
+- **Codex** (`codex`) — launches clean (its resume/fork are subcommands, approval via `-a`, MCP via
+  `~/.codex/config.toml`, so no launch flags). A Codex session gets the **CLI-agnostic** parts:
+  the in-browser terminal, attach, kill, rename, snapshot/restore, and remote — everything you'd
+  drive by hand.
+
+What's **Claude-only** for now (not cc-deck limitations you can flip — they're gaps in what the
+other CLI exposes): the live busy/idle/waiting **status dot** (Codex has no machine-readable status
+feed — a Codex session just shows live/idle from its process), the **History tab / resume from
+cc-deck** (Codex keeps sessions in an internal store with no scriptable listing — resume a Codex
+session with `codex resume` in a terminal instead), **usage/ROI** (Claude-plan specific), and the
+**notes/handoff + browser auto-wire** (wired via Claude's `--mcp-config`; Codex uses `config.toml`).
+The provider interface leaves room to fill these in per-CLI as the tools expose more.
 
 ## Remote sessions on other hosts
 
@@ -359,7 +383,8 @@ src/server.js      Fastify app: static, REST API, auth gate, ws + /mcp routes
 src/auth.js        password check + HMAC-signed cookie / token
 src/oauth.js       single-user OAuth 2.1 AS for MCP connectors (DCR + PKCE, in-memory)
 src/mcp.js         MCP server + tools (search / context / notes / create / send)
-src/tmux.js        list/create/kill/rename/preview — wraps tmux (resume, fork, MCP auto-wire)
+src/tmux.js        list/create/kill/rename/preview — wraps tmux (resume, fork, per-CLI launch)
+src/providers/     per-CLI adapters (claude.js, codex.js) — launch/resume/fork/wire, registry
 src/pty.js         websocket ⇄ node-pty(`tmux attach`) bridge
 src/agents.js      parse live Claude state (title / mode / session id) from a pane
 src/history.js     scans ~/.claude/projects for resumable past sessions

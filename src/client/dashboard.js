@@ -390,7 +390,7 @@ function wireActiveCards(container) {
 function cardHtml(s) {
   const st = statusOf(s);
   return `<div class="card" data-name="${esc(s.name)}">
-    <div class="card-head"><div class="card-title" title="${esc(s.title)}">${esc(s.title)}</div></div>
+    <div class="card-head"><div class="card-title" title="${esc(s.title)}">${s.kind && s.kind !== 'claude' ? `<span class="card-cli" title="${esc(s.kind)} CLI">${esc(s.kind)}</span>` : ''}${esc(s.title)}</div></div>
     <div class="card-dir" title="${esc(s.dir)}">${esc(shortDir(s.dir))}</div>
     <pre class="preview" data-preview="${esc(s.name)}">…</pre>
     <div class="card-foot">

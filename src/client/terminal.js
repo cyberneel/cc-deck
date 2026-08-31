@@ -690,6 +690,8 @@ function sidebarItemHtml(s, i) {
   const att = needsAttention(s);
   const num = i < 9 ? `<span class="sb-num">${i + 1}</span>` : '';
   const dirLine = s.remote ? `${esc(s.host)} · ${esc(baseName(s.dir))}` : esc(baseName(s.dir));
+  // Badge non-Claude CLIs (e.g. codex) so it's clear which tool a session runs.
+  const cliTag = (s.kind && s.kind !== 'claude') ? `<span class="sb-cli" title="${esc(s.kind)} CLI">${esc(s.kind)}</span>` : '';
   // Remote sessions (over SSH) are attach-only for now — no rename/kill/share.
   const actions = s.remote
     ? `<span class="sb-remote-tag" title="Remote tmux session on ${esc(s.host)} — attach only">${esc(s.paneCommand || 'remote')}</span>`
@@ -698,7 +700,7 @@ function sidebarItemHtml(s, i) {
         <button class="sb-kill" title="Kill session" data-kill="${esc(s.name)}">✕</button>`;
   return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''} ${s.remote ? 'remote' : ''}" data-name="${esc(s.name)}">
       <span class="sb-dot ${statusDot(s)}"></span>
-      <span class="sb-meta"><span class="sb-title">${esc(s.title)}</span><span class="sb-dir">${dirLine}</span></span>
+      <span class="sb-meta"><span class="sb-title">${cliTag}${esc(s.title)}</span><span class="sb-dir">${dirLine}</span></span>
       ${att ? '<span class="sb-attn" title="Needs your attention">●</span>' : num}
       <div class="sb-actions">${actions}</div>
     </div>`;
