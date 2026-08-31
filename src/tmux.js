@@ -1,41 +1,10 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { stat, readdir, mkdir, writeFile } from 'node:fs/promises';
+import { stat, readdir, mkdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
-import { homedir } from 'node:os';
 import crypto from 'node:crypto';
 import { config } from './config.js';
-
-const SESSION_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'session-mcp.json');
-const BROWSER_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'browser-mcp.json');
-
-const SESSION_NUDGE = "You are one of several cc-deck sessions the user runs in parallel. Before substantial work you may use the cc-deck tools (search_sessions, get_session_context) to check whether related work already lives in another session; if a request clearly belongs to a different session, prefer leaving a handoff note (save_session_summary) over duplicating it here. You cannot start or drive other sessions yourself.";
-const BROWSER_NUDGE = "You can drive a shared, already-logged-in Chrome via the chrome-* tools — it is SHARED with other cc-deck sessions and with Friday, so coordinate through cc-deck's broker: call browser_tabs to see what is open and who has each tab; do your work in your OWN tab (chrome new_page, navigate it, then browser_claim it with a short note); NEVER navigate, click, or close a tab you did not open (those hold other agents' logged-in work); when finished, close your tab (chrome close_page) and browser_release it.";
-
-// Launch flags: wire the read-only cc-deck MCP (handoff-aware) and — when enabled
-// globally (config.sessionBrowser) or per session (the New-session browser toggle) —
-// the shared logged-in browser (chrome-devtools-mcp) + a coordination nudge. Both
-// nudges share ONE --append-system-prompt so they don't clobber each other.
-async function sessionFlags(browser) {
-  let flags = '';
-  const nudges = [];
-  const ensureDir = () => mkdir(join(homedir(), '.claude', 'cc-deck'), { recursive: true });
-  if (config.sessionMcp && config.mcpTokenReadonly) {
-    const cfg = { mcpServers: { 'cc-deck': { type: 'http', url: `http://127.0.0.1:${config.port}/mcp`, headers: { Authorization: `Bearer ${config.mcpTokenReadonly}` } } } };
-    try { await ensureDir(); await writeFile(SESSION_MCP_PATH, JSON.stringify(cfg)); flags += ` --mcp-config ${SESSION_MCP_PATH}`; nudges.push(SESSION_NUDGE); } catch { /* skip cc-deck MCP */ }
-  }
-  if (config.sessionBrowser || browser) {
-    const cfg = { mcpServers: { chrome: { command: 'npx', args: ['chrome-devtools-mcp@latest', '--browser-url', config.browserCdp] } } };
-    try { await ensureDir(); await writeFile(BROWSER_MCP_PATH, JSON.stringify(cfg)); flags += ` --mcp-config ${BROWSER_MCP_PATH}`; if (config.sessionMcp) nudges.push(BROWSER_NUDGE); } catch { /* skip browser */ }
-  }
-  if (nudges.length) {
-    // Single-quote for the shell (send-keys types this into the login shell); escape
-    // any ' as '\'' so an apostrophe can't break out of the quoting.
-    const nudge = nudges.join(' ').replace(/'/g, "'\\''");
-    flags += ` --append-system-prompt '${nudge}'`;
-  }
-  return flags;
-}
+import { getProvider, DEFAULT_KIND } from './providers/index.js';
 
 const exec = promisify(execFile);
 
@@ -136,6 +105,7 @@ const FIELDS = [
   '#{pane_current_command}',
   '#{@ccdeck_resume}',
   '#{pane_pid}',
+  '#{@ccdeck_kind}',
 ].join('\t');
 
 export async function listSessions() {
@@ -143,7 +113,7 @@ export async function listSessions() {
   const sessions = [];
   for (const line of out.split('\n')) {
     if (!line.trim()) continue;
-    const [name, attached, activity, created, title, dir, paneCmd, resume, panePid] = line.split('\t');
+    const [name, attached, activity, created, title, dir, paneCmd, resume, panePid, kind] = line.split('\t');
     if (!isManagedName(name)) continue;
     sessions.push({
       name,
@@ -156,13 +126,13 @@ export async function listSessions() {
       paneCommand: paneCmd || '',
       resumedFrom: resume || null,
       panePid: Number(panePid) || null,
+      kind: kind || DEFAULT_KIND, // which CLI (claude|codex); older sessions default to claude
     });
   }
   sessions.sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0));
   return sessions;
 }
 
-const RESUME_ID_RE = /^[0-9a-fA-F-]{36}$/;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Some setup can only happen once Claude has booted to its prompt: `/rename`
@@ -209,46 +179,32 @@ export async function sendText(name, text) {
   await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
 }
 
-export async function createSession({ dir, title, resume, fork, seed, browser }) {
+export async function createSession({ dir, title, resume, fork, seed, browser, kind }) {
   const abs = await resolveAllowedDir(dir);
+  const provider = getProvider(kind); // claude | codex | … (defaults to claude)
   const id = `${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
   const name = `${config.prefix}${id}`;
   const cleanTitle = (title || '').toString().slice(0, 120).replace(/[\r\n\t]/g, ' ').trim();
 
-  // Build the launch command; optionally resume a prior Claude session by id.
-  // For a fresh session with a custom title, pass it to Claude as --name so the
-  // Claude session itself is named (not just cc-deck's label).
-  let launch = config.launchCommand;
-  if (resume) {
-    if (!RESUME_ID_RE.test(resume)) {
-      const e = new Error('Invalid resume session id');
-      e.statusCode = 400;
-      throw e;
-    }
-    launch = `${config.launchCommand} --resume ${resume}`;
-    // Fork = branch into a NEW session id that copies the prior history, leaving
-    // the original untouched (vs. plain resume, which appends to the original).
-    if (fork) launch += ' --fork-session';
-  }
+  // The provider builds the CLI-specific launch command: the binary + resume/fork
+  // args + its permission/approval flag. It validates the resume id and throws 400
+  // on a bad one.
+  let launch = provider.command() + provider.launchArgs({ resume, fork });
 
   await tmux(['new-session', '-d', '-s', name, '-c', abs, '-x', '220', '-y', '50']);
   await initServer(); // server is up now — make sure it won't exit when emptied
   await tmux(['set-option', '-t', name, '@ccdeck_title', cleanTitle || abs.split('/').pop() || name]);
   await tmux(['set-option', '-t', name, '@ccdeck_dir', abs]);
+  await tmux(['set-option', '-t', name, '@ccdeck_kind', provider.kind]); // which CLI this session runs
   // Tag the source id only for a plain resume (so we can dedup/Open it). A fork
   // is a new, independent session — matched by PID — so we don't tag it as a
   // resume of the original (that would hijack the original's Open/Resume logic).
   if (resume && !fork) await tmux(['set-option', '-t', name, '@ccdeck_resume', resume]);
   await setMouse(name, true);
   await styleSession(name);
-  // Launch the CLI inside the login shell so the session survives if claude exits.
-  // Prefix COLORTERM=truecolor so Claude emits 24-bit color (diffs, highlights).
-  // Start in a configured permission mode (e.g. "auto"). Validated against Claude's
-  // known modes so a stray env value can't break the launch line.
-  if (/^(acceptEdits|auto|plan|bypassPermissions|manual|default)$/.test(config.permissionMode)) {
-    launch += ` --permission-mode ${config.permissionMode}`;
-  }
-  launch += await sessionFlags(browser); // cc-deck MCP + optional shared browser + combined nudge
+  // Launch the CLI inside the login shell so the session survives if it exits.
+  // Prefix COLORTERM=truecolor so it emits 24-bit color (diffs, highlights).
+  launch += await provider.wireFlags({ browser }); // cc-deck MCP + shared browser (Claude); no-op for Codex
   await tmux(['send-keys', '-t', name, `COLORTERM=truecolor ${launch}`, 'Enter']);
   // Once Claude has booted: name a fresh titled session (so the name shows in
   // Claude and `claude --resume`) and/or type a seed prompt. Background.

@@ -32,8 +32,14 @@ export const config = {
   // Dedicated tmux socket so cc-deck's sessions live on their own server,
   // isolated from your personal `tmux` (and protected with exit-empty off).
   tmuxSocket: process.env.CCDECK_TMUX_SOCKET || 'ccdeck',
-  // Command launched inside each new session.
+  // Command launched inside each new session (the Claude CLI provider).
   launchCommand: process.env.CCDECK_LAUNCH || 'claude',
+  // The Codex CLI provider (cc-deck is multi-CLI via src/providers/). Set to a
+  // custom binary/path if `codex` isn't on PATH; per-session choice is in the UI.
+  codexCommand: process.env.CCDECK_CODEX_LAUNCH || 'codex',
+  // Codex approval policy new Codex sessions start in (its "permission mode"):
+  // e.g. untrusted | on-failure | on-request | never. Empty = Codex's own default.
+  codexApproval: (process.env.CCDECK_CODEX_APPROVAL || '').trim(),
   // Permission mode each new session starts in (Claude's --permission-mode):
   // acceptEdits | auto | plan | bypassPermissions | manual | default. Empty =
   // Claude's own default. The user can still cycle with shift+tab in-session.

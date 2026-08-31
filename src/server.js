@@ -61,6 +61,7 @@ async function enrichedSessions() {
 }
 import { getBurn } from './burn.js';
 import { listRemoteSessions } from './remote.js';
+import { providerList } from './providers/index.js';
 import { getUsage } from './usage.js';
 import { getPricing } from './pricing.js';
 
@@ -164,7 +165,7 @@ app.get('/api/remote/sessions', async () => {
 });
 
 app.post('/api/sessions', async (req, reply) => {
-  const { dir, title, resume, fork, browser } = req.body || {};
+  const { dir, title, resume, fork, browser, kind } = req.body || {};
   if (!dir) return reply.code(400).send({ error: 'dir is required' });
   try {
     // Don't launch a duplicate: if the session being resumed is already running,
@@ -180,7 +181,7 @@ app.post('/api/sessions', async (req, reply) => {
     // Resuming a session? Seed it with any external notes saved from outside chats
     // so it picks up what happened elsewhere (consumed so it won't re-inject).
     const seed = resume && !fork ? await consumeNotesSeed(resume) : undefined;
-    const name = await createSession({ dir, title, resume, fork, seed, browser });
+    const name = await createSession({ dir, title, resume, fork, seed, browser, kind });
     return { name };
   } catch (err) {
     return reply.code(err.statusCode || 500).send({ error: err.message });
@@ -554,7 +555,7 @@ app.post('/api/fs', async (req, reply) => {
 });
 
 app.get('/api/config', async () => {
-  return { roots: config.roots, launchCommand: config.launchCommand, home: process.env.HOME || '' };
+  return { roots: config.roots, launchCommand: config.launchCommand, home: process.env.HOME || '', providers: providerList() };
 });
 
 // Build version = the client bundle's mtime. The UI polls this and offers a

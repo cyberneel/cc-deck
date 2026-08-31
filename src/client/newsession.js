@@ -9,11 +9,17 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 
 export function openNewModal({ api, cfg = {}, onCreated }) {
   let currentPath = (cfg.roots && cfg.roots[0]) || cfg.home || '/';
+  const providers = (cfg.providers && cfg.providers.length) ? cfg.providers : [{ kind: 'claude', label: 'Claude' }];
+  // CLI picker only appears when more than one provider is available.
+  const cliField = providers.length > 1
+    ? `<div class="field"><label>CLI</label><select id="cli-mode">${providers.map((p) => `<option value="${esc(p.kind)}">${esc(p.label)}</option>`).join('')}</select></div>`
+    : '';
   const bg = document.createElement('div');
   bg.className = 'modal-bg';
   bg.innerHTML = `
     <div class="modal">
-      <h2>New Claude session</h2>
+      <h2>New session</h2>
+      ${cliField}
       <div class="field">
         <label>Directory</label>
         <input id="dir-input" value="${esc(currentPath)}" spellcheck="false" />
@@ -94,6 +100,7 @@ export function openNewModal({ api, cfg = {}, onCreated }) {
     try {
       const title = bg.querySelector('#title-input').value;
       const browser = bg.querySelector('#browser-mode').value === '1';
+      const kind = bg.querySelector('#cli-mode')?.value || 'claude';
       let name;
       if (seed) {
         btn.textContent = seed.scope === 'summary' ? 'Generating context…' : 'Preparing…';
@@ -102,7 +109,7 @@ export function openNewModal({ api, cfg = {}, onCreated }) {
           body: JSON.stringify({ sources: seed.sources, scope: seed.scope, dest: 'new', targetDir: dirInput.value, title, browser }),
         }));
       } else {
-        ({ name } = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ dir: dirInput.value, title, browser }) }));
+        ({ name } = await api('/api/sessions', { method: 'POST', body: JSON.stringify({ dir: dirInput.value, title, browser, kind }) }));
       }
       close();
       onCreated(name);
