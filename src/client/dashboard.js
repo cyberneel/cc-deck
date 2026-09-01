@@ -7,6 +7,7 @@ import { renderFiles } from './files.js';
 import { toast } from './upload.js';
 import { openNotes } from './notes.js';
 import { fetchBurn, renderBurnPill, openBurnPopover } from './burnpill.js';
+import { openHelp, maybeShowIntro } from './help.js';
 
 // Inject shared styles.
 const styleEl = document.createElement('style');
@@ -193,12 +194,14 @@ function render() {
         <button data-tab="history" class="${tab === 'history' ? 'active' : ''}">History</button>
         <button data-tab="usage" class="${tab === 'usage' ? 'active' : ''}">Usage</button>
         <button data-tab="files" class="${tab === 'files' ? 'active' : ''}">Files</button>
+        <button class="tabs-help" id="tabs-help" title="Help">❔ Help</button>
       </div>
       <div class="spacer"></div>
       <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
       <button class="primary" id="new-btn" title="New session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New session'}</button>
       <button id="snapshot-btn" class="icon" title="Snapshot sessions (restore after a reboot)">💾<span class="snap-age" id="snap-age"></span></button>
       <button id="storage-btn" class="icon" title="Storage &amp; cleanup">🗄</button>
+      <button id="help-btn" class="icon help-btn" title="Help">?</button>
       <button id="reload-btn" class="icon" title="Reload app">↻</button>
       <button id="logout-btn" title="Log out">⏻</button>
     </div>
@@ -220,7 +223,7 @@ function render() {
       <div id="cards"></div>
     </div>`;
 
-  app.querySelectorAll('.tabs button').forEach((b) =>
+  app.querySelectorAll('.tabs button[data-tab]').forEach((b) =>
     b.addEventListener('click', () => {
       tab = b.dataset.tab;
       localStorage.setItem('ccdeck.tab', tab);
@@ -284,6 +287,8 @@ function render() {
     } catch (err) { toast('Snapshot failed: ' + err.message); }
     finally { b.disabled = false; }
   });
+  document.getElementById('help-btn').addEventListener('click', openHelp);
+  document.getElementById('tabs-help').addEventListener('click', openHelp); // mobile hamburger entry
   document.getElementById('reload-btn').addEventListener('click', () => applyUpdate(pendingWorker));
   document.getElementById('logout-btn').addEventListener('click', async () => {
     await api('/api/logout', { method: 'POST' });
@@ -778,6 +783,7 @@ function openNewModal() {
   loadBurn(); // top-bar ccburn pill (all tabs)
   loadSnap(); // last-snapshot age indicator
   checkVersion();
+  maybeShowIntro(); // first-run walkthrough (once)
   setInterval(refresh, 4000);
   setInterval(loadBurn, 60_000);
   setInterval(loadSnap, 60_000);
