@@ -194,7 +194,6 @@ function render() {
         <button data-tab="history" class="${tab === 'history' ? 'active' : ''}">History</button>
         <button data-tab="usage" class="${tab === 'usage' ? 'active' : ''}">Usage</button>
         <button data-tab="files" class="${tab === 'files' ? 'active' : ''}">Files</button>
-        <button class="tabs-help" id="tabs-help" title="Help">❔ Help</button>
       </div>
       <div class="spacer"></div>
       <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
@@ -204,6 +203,14 @@ function render() {
       <button id="help-btn" class="icon help-btn" title="Help">?</button>
       <button id="reload-btn" class="icon" title="Reload app">↻</button>
       <button id="logout-btn" title="Log out">⏻</button>
+      <button id="opts-btn" class="icon opts-btn" title="Options" aria-haspopup="true" aria-expanded="false">⋯</button>
+      <div class="opts-menu" id="opts-menu">
+        <button data-target="help-btn">❔&nbsp; Help</button>
+        <button data-target="snapshot-btn">💾&nbsp; Snapshot sessions</button>
+        <button data-target="storage-btn">🗄&nbsp; Storage &amp; cleanup</button>
+        <button data-target="reload-btn">↻&nbsp; Reload app</button>
+        <button data-target="logout-btn">⏻&nbsp; Log out</button>
+      </div>
     </div>
     <div class="wrap">
       <div class="stats" id="stats" style="${tab === 'usage' || tab === 'files' ? 'display:none' : ''}"></div>
@@ -288,8 +295,22 @@ function render() {
     finally { b.disabled = false; }
   });
   document.getElementById('help-btn').addEventListener('click', openHelp);
-  document.getElementById('tabs-help').addEventListener('click', openHelp); // mobile hamburger entry
   document.getElementById('reload-btn').addEventListener('click', () => applyUpdate(pendingWorker));
+  // Mobile "⋯" options menu: its items just trigger the (mobile-hidden) top-bar
+  // buttons, so there's one set of handlers. Toggle + close on outside tap.
+  const optsBtn = document.getElementById('opts-btn');
+  const optsMenu = document.getElementById('opts-menu');
+  optsMenu.querySelectorAll('button[data-target]').forEach((b) =>
+    b.addEventListener('click', () => { optsMenu.classList.remove('open'); document.getElementById(b.dataset.target)?.click(); }));
+  optsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = optsMenu.classList.toggle('open');
+    optsBtn.setAttribute('aria-expanded', String(open));
+    if (open) {
+      const close = (ev) => { if (optsMenu.contains(ev.target) || ev.target === optsBtn) return; optsMenu.classList.remove('open'); optsBtn.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', close); };
+      setTimeout(() => document.addEventListener('click', close), 0);
+    }
+  });
   document.getElementById('logout-btn').addEventListener('click', async () => {
     await api('/api/logout', { method: 'POST' });
     location.href = '/login.html';

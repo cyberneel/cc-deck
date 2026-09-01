@@ -250,8 +250,18 @@ select:focus { outline: none; border-color: var(--accent); }
 .error { color: #ff8d85; font-size: 13px; margin-top: 8px; min-height: 16px; }
 
 /* Help + first-run walkthrough */
-.help-btn { display: inline-flex; } /* desktop "?"; hidden on mobile (dropdown carries it) */
-.tabs-help { display: none; }       /* only appears inside the mobile hamburger dropdown */
+.help-btn { display: inline-flex; } /* desktop "?"; on mobile it lives in the ⋯ options menu */
+.opts-btn { display: none; }        /* mobile-only overflow menu (see media query) */
+.opts-menu {
+  position: absolute; top: calc(100% - 4px); right: 12px; z-index: 30;
+  flex-direction: column; align-items: stretch; gap: 2px;
+  min-width: 210px; padding: 6px; display: none;
+  background: var(--bg-elev); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+.opts-menu.open { display: flex; }
+.opts-menu button { width: 100%; text-align: left; white-space: nowrap; padding: 11px 12px; background: none; border: 0; color: var(--text); border-radius: 8px; font-size: 14px; cursor: pointer; }
+.opts-menu button:hover { background: var(--bg-card); }
 .help-modal { width: min(760px, 94vw); max-height: 88vh; display: flex; flex-direction: column; padding: 0; }
 .help-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 10px; }
 .help-head h2 { margin: 0; }
@@ -273,8 +283,10 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--bg-card); bor
 .intro-steps li { font-size: 13px; line-height: 1.5; margin: 6px 0; color: var(--text-dim); }
 .intro-steps b { color: var(--text); }
 @media (max-width: 700px) {
-  .help-btn { display: none; }
-  .tabs-help { display: block; width: 100%; text-align: left; white-space: nowrap; padding: 10px 12px; color: var(--accent); }
+  /* On mobile, secondary actions collapse into the ⋯ options menu so the tight
+     portrait top bar stays uncluttered (☰ · burn · + New · ⋯). */
+  .help-btn, #snapshot-btn, #storage-btn, #reload-btn, #logout-btn { display: none; }
+  .opts-btn { display: inline-flex; }
 }
 
 /* directory browser */
