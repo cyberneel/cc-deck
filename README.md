@@ -177,6 +177,29 @@ docker compose exec cc-deck codex login
 
 To build the image yourself instead of via compose: `docker build -t cc-deck .`
 
+### Filesystem & isolation
+
+The container keeps its own state separate from the host — three layers:
+
+| Layer | Lives in | Host relationship |
+|---|---|---|
+| App + Node + the `claude`/`codex` binaries | the image | **isolated** (container FS) |
+| **Projects** — `./workspace` → `/workspace` (`CCDECK_ROOTS`) | a host directory (bind mount) | **shared** — the one deliberate shared surface, so sessions edit real code |
+| **State** — CLI auth (`~/.claude`, `~/.codex`), notes, restore snapshots, caches | the `ccdeck-home` named volume | **separate** — Docker-managed, not a host path you use directly |
+
+- **Bounded access**: every path cc-deck touches (a session's cwd, the Files tab, uploads) is
+  validated to be under `CCDECK_ROOTS` — so via the app it only sees `/workspace` and its own home
+  volume, never the wider container or host filesystem.
+- **Multiple instances**: each container has its own image FS, its own `ccdeck-home` volume, and its
+  own tmux server + sessions — run several with distinct volumes/roots/ports and they don't collide
+  on state (they'd only overlap if you mount the same `/workspace` into more than one).
+- **Disk is the host's** (no separate quota): a container shares the host's disk, so a runaway
+  session can fill it. For hard isolation, put the volume on its own disk or set a Docker
+  volume/storage size limit.
+- **Permissions (Linux hosts)**: cc-deck runs as the non-root `node` user (uid 1000), so
+  bind-mounted files must be read/writable by uid 1000. Docker Desktop (macOS/Windows) maps this
+  for you; on a Linux host you may need to `chown` the mounted dir to match.
+
 ## Configuration (`.env`)
 
 Only the first two are required; everything else has a sensible default. See `.env.example`
