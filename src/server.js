@@ -103,6 +103,7 @@ await app.register(fastifyStatic, {
 // Paths reachable without auth (login assets + PWA manifest/icons the browser
 // fetches before login).
 const PUBLIC_PATHS = new Set([
+  '/healthz', // unauthenticated liveness (hosted rollout health poll)
   '/login.html', '/login.css', '/api/login', '/favicon.ico', '/sw.js',
   '/manifest.webmanifest', '/icon-180.png', '/icon-192.png', '/icon-512.png',
   '/mcp', // MCP endpoint does its own bearer/OAuth auth (below)
@@ -129,6 +130,9 @@ app.addHook('onRequest', async (req, reply) => {
   }
   return reply.redirect('/login.html');
 });
+
+// Liveness for the hosted rollout health poll (public — 200 = the server is serving).
+app.get('/healthz', async () => ({ ok: true }));
 
 // ---- Auth routes ----
 app.post('/api/login', async (req, reply) => {
