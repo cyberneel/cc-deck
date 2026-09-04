@@ -1,7 +1,8 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve, sep, basename, relative } from 'node:path';
 import { statSync, createWriteStream, createReadStream } from 'node:fs';
-import { mkdir, stat, readdir, rm, access } from 'node:fs/promises';
+import { mkdir, stat, readdir, rm, access, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
@@ -107,6 +108,7 @@ const PUBLIC_PATHS = new Set([
   '/login.html', '/login.css', '/api/login', '/favicon.ico', '/sw.js',
   '/manifest.webmanifest', '/icon-180.png', '/icon-192.png', '/icon-512.png',
   '/mcp', // MCP endpoint does its own bearer/OAuth auth (below)
+  '/api/creds/import', // AI-cred sync from the tenant's Friday — MCP-token bearer auth (below)
   // OAuth endpoints for claude.ai connectors — reachable without a cc-deck cookie.
   '/.well-known/oauth-protected-resource', '/.well-known/oauth-authorization-server',
   '/.well-known/oauth-protected-resource/mcp',
@@ -133,6 +135,28 @@ app.addHook('onRequest', async (req, reply) => {
 
 // Liveness for the hosted rollout health poll (public — 200 = the server is serving).
 app.get('/healthz', async () => ({ ok: true }));
+
+// AI-cred sync: the tenant's Friday (same account, MCP-token authed) mirrors a just-connected
+// engine's creds here so cc-deck's claude/codex/agy sessions use the SAME account — "Connect
+// AI" once in Friday covers cc-deck too. Writes HOME-relative files (0600). Static-bearer only.
+app.post('/api/creds/import', async (req, reply) => {
+  const h = req.headers.authorization || '';
+  const tok = h.startsWith('Bearer ') ? h.slice(7) : '';
+  if (!config.mcpToken || tok !== config.mcpToken) return reply.code(401).send({ error: 'unauthorized' });
+  const files = req.body?.files;
+  if (!files || typeof files !== 'object') return reply.code(400).send({ error: 'no files' });
+  const home = process.env.HOME || homedir();
+  let written = 0;
+  for (const [rel, b64] of Object.entries(files)) {
+    // rel is HOME-relative (e.g. ".claude/.credentials.json"); reject traversal / absolute.
+    if (typeof rel !== 'string' || rel.includes('..') || rel.startsWith('/') || typeof b64 !== 'string') continue;
+    const dest = join(home, rel);
+    await mkdir(dirname(dest), { recursive: true });
+    await writeFile(dest, Buffer.from(b64, 'base64'), { mode: 0o600 });
+    written++;
+  }
+  return { ok: true, written };
+});
 
 // ---- Auth routes ----
 app.post('/api/login', async (req, reply) => {
