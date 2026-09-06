@@ -11,7 +11,6 @@
 services:
   cc-deck:
     build: .
-    # Or use a published image instead of building:  image: ghcr.io/cyberneel/cc-deck:latest
     restart: unless-stopped
     # Host-only by default. Drop the 127.0.0.1 prefix only behind your own auth layer.
     ports:

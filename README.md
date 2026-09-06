@@ -125,7 +125,7 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
 ## Quick start
 
 ```bash
-git clone <your-fork-url> cc-deck && cd cc-deck
+git clone https://github.com/cyberneel/cc-deck && cd cc-deck
 ./setup.sh            # checks deps, installs, builds, creates .env, optional service
 npm start             # if you didn't install the service — listens on 127.0.0.1:8787
 ```
