@@ -19,6 +19,10 @@ export const claude = {
   label: 'Claude',
   command: () => config.launchCommand,
   resumeIdRe: RESUME_ID_RE,
+  // The "trust this folder?" gate Claude shows for an unfamiliar directory. `re`
+  // detects it; `yes` matches the "Yes, I trust" menu line (its position/numbering
+  // varies by version — often "No" is even the default — so we navigate to it).
+  trust: { re: /do you trust|created or one you trust|trust (this|the) (folder|files|project|directory)|yes, i trust this folder/i, yes: /\byes\b/i },
 
   // Post-command launch args: resume/fork by id + the configured permission mode.
   launchArgs({ resume, fork }) {

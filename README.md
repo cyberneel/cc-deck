@@ -216,6 +216,7 @@ for the full annotated list.
 | `CCDECK_LAUNCH` | `claude` | Command for the **Claude** CLI provider. |
 | `CCDECK_CODEX_LAUNCH` | `codex` | Command for the **Codex** CLI provider (cc-deck is multi-CLI; see [Multiple CLIs](#multiple-clis-claude-and-codex)). |
 | `CCDECK_CODEX_APPROVAL` | — | Default Codex approval policy new Codex sessions start in (its "permission mode"). Empty = Codex default. |
+| `CCDECK_AUTO_TRUST` | on | Auto-accept a CLI's "trust this folder?" prompt on launch (the dir is under `CCDECK_ROOTS`). `off` to answer it yourself. |
 | `CCDECK_PERMISSION_MODE` | — | Permission mode new sessions start in (`acceptEdits`/`auto`/`plan`/…). Empty = Claude's default. |
 | `CCDECK_REMOTE_HOSTS` | — | Hosts whose tmux sessions to list+attach over SSH (see [Remote sessions](#remote-sessions-on-other-hosts)). |
 | `CCDECK_SESSION_BROWSER` | off | `on` auto-wires every session with the shared logged-in browser + a coordination nudge (lock registry). |

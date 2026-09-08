@@ -40,6 +40,11 @@ export const config = {
   // Codex approval policy new Codex sessions start in (its "permission mode"):
   // e.g. untrusted | on-failure | on-request | never. Empty = Codex's own default.
   codexApproval: (process.env.CCDECK_CODEX_APPROVAL || '').trim(),
+  // Auto-accept a CLI's "trust this folder?" prompt on launch. The directory is
+  // operator-chosen (under CCDECK_ROOTS), so this is safe by default and stops
+  // sessions from stalling/closing on the trust gate. Set CCDECK_AUTO_TRUST=off to
+  // leave the prompt for the user to answer.
+  autoTrust: !/^(0|off|false|no)$/i.test(process.env.CCDECK_AUTO_TRUST || ''),
   // Permission mode each new session starts in (Claude's --permission-mode):
   // acceptEdits | auto | plan | bypassPermissions | manual | default. Empty =
   // Claude's own default. The user can still cycle with shift+tab in-session.

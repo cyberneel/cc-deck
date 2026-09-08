@@ -15,6 +15,9 @@ export const codex = {
   label: 'Codex',
   command: () => config.codexCommand,
   resumeIdRe: UUID_RE,
+  // Codex's "Do you trust the contents of this directory?" gate; `yes` matches its
+  // "Yes, continue" menu line (navigated to, so ordering changes don't break it).
+  trust: { re: /do you trust|trust the contents of this directory/i, yes: /\byes\b/i },
 
   launchArgs({ resume, fork }) {
     let args = '';
