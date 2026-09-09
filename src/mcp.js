@@ -15,11 +15,40 @@ import { createSession, sendText, listSessions } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
 import { listTabs, claimTab, releaseTab } from './browser.js';
 
-// Find a RUNNING session by any id in its lineage (live id or resumedFrom).
-async function findLiveSession(id) {
-  const sessions = await listSessions();
+// Callers (Friday, other agents) naturally refer to a session by the human TITLE
+// they see, not its UUID — so these tools accept either. Resolve leniently: a valid
+// id passes through; otherwise match a session TITLE (unique, case-insensitive:
+// exact first, else a unique substring). Ambiguous/no match returns null so the
+// caller gets one actionable error instead of looping on a hard reject.
+
+// RUNNING sessions with live status attached (best-effort).
+async function liveSessions() {
+  const sessions = await listSessions().catch(() => []);
   try { matchAgents(sessions, await getAgents()); } catch { /* */ }
-  return sessions.find((s) => s.liveSessionId === id || s.resumedFrom === id);
+  return sessions;
+}
+// Unique title match in `arr`, or null if zero / more than one.
+function pickByTitle(arr, getTitle, q) {
+  const lc = String(q || '').trim().toLowerCase();
+  if (!lc) return null;
+  const exact = arr.filter((x) => (getTitle(x) || '').toLowerCase() === lc);
+  const cands = exact.length ? exact : arr.filter((x) => (getTitle(x) || '').toLowerCase().includes(lc));
+  return cands.length === 1 ? cands[0] : null;
+}
+// "title=id" list of running sessions — for actionable error messages.
+function liveHint(sessions) {
+  return sessions.length ? sessions.map((s) => `"${s.title || s.name}"=${s.liveSessionId || s.resumedFrom || '(no id)'}`).join(', ') : 'none running';
+}
+// Resolve an id-or-title to a transcript session id (LIVE sessions first, then
+// history). Used by the read/note tools, which operate on transcripts (live or past).
+async function resolveTranscriptId(arg) {
+  const val = String(arg || '').trim();
+  if (isSessionId(val)) return val;
+  const live = pickByTitle(await liveSessions(), (x) => x.title, val);
+  if (live && (live.liveSessionId || live.resumedFrom)) return live.liveSessionId || live.resumedFrom;
+  const hist = (await listHistory().catch(() => ({ sessions: [] }))).sessions || [];
+  const h = pickByTitle(hist, (x) => x.title, val);
+  return h ? h.sessionId : null;
 }
 
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
@@ -167,13 +196,14 @@ export function createMcpServer({ sessionControl = false } = {}) {
     title: 'Get context from a cc-deck session',
     description: "Fetch the content of a specific past session so you can use it as context. format 'summary' returns a concise AI briefing (goal, decisions, current state, files, next steps); format 'transcript' returns the raw conversation (truncated).",
     inputSchema: {
-      session_id: z.string().describe('The sessionId from search_sessions / list_recent_sessions.'),
+      session_id: z.string().describe("A sessionId (from search_sessions / list_recent_sessions) OR the session's title."),
       format: z.enum(['summary', 'transcript']).optional().describe("'summary' (default) or 'transcript'."),
       max_chars: z.number().int().min(2000).max(120000).optional().describe('For transcript format, cap on characters (default 40000).'),
     },
   }, async ({ session_id, format, max_chars }) => {
-    if (!isSessionId(session_id)) return text('Invalid session_id.');
-    try { return text(await getContext(session_id, format || 'summary', max_chars || 40000)); }
+    const id = await resolveTranscriptId(session_id);
+    if (!id) return text(`No session matches "${session_id}". Pass a sessionId from search_sessions / list_recent_sessions, or an exact session title.`);
+    try { return text(await getContext(id, format || 'summary', max_chars || 40000)); }
     catch (e) { return text(`Could not load session: ${e.message}`); }
   });
 
@@ -184,12 +214,13 @@ export function createMcpServer({ sessionControl = false } = {}) {
       'IMPORTANT: Only call this AFTER explicitly asking the user whether they want a summary saved back to that session, and confirming which session_id it should attach to (from a prior search_sessions / get_session_context result). ' +
       'The summary should capture decisions made, conclusions reached, and any action items relevant to that session\'s work.',
     inputSchema: {
-      session_id: z.string().describe('The cc-deck sessionId this summary should attach to (from search_sessions / get_session_context).'),
+      session_id: z.string().describe('The cc-deck sessionId this summary attaches to (from search_sessions / get_session_context) — or the session title.'),
       summary: z.string().min(1).max(8000).describe('A concise summary of the outcomes/decisions/action-items from this conversation, written for the other session to pick up.'),
     },
   }, async ({ session_id, summary }) => {
-    if (!isSessionId(session_id)) return text('Invalid session_id.');
-    try { await addNote(session_id, summary); }
+    const id = await resolveTranscriptId(session_id);
+    if (!id) return text(`No session matches "${session_id}". Pass a sessionId (from search_sessions / get_session_context) or an exact session title.`);
+    try { await addNote(id, summary); }
     catch (e) { return text(`Could not save: ${e.message}`); }
     return text('Saved. This summary will surface in that cc-deck session the next time the user opens or resumes it.');
   });
@@ -283,13 +314,16 @@ export function createMcpServer({ sessionControl = false } = {}) {
       title: 'Send input to a running cc-deck session',
       description: 'Type a line into an already-running cc-deck session (a live nudge, submitted with Enter). The session must be active — resume it in cc-deck first if not.',
       inputSchema: {
-        session_id: z.string().describe('A Claude session id (as used by list_recent_sessions / get_session_context).'),
+        session_id: z.string().describe("A Claude session id OR the session's title (as shown in cc-deck) — the session must be live."),
         text: z.string().min(1).describe('The text to send; it is submitted with Enter.'),
       },
     }, async ({ session_id, text: line }) => {
-      if (!isSessionId(session_id)) return text('ERROR: invalid session_id.');
-      const s = await findLiveSession(session_id);
-      if (!s) return text('ERROR: session not active — resume it in cc-deck first.');
+      const sessions = await liveSessions();
+      const val = String(session_id || '').trim();
+      const s = isSessionId(val)
+        ? sessions.find((x) => x.liveSessionId === val || x.resumedFrom === val)
+        : pickByTitle(sessions, (x) => x.title, val);
+      if (!s) return text(`ERROR: no live session matches "${session_id}". Live now: ${liveHint(sessions)}. Pass one of those ids or an exact title (resume a past session in cc-deck first if it isn't listed).`);
       try { await sendText(s.name, line); return text(redact(`Sent to "${s.title || s.name}".`)); }
       catch (e) { return text(`ERROR: could not send — ${e.message}`); }
     });
