@@ -170,7 +170,7 @@ docker compose exec cc-deck codex login
   container is up; on restart, cc-deck relaunches them from its snapshot.
 - **Exposure**: the port maps to `127.0.0.1` only. Put it behind Tailscale/Cloudflare (below) for
   remote access — don't drop the `127.0.0.1` prefix without an auth layer.
-- **Host-specific features off by default**: the [shared browser](#multiple-clis-claude-and-codex)
+- **Host-specific features off by default**: the [shared browser](#multiple-clis)
   (CDP) and [remote SSH sessions](#remote-sessions-on-other-hosts) reach host resources, so they
   need extra wiring in a container — the core (managing Claude/Codex sessions on your mounted code)
   works out of the box.
@@ -214,8 +214,10 @@ for the full annotated list.
 | `CCDECK_ROOTS` | `$HOME` | Colon-separated dirs sessions may launch/browse under. |
 | `CCDECK_EXCLUDE_DIRS` | — | Colon-separated dirs to hide from the History tab (e.g. where another app runs `claude -p` headlessly). |
 | `CCDECK_LAUNCH` | `claude` | Command for the **Claude** CLI provider. |
-| `CCDECK_CODEX_LAUNCH` | `codex` | Command for the **Codex** CLI provider (cc-deck is multi-CLI; see [Multiple CLIs](#multiple-clis-claude-and-codex)). |
+| `CCDECK_CODEX_LAUNCH` | `codex` | Command for the **Codex** CLI provider (cc-deck is multi-CLI; see [Multiple CLIs](#multiple-clis)). |
 | `CCDECK_CODEX_APPROVAL` | — | Default Codex approval policy new Codex sessions start in (its "permission mode"). Empty = Codex default. |
+| `CCDECK_AGY_LAUNCH` | `agy` | Command for the **agy** (Antigravity) CLI provider. |
+| `CCDECK_AGY_MODE` | — | agy execution mode new agy sessions start in (`accept-edits` / `plan`). Empty = agy default. |
 | `CCDECK_AUTO_TRUST` | on | Auto-accept a CLI's "trust this folder?" prompt on launch (the dir is under `CCDECK_ROOTS`). `off` to answer it yourself. |
 | `CCDECK_PERMISSION_MODE` | — | Permission mode new sessions start in (`acceptEdits`/`auto`/`plan`/…). Empty = Claude's default. |
 | `CCDECK_REMOTE_HOSTS` | — | Hosts whose tmux sessions to list+attach over SSH (see [Remote sessions](#remote-sessions-on-other-hosts)). |
@@ -299,27 +301,31 @@ polling), and it's best-effort: if the webhook is down the event is dropped and 
 backstop. Built for [Friday](https://github.com/cyberneel/friday)'s Reach Manager, but it's just a
 webhook — empty url = disabled (cc-deck runs fully standalone).
 
-## Multiple CLIs (Claude and Codex)
+<a id="multiple-clis"></a>
+## Multiple CLIs (Claude, Codex, agy)
 
 cc-deck is **CLI-agnostic**: each session records which CLI it runs, and a small provider
 (`src/providers/`) owns everything tool-specific. The New Session dialog has a **CLI** picker
 (shown when more than one provider is available); sessions are badged by CLI in the sidebar and
-grid. Adding another CLI is one provider file.
+grid. Adding another CLI is one provider file, and the CLI's "trust this folder?" prompt is
+auto-accepted on launch (see [CCDECK_AUTO_TRUST](#configuration-env)).
 
 - **Claude** (`claude`) — the default. Full feature set: live status dots, History-tab resume/fork,
   usage/ROI, notes/handoff + the shared-browser auto-wire.
-- **Codex** (`codex`) — launches clean (its resume/fork are subcommands, approval via `-a`, MCP via
-  `~/.codex/config.toml`, so no launch flags). A Codex session gets the **CLI-agnostic** parts:
-  the in-browser terminal, attach, kill, rename, snapshot/restore, and remote — everything you'd
-  drive by hand.
+- **Codex** (`codex`) — resume/fork are subcommands, approval via `-a`, MCP via `~/.codex/config.toml`.
+- **agy** (Antigravity, Gemini-backed) — resume via `--conversation <id>`, mode via `--mode
+  accept-edits|plan`, MCP via `agy mcp`.
 
-What's **Claude-only** for now (not cc-deck limitations you can flip — they're gaps in what the
-other CLI exposes): the live busy/idle/waiting **status dot** (Codex has no machine-readable status
-feed — a Codex session just shows live/idle from its process), the **History tab / resume from
-cc-deck** (Codex keeps sessions in an internal store with no scriptable listing — resume a Codex
-session with `codex resume` in a terminal instead), **usage/ROI** (Claude-plan specific), and the
-**notes/handoff + browser auto-wire** (wired via Claude's `--mcp-config`; Codex uses `config.toml`).
-The provider interface leaves room to fill these in per-CLI as the tools expose more.
+Codex and agy launch clean and get the **CLI-agnostic** surface: the in-browser terminal, attach,
+kill, rename (cc-deck label), snapshot/restore, and remote — everything you'd drive by hand.
+
+What's **Claude-only** for now (not cc-deck limits you can flip — they're gaps in what the other
+CLIs expose): the live busy/idle/waiting **status dot** (Codex/agy have no machine-readable status
+feed — those sessions show live/idle from the process), **History-tab resume** (they keep sessions
+in stores with no scriptable listing — resume with `codex resume` / `agy --continue` in a terminal),
+**usage/ROI** (Claude-plan specific), and the **notes/handoff + browser auto-wire** (wired via
+Claude's `--mcp-config`). The provider interface leaves room to fill these in per-CLI as the tools
+expose more.
 
 ## Remote sessions on other hosts
 
@@ -439,7 +445,7 @@ src/auth.js        password check + HMAC-signed cookie / token
 src/oauth.js       single-user OAuth 2.1 AS for MCP connectors (DCR + PKCE, in-memory)
 src/mcp.js         MCP server + tools (search / context / notes / create / send)
 src/tmux.js        list/create/kill/rename/preview — wraps tmux (resume, fork, per-CLI launch)
-src/providers/     per-CLI adapters (claude.js, codex.js) — launch/resume/fork/wire, registry
+src/providers/     per-CLI adapters (claude.js, codex.js, agy.js) — launch/resume/fork/wire, registry
 src/pty.js         websocket ⇄ node-pty(`tmux attach`) bridge
 src/agents.js      parse live Claude state (title / mode / session id) from a pane
 src/history.js     scans ~/.claude/projects for resumable past sessions

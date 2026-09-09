@@ -4,8 +4,9 @@
 // new CLI by dropping in one provider file and registering it here.
 import { claude } from './claude.js';
 import { codex } from './codex.js';
+import { agy } from './agy.js';
 
-const PROVIDERS = { claude, codex };
+const PROVIDERS = { claude, codex, agy };
 
 // Default to Claude so sessions created before `kind` existed keep working.
 export const DEFAULT_KIND = 'claude';

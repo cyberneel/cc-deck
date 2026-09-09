@@ -19,6 +19,7 @@ export const claude = {
   label: 'Claude',
   command: () => config.launchCommand,
   resumeIdRe: RESUME_ID_RE,
+  supportsRename: true, // `/rename` is a Claude slash command (Codex/agy don't have it)
   // The "trust this folder?" gate Claude shows for an unfamiliar directory. `re`
   // detects it; `yes` matches the "Yes, I trust" menu line (its position/numbering
   // varies by version — often "No" is even the default — so we navigate to it).

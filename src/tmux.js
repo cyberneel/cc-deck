@@ -157,8 +157,8 @@ async function scheduleBoot(name, { rename, seed, provider }) {
         // Enter. Robust to option order/numbering — some Claude versions default the
         // cursor to "No, exit", so a fixed keystroke would confirm No and exit.
         const lines = pane.split('\n');
-        const cur = lines.findIndex((l) => /[›❯]/.test(l));    // currently-highlighted row
-        const yes = lines.findIndex((l) => trust.yes.test(l)); // the "Yes" option row
+        const cur = lines.findIndex((l) => /^\s*[>›❯]\s/.test(l)); // highlighted row (❯ / › / >)
+        const yes = lines.findIndex((l) => trust.yes.test(l));     // the "Yes" option row
         if (yes >= 0) {
           const delta = cur >= 0 ? yes - cur : 0;
           const key = delta >= 0 ? 'Down' : 'Up';
@@ -231,7 +231,8 @@ export async function createSession({ dir, title, resume, fork, seed, browser, k
   await tmux(['send-keys', '-t', name, `COLORTERM=truecolor ${launch}`, 'Enter']);
   // Once Claude has booted: name a fresh titled session (so the name shows in
   // Claude and `claude --resume`) and/or type a seed prompt. Background.
-  const doRename = !resume && cleanTitle;
+  // /rename is a Claude slash command — only send it for providers that have it.
+  const doRename = !resume && cleanTitle && provider.supportsRename;
   // Always run: even with no rename/seed it clears the CLI's trust gate (auto-accept)
   // so a clean session doesn't stall or close on it.
   scheduleBoot(name, { rename: doRename ? cleanTitle : null, seed, provider }).catch(() => {});

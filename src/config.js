@@ -40,6 +40,10 @@ export const config = {
   // Codex approval policy new Codex sessions start in (its "permission mode"):
   // e.g. untrusted | on-failure | on-request | never. Empty = Codex's own default.
   codexApproval: (process.env.CCDECK_CODEX_APPROVAL || '').trim(),
+  // The Antigravity (agy) CLI provider — binary + its execution mode (agy's
+  // "permission mode": accept-edits | plan). Empty mode = agy's own default.
+  agyCommand: process.env.CCDECK_AGY_LAUNCH || 'agy',
+  agyMode: (process.env.CCDECK_AGY_MODE || '').trim(),
   // Auto-accept a CLI's "trust this folder?" prompt on launch. The directory is
   // operator-chosen (under CCDECK_ROOTS), so this is safe by default and stops
   // sessions from stalling/closing on the trust gate. Set CCDECK_AUTO_TRUST=off to
