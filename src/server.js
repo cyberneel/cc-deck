@@ -584,7 +584,7 @@ app.post('/api/fs', async (req, reply) => {
 });
 
 app.get('/api/config', async () => {
-  return { roots: config.roots, launchCommand: config.launchCommand, home: process.env.HOME || '', providers: providerList() };
+  return { roots: config.roots, launchCommand: config.launchCommand, home: process.env.HOME || '', providers: providerList(), account_url: config.accountUrl };
 });
 
 // Build version = the client bundle's mtime. The UI polls this and offers a

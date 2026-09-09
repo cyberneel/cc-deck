@@ -27,6 +27,10 @@ export const config = {
     .map((p) => p.trim())
     .filter(Boolean)
     .map((p) => resolve(p)),
+  // Hosted-tenant account hub. systems' provisioning injects a tokenized
+  // https://systems.cyberneel.com/account?t=… URL only into hosted-tenant VMs;
+  // when set, the UI shows an "Account ↗" link to it. Self-host = unset = hidden.
+  accountUrl: (process.env.ACCOUNT_URL || '').trim(),
   // tmux session name prefix for sessions this app manages.
   prefix: 'ccdeck-',
   // Dedicated tmux socket so cc-deck's sessions live on their own server,

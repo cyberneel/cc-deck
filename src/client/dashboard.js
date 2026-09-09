@@ -202,6 +202,7 @@ function render() {
       <button id="storage-btn" class="icon" title="Storage &amp; cleanup">🗄</button>
       <button id="help-btn" class="icon help-btn" title="Help">?</button>
       <button id="reload-btn" class="icon" title="Reload app">↻</button>
+      ${cfg.account_url ? `<a id="account-link" class="icon" href="${esc(cfg.account_url)}" target="_blank" rel="noopener" title="Account">👤</a>` : ''}
       <button id="logout-btn" title="Log out">⏻</button>
       <button id="opts-btn" class="icon opts-btn" title="Options" aria-haspopup="true" aria-expanded="false">⋯</button>
       <div class="opts-menu" id="opts-menu">
@@ -209,6 +210,7 @@ function render() {
         <button data-target="snapshot-btn">💾&nbsp; Snapshot sessions</button>
         <button data-target="storage-btn">🗄&nbsp; Storage &amp; cleanup</button>
         <button data-target="reload-btn">↻&nbsp; Reload app</button>
+        ${cfg.account_url ? '<button data-target="account-link">👤&nbsp; Account ↗</button>' : ''}
         <button data-target="logout-btn">⏻&nbsp; Log out</button>
       </div>
     </div>
