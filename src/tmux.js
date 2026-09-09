@@ -4,7 +4,7 @@ import { stat, readdir, mkdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import crypto from 'node:crypto';
 import { config } from './config.js';
-import { getProvider, DEFAULT_KIND } from './providers/index.js';
+import { getProvider, providerAvailable, DEFAULT_KIND } from './providers/index.js';
 
 const exec = promisify(execFile);
 
@@ -205,6 +205,13 @@ export async function sendText(name, text) {
 export async function createSession({ dir, title, resume, fork, seed, browser, kind }) {
   const abs = await resolveAllowedDir(dir);
   const provider = getProvider(kind); // claude | codex | … (defaults to claude)
+  // Fail clean if the chosen CLI isn't installed here (e.g. a tenant that never
+  // installed agy) — otherwise the shell just prints "command not found" and the
+  // pane sits as an empty shell.
+  if (!(await providerAvailable(provider.kind))) {
+    const e = new Error(`The ${provider.label} CLI isn't installed on this cc-deck instance.`);
+    e.statusCode = 400; throw e;
+  }
   const id = `${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
   const name = `${config.prefix}${id}`;
   const cleanTitle = (title || '').toString().slice(0, 120).replace(/[\r\n\t]/g, ' ').trim();
