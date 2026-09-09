@@ -53,6 +53,9 @@ async function resolveTranscriptId(arg) {
 
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 const READ_CAP = 1_000_000; // bytes read per transcript when searching
+// Any provider's resume-id shape (Claude/Codex UUID, agy id) — used so a note can
+// be keyed to a Codex/agy session by its raw conversation id, not just a title.
+const ANY_ID_RE = /^[A-Za-z0-9._:-]{8,128}$/;
 
 // Best-effort scrub of likely secrets before transcript text leaves the server.
 export function redact(s) {
@@ -210,7 +213,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
   server.registerTool('save_session_summary', {
     title: 'Save a summary back to a cc-deck session',
     description:
-      "Save a concise summary of THIS conversation's outcomes back into a specific cc-deck (Claude Code) session, so that session becomes aware of what happened here the next time the user opens or resumes it. " +
+      "Save a concise summary of THIS conversation's outcomes back into a specific cc-deck session (any CLI — Claude, Codex, or agy), so that session becomes aware of what happened here the next time the user opens or resumes it. This is the cross-session note channel: it reaches a session even while it is offline. " +
       'IMPORTANT: Only call this AFTER explicitly asking the user whether they want a summary saved back to that session, and confirming which session_id it should attach to (from a prior search_sessions / get_session_context result). ' +
       'The summary should capture decisions made, conclusions reached, and any action items relevant to that session\'s work.',
     inputSchema: {
@@ -218,8 +221,12 @@ export function createMcpServer({ sessionControl = false } = {}) {
       summary: z.string().min(1).max(8000).describe('A concise summary of the outcomes/decisions/action-items from this conversation, written for the other session to pick up.'),
     },
   }, async ({ session_id, summary }) => {
-    const id = await resolveTranscriptId(session_id);
-    if (!id) return text(`No session matches "${session_id}". Pass a sessionId (from search_sessions / get_session_context) or an exact session title.`);
+    // Resolve id-or-title; if that misses but the arg is itself a valid CLI
+    // conversation id (Codex/agy sessions aren't in the Claude transcript index),
+    // key the note to it directly so cross-provider notes still land.
+    const arg = String(session_id || '').trim();
+    const id = (await resolveTranscriptId(arg)) || (ANY_ID_RE.test(arg) ? arg : null);
+    if (!id) return text(`No session matches "${session_id}". Pass a sessionId (from search_sessions / get_session_context / list_sessions) or an exact session title.`);
     try { await addNote(id, summary); }
     catch (e) { return text(`Could not save: ${e.message}`); }
     return text('Saved. This summary will surface in that cc-deck session the next time the user opens or resumes it.');

@@ -228,7 +228,7 @@ for the full annotated list.
 | `CCDECK_TMUX_SOCKET` | `ccdeck` | Dedicated tmux `-L` socket name. |
 | `CCDECK_MCP_TOKEN` | — | Static bearer for the MCP endpoint. Empty = the bearer path is off. Enables the session-control tools (`create_session`/`send_to_session`). |
 | `CCDECK_MCP_TOKEN_READONLY` | — | Read-only MCP bearer (search + leave-note only). Used to auto-wire sessions. |
-| `CCDECK_SESSION_MCP` | off | `on` auto-wires every new session with the read-only MCP + a handoff nudge. |
+| `CCDECK_SESSION_MCP` | off | `on` auto-wires every new session — on any CLI (Claude, Codex, agy) — with the read-only MCP so sessions can leave/receive cross-session notes. |
 | `CCDECK_PUBLIC_URL` | derived | Public origin for OAuth metadata (e.g. `https://claude.example.com`). Auto-derived from request headers if unset. |
 | `CCDECK_RESTORE` | on | `off` disables snapshot/restore across reboot. |
 | `CCDECK_RESTORE_FILE` | `~/.claude/cc-deck/restore.json` | Snapshot location. |
@@ -267,10 +267,11 @@ host can't be derived from request headers.
 Use the static token if the agent should be able to create and drive sessions; use the read-only
 token if it should only search and leave notes.
 
-**Handoff-aware sessions** (`CCDECK_SESSION_MCP=on`) — every new session is launched with the
-read-only MCP pre-wired (loopback URL, read-only bearer) plus a one-line system-prompt nudge, so
-sessions can discover related work and hand off through notes instead of duplicating it. They
-**cannot** start or drive other sessions — that stays operator-only via the static bearer.
+**Handoff-aware sessions** (`CCDECK_SESSION_MCP=on`) — every new session, on **any** CLI (Claude,
+Codex, agy), is launched with the read-only MCP pre-wired (loopback URL, read-only bearer; Claude
+also gets a one-line system-prompt nudge), so sessions can discover related work and hand off
+through notes instead of duplicating it — across CLIs. They **cannot** start or drive other
+sessions — that stays operator-only via the static bearer.
 
 **Shared browser + lock registry** — cc-deck can attach sessions to a **single, already-logged-in
 Chrome** (over CDP) so they can read/act on authenticated pages — and coordinate so they don't
@@ -312,20 +313,29 @@ auto-accepted on launch (see [CCDECK_AUTO_TRUST](#configuration-env)).
 
 - **Claude** (`claude`) — the default. Full feature set: live status dots, History-tab resume/fork,
   usage/ROI, notes/handoff + the shared-browser auto-wire.
-- **Codex** (`codex`) — resume/fork are subcommands, approval via `-a`, MCP via `~/.codex/config.toml`.
+- **Codex** (`codex`) — resume/fork are subcommands, approval via `-a`. The cc-deck MCP is wired
+  per-launch via `-c mcp_servers.*` (scoped, so your global `~/.codex/config.toml` is untouched).
 - **agy** (Antigravity, Gemini-backed) — resume via `--conversation <id>`, mode via `--mode
-  accept-edits|plan`, MCP via `agy mcp`.
+  accept-edits|plan`. The cc-deck MCP is registered once at startup via `agy mcp add` (agy has no
+  per-launch MCP flag).
 
 Codex and agy launch clean and get the **CLI-agnostic** surface: the in-browser terminal, attach,
 kill, rename (cc-deck label), snapshot/restore, and remote — everything you'd drive by hand.
 
-What's **Claude-only** for now (not cc-deck limits you can flip — they're gaps in what the other
-CLIs expose): the live busy/idle/waiting **status dot** (Codex/agy have no machine-readable status
-feed — those sessions show live/idle from the process), **History-tab resume** (they keep sessions
-in stores with no scriptable listing — resume with `codex resume` / `agy --continue` in a terminal),
-**usage/ROI** (Claude-plan specific), and the **notes/handoff + browser auto-wire** (wired via
-Claude's `--mcp-config`). The provider interface leaves room to fill these in per-CLI as the tools
-expose more.
+**Cross-CLI notes work** (`CCDECK_SESSION_MCP=on`): every session — Claude, Codex, *and* agy — is
+wired with the read-only cc-deck MCP, so any session can `search_sessions`, `list_sessions`, read a
+sibling's context, and `save_session_summary` to leave a note on another session (any CLI) that
+surfaces the next time it opens/resumes — even if that session is offline. Notes are keyed by the
+session's CLI id, so a note left for a Codex or agy session lands the same way it does for Claude.
+
+What's **Claude-only** for now (gaps in what the other CLIs expose, not cc-deck limits you can flip):
+the live busy/idle/waiting **status dot** (Codex/agy have no machine-readable status feed — those
+sessions show live/idle from the process), **History-tab resume** (they keep sessions in stores with
+no scriptable listing — resume with `codex resume` / `agy --continue` in a terminal), **usage/ROI**
+(Claude-plan specific), and the **shared-browser auto-wire** (Codex/agy get the cc-deck MCP but not
+the browser MCP). Note delivery to a Codex/agy session needs an id cc-deck knows — while it's live
+(message it by title), or its conversation id — since their transcript stores aren't indexed for
+search the way `~/.claude/projects` is.
 
 ## Remote sessions on other hosts
 

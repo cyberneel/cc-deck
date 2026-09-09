@@ -227,8 +227,13 @@ export async function createSession({ dir, title, resume, fork, seed, browser, k
   await styleSession(name);
   // Launch the CLI inside the login shell so the session survives if it exits.
   // Prefix COLORTERM=truecolor so it emits 24-bit color (diffs, highlights).
-  launch += await provider.wireFlags({ browser }); // cc-deck MCP + shared browser (Claude); no-op for Codex
-  await tmux(['send-keys', '-t', name, `COLORTERM=truecolor ${launch}`, 'Enter']);
+  launch += await provider.wireFlags({ browser }); // cc-deck MCP + shared browser
+  // Export the read-only MCP bearer so Codex's `-c bearer_token_env_var=CCDECK_RO`
+  // can read it (Codex's HTTP MCP only takes an env-var bearer). Harmless for the
+  // other CLIs, which don't reference it. Single-quote-escaped for the shell.
+  const roEnv = config.sessionMcp && config.mcpTokenReadonly
+    ? `CCDECK_RO='${config.mcpTokenReadonly.replace(/'/g, "'\\''")}' ` : '';
+  await tmux(['send-keys', '-t', name, `${roEnv}COLORTERM=truecolor ${launch}`, 'Enter']);
   // Once Claude has booted: name a fresh titled session (so the name shows in
   // Claude and `claude --resume`) and/or type a seed prompt. Background.
   // /rename is a Claude slash command — only send it for providers that have it.

@@ -1,20 +1,25 @@
 // "External notes": summaries pushed back into a cc-deck session from an outside
 // chat (via the MCP save_session_summary tool). They surface when the user next
 // opens/resumes that session, so the session becomes aware of what happened
-// elsewhere. Stored as markdown files keyed by the Claude sessionId. A pending
-// note is `<sessionId>-<ts>.md`; once delivered it's renamed to `.md.done` (the
-// file stays so Claude can Read it, but it won't be injected again).
+// elsewhere. Provider-agnostic: keyed by the session's CLI id — a Claude/Codex
+// transcript UUID or an agy conversation id (any provider can leave/receive one).
+// A pending note is `<sessionId>~<ts>.md`; once delivered it's renamed to
+// `.md.done` (the file stays so the CLI can Read it, but it won't be injected
+// again). The `~` delimiter is outside every id charset, so ids that contain
+// `-`/`.`/`:`/`_` (agy) still parse unambiguously.
 import { mkdir, writeFile, readdir, rename, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 const NOTES_DIR = join(homedir(), '.claude', 'cc-deck', 'notes');
-const SESSION_ID_RE = /^[0-9a-fA-F-]{36}$/;
+// Union of every provider's resume-id shape (Claude/Codex UUID, agy id). Never
+// contains `~` (the filename delimiter).
+const SESSION_ID_RE = /^[A-Za-z0-9._:-]{8,128}$/;
 
 export async function addNote(sessionId, summary, source = 'an outside Claude chat') {
   if (!SESSION_ID_RE.test(sessionId)) { const e = new Error('invalid session id'); e.statusCode = 400; throw e; }
   await mkdir(NOTES_DIR, { recursive: true });
-  const file = join(NOTES_DIR, `${sessionId}-${Date.now().toString(36)}.md`);
+  const file = join(NOTES_DIR, `${sessionId}~${Date.now().toString(36)}.md`);
   const body = `# External update from ${source}\n\n_Saved via cc-deck MCP. This summarizes work that happened outside this session._\n\n${summary}\n`;
   await writeFile(file, body);
   return file;
@@ -28,7 +33,7 @@ async function listFiles() {
 export async function listPending(sessionId) {
   if (!SESSION_ID_RE.test(sessionId)) return [];
   const names = await listFiles();
-  return names.filter((n) => n.startsWith(`${sessionId}-`) && n.endsWith('.md')).map((n) => join(NOTES_DIR, n));
+  return names.filter((n) => n.startsWith(`${sessionId}~`) && n.endsWith('.md')).map((n) => join(NOTES_DIR, n));
 }
 
 const MAX_DATE_MS = 8.64e15; // largest value a JS Date accepts
@@ -72,7 +77,7 @@ export async function pendingCounts() {
   const counts = new Map();
   for (const n of await listFiles()) {
     if (!n.endsWith('.md')) continue;
-    const m = n.match(/^([0-9a-fA-F-]{36})-/);
+    const m = n.match(/^([A-Za-z0-9._:-]{8,128})~/);
     if (m) counts.set(m[1], (counts.get(m[1]) || 0) + 1);
   }
   return counts;

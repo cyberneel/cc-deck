@@ -6,7 +6,7 @@ const INTRO_KEY = 'ccdeck.introSeen.v1';
 
 const SECTIONS = [
   ['What is cc-deck', `
-    <p>A dashboard for your <b>coding-CLI sessions</b> (Claude Code and Codex). Each session is a
+    <p>A dashboard for your <b>coding-CLI sessions</b> (Claude Code, Codex, and agy). Each session is a
     real CLI running inside a <b>tmux</b> session on the server, shown through a fast in-browser
     terminal — the actual CLI, not a wrapper. Closing the tab only <i>detaches</i>; the session
     keeps running. Reach it from any device on your tailnet (or behind Cloudflare Access).</p>`],
@@ -65,11 +65,14 @@ const SECTIONS = [
     leaves the original untouched. Resuming injects any external handoff notes left for that session.
     Codex sessions resume through Codex's own picker (<code>codex resume</code>) rather than a list.</p>`],
 
-  ['Multiple CLIs (Claude &amp; Codex)', `
-    <p>Pick the CLI per session in the New Session dialog; sessions are badged by CLI. Both get the
-    core surface (terminal, attach, kill, rename, snapshot, remote). Live status dots, History-tab
-    resume, usage/ROI, and notes/handoff are Claude-only for now (Codex doesn't expose the needed
-    APIs yet).</p>`],
+  ['Multiple CLIs (Claude, Codex &amp; agy)', `
+    <p>Pick the CLI per session in the New Session dialog; sessions are badged by CLI. All get the
+    core surface (terminal, attach, kill, rename, snapshot, remote) <b>and</b> cross-session notes —
+    with <code>CCDECK_SESSION_MCP=on</code>, every session (Claude, Codex, agy) is wired with the
+    read-only cc-deck MCP, so any of them can search siblings and leave a note on another session
+    (any CLI) that surfaces when it next opens. Still Claude-only for now: live status dots,
+    History-tab resume, usage/ROI, and the shared-browser auto-wire (the other CLIs don't expose the
+    needed APIs yet).</p>`],
 
   ['Remote sessions', `
     <p>cc-deck can list and attach tmux sessions running a CLI on <b>other hosts</b> (a laptop, another

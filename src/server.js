@@ -63,6 +63,7 @@ async function enrichedSessions() {
 import { getBurn } from './burn.js';
 import { listRemoteSessions } from './remote.js';
 import { providerList } from './providers/index.js';
+import { registerAgyMcp } from './providers/agy.js';
 import { getUsage } from './usage.js';
 import { getPricing } from './pricing.js';
 
@@ -636,6 +637,10 @@ app.log.info(`cc-deck listening on ${address} (roots: ${config.roots.join(', ')}
 
 // Keep cc-deck's dedicated tmux server alive even when it has no sessions.
 await initServer().catch(() => {});
+
+// Register the read-only cc-deck MCP with agy (persistent, idempotent) so agy
+// sessions get the same handoff-aware toolset as Claude/Codex. Best-effort.
+registerAgyMcp().catch(() => {});
 
 // Push session-state transitions to Friday the instant they happen (opt-in; no-op unless
 // CCDECK_FRIDAY_REACH_URL is set) — so Friday reacts without polling.
