@@ -1,7 +1,8 @@
 # cc-deck in a container. The whole point: cc-deck needs Linux + tmux + node-pty,
 # which is awkward on Windows/macOS — but Docker Desktop runs a Linux VM, so this
-# image runs the same everywhere. It bundles the Claude Code and Codex CLIs so a
-# session launches inside the container against your mounted project dir.
+# image runs the same everywhere. It bundles the Claude Code, Codex, and agy
+# (Google Antigravity) CLIs so a session launches inside the container against
+# your mounted project dir.
 
 # ---- build: compile node-pty + bundle the client ----
 FROM node:24-bookworm-slim AS build
@@ -16,10 +17,19 @@ RUN npm run build
 # ---- runtime ----
 FROM node:24-bookworm-slim
 # tmux runs the sessions; git for branch detection; the CLIs cc-deck manages.
-RUN apt-get update && apt-get install -y --no-install-recommends tmux git ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends tmux git ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
     && npm install -g @anthropic-ai/claude-code @openai/codex \
-    && npm cache clean --force
+    && npm cache clean --force \
+    # agy (Google Antigravity CLI): install from Google's official bootstrapper at
+    # build time — each build pulls straight from Google, so we never redistribute
+    # the binary. Download-to-file (NOT `curl | bash`, whose pipeline masks a failed
+    # fetch), then `agy --version` so the build FAILS if the install silently no-ops
+    # or the binary can't run — rather than shipping an image that lacks agy.
+    && curl -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh \
+    && bash /tmp/agy-install.sh --dir /usr/local/bin \
+    && rm -f /tmp/agy-install.sh \
+    && agy --version
 # Run as the image's built-in non-root `node` user (uid 1000, home /home/node).
 # cc-deck writes ~/.claude (transcripts, notes, restore) and the CLIs write their
 # auth there, so keep /home/node on a volume.

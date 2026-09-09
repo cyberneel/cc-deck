@@ -149,8 +149,9 @@ Rebuild the frontend after editing anything in `src/client/` with `npm run build
 ## Run with Docker (Windows, macOS, Linux)
 
 cc-deck needs Linux + tmux + `node-pty`, which is awkward on Windows/macOS — so the container
-does it for you (Docker Desktop runs the Linux VM). The image **bundles the Claude Code and Codex
-CLIs**, so sessions launch inside the container against a folder you mount.
+does it for you (Docker Desktop runs the Linux VM). The image **bundles the Claude Code, Codex, and
+agy (Google Antigravity) CLIs** (agy is installed at build from Google's official installer), so
+sessions launch inside the container against a folder you mount.
 
 ```bash
 # 1. create a .env next to docker-compose.yml
@@ -183,7 +184,7 @@ The container keeps its own state separate from the host — three layers:
 
 | Layer | Lives in | Host relationship |
 |---|---|---|
-| App + Node + the `claude`/`codex` binaries | the image | **isolated** (container FS) |
+| App + Node + the `claude`/`codex`/`agy` binaries | the image | **isolated** (container FS) |
 | **Projects** — `./workspace` → `/workspace` (`CCDECK_ROOTS`) | a host directory (bind mount) | **shared** — the one deliberate shared surface, so sessions edit real code |
 | **State** — CLI auth (`~/.claude`, `~/.codex`), notes, restore snapshots, caches | the `ccdeck-home` named volume | **separate** — Docker-managed, not a host path you use directly |
 
