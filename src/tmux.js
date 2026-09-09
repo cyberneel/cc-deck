@@ -271,12 +271,13 @@ export async function killSession(name) {
 export async function renameSession(name, title) {
   assertManaged(name);
   const cleanTitle = (title || '').toString().slice(0, 120).replace(/[\r\n\t]/g, ' ').trim();
-  // cc-deck's own display label.
+  // cc-deck's own display label (works for every CLI — this is what the UI shows).
   await tmux(['set-option', '-t', name, '@ccdeck_title', cleanTitle]);
-  // Also rename the underlying Claude session via its `/rename` slash command,
-  // so the new name shows in Claude itself and in `claude --resume`. Only do this
-  // when Claude is actually running in the pane (else it'd type into the shell).
-  if (cleanTitle) {
+  // Also rename the underlying session via its `/rename` slash command so the new
+  // name shows in the CLI itself and in `--resume` — but ONLY for providers that
+  // have that command (Claude); typing it into Codex/agy would send it as a prompt.
+  const kind = (await tmux(['show-options', '-t', name, '-qv', '@ccdeck_kind']).catch(() => '')).trim();
+  if (cleanTitle && getProvider(kind).supportsRename) {
     const cmd = (await tmux(['display-message', '-p', '-t', name, '#{pane_current_command}']).catch(() => '')).trim();
     if (/claude|node/i.test(cmd)) {
       // -l sends the text literally (so titles with key-like words aren't parsed),
