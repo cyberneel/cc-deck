@@ -22,7 +22,7 @@ export async function captureSnapshot({ skipIfEmpty = false } = {}) {
   try { matchAgents(sessions, await getAgents()); } catch { /* resume ids best-effort */ }
   const entries = sessions
     .filter((s) => s.dir)
-    .map((s) => ({ dir: s.dir, title: s.title, resume: s.liveSessionId || s.resumedFrom || null }));
+    .map((s) => ({ dir: s.dir, title: s.title, resume: s.liveSessionId || s.resumedFrom || null, kind: s.kind || undefined }));
   if (!entries.length && skipIfEmpty) return -1; // keep last-good snapshot
   await mkdir(DIR, { recursive: true });
   const tmp = `${FILE}.tmp`;
@@ -48,11 +48,11 @@ export async function restoreIfBoot() {
   let restored = 0;
   for (const e of snap.sessions) {
     try {
-      await createSession({ dir: e.dir, title: e.title, resume: e.resume || undefined });
+      await createSession({ dir: e.dir, title: e.title, resume: e.resume || undefined, kind: e.kind });
       restored += 1;
     } catch {
       // Resume id invalid / transcript gone → fall back to a fresh session in the dir.
-      if (e.resume) { try { await createSession({ dir: e.dir, title: e.title }); restored += 1; } catch { /* dir gone */ } }
+      if (e.resume) { try { await createSession({ dir: e.dir, title: e.title, kind: e.kind }); restored += 1; } catch { /* dir gone */ } }
     }
     await sleep(800); // stagger claude launches
   }
