@@ -398,6 +398,10 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--bg-card); bor
 .nt-note { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; background: rgba(255,255,255,.02); }
 .nt-when { font-size: 11px; margin-bottom: 6px; }
 .nt-text { white-space: pre-wrap; word-break: break-word; font-size: 13px; line-height: 1.5; }
+.nt-acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+.nt-acts button { font-size: 12px; padding: 3px 10px; }
+.nt-del[data-confirm="1"] { color: var(--danger, #e5534b); border-color: var(--danger, #e5534b); }
+.nt-ta { width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; line-height: 1.5; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg, #111); color: inherit; resize: vertical; }
 
 .up-files { max-height: 150px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); padding: 6px 10px; }
 .up-f { font-family: var(--mono); font-size: 12px; color: var(--text-dim); padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

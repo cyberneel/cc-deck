@@ -34,7 +34,7 @@ import { listArtifacts, deleteArtifacts } from './storage.js';
 import { createMcpServer } from './mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import * as oauth from './oauth.js';
-import { consumeNotesSeed, consumeNotesSeedMany, pendingCounts, readPending, readPendingMany, countNotes } from './notes.js';
+import { consumeNotesSeed, consumeNotesSeedMany, pendingCounts, readPending, readPendingMany, countNotes, deleteNote, editNote } from './notes.js';
 
 // A session's Claude id lineage: the live id (changes on resume/fork/reboot) plus
 // resumedFrom (the stable @ccdeck_resume anchor). Notes are matched across all of it.
@@ -247,6 +247,22 @@ app.get('/api/notes/:sessionId', async (req, reply) => {
     let s;
     try { s = (await enrichedSessions()).find((x) => lineageIds(x).includes(id)); } catch { /* offline */ }
     return { notes: s ? await readPendingMany(lineageIds(s)) : await readPending(id) };
+  } catch (err) { return reply.code(err.statusCode || 500).send({ error: err.message }); }
+});
+
+// Drop a single pending note the user no longer wants (before it's delivered).
+app.delete('/api/notes/:sessionId/:id', async (req, reply) => {
+  try { await deleteNote(req.params.sessionId, req.params.id); return { ok: true }; }
+  catch (err) { return reply.code(err.statusCode || 500).send({ error: err.message }); }
+});
+
+// Edit a single pending note's text.
+app.patch('/api/notes/:sessionId/:id', async (req, reply) => {
+  try {
+    const summary = (req.body?.summary ?? req.body?.text ?? '').toString().trim();
+    if (!summary) return reply.code(400).send({ error: 'note text is empty' });
+    await editNote(req.params.sessionId, req.params.id, summary);
+    return { ok: true };
   } catch (err) { return reply.code(err.statusCode || 500).send({ error: err.message }); }
 });
 

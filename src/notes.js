@@ -7,7 +7,7 @@
 // `.md.done` (the file stays so the CLI can Read it, but it won't be injected
 // again). The `~` delimiter is outside every id charset, so ids that contain
 // `-`/`.`/`:`/`_` (agy) still parse unambiguously.
-import { mkdir, writeFile, readdir, rename, readFile, stat } from 'node:fs/promises';
+import { mkdir, writeFile, readdir, rename, readFile, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -15,14 +15,43 @@ const NOTES_DIR = join(homedir(), '.claude', 'cc-deck', 'notes');
 // Union of every provider's resume-id shape (Claude/Codex UUID, agy id). Never
 // contains `~` (the filename delimiter).
 const SESSION_ID_RE = /^[A-Za-z0-9._:-]{8,128}$/;
+// The per-note token (base-36 timestamp) — the `<ts>` in `<sessionId>~<ts>.md`.
+// Restricted so a note id from the client can't escape NOTES_DIR.
+const NOTE_TOKEN_RE = /^[A-Za-z0-9]{1,32}$/;
+
+const noteBody = (summary, source) =>
+  `# External update from ${source}\n\n_Saved via cc-deck MCP. This summarizes work that happened outside this session._\n\n${summary}\n`;
 
 export async function addNote(sessionId, summary, source = 'an outside Claude chat') {
   if (!SESSION_ID_RE.test(sessionId)) { const e = new Error('invalid session id'); e.statusCode = 400; throw e; }
   await mkdir(NOTES_DIR, { recursive: true });
   const file = join(NOTES_DIR, `${sessionId}~${Date.now().toString(36)}.md`);
-  const body = `# External update from ${source}\n\n_Saved via cc-deck MCP. This summarizes work that happened outside this session._\n\n${summary}\n`;
-  await writeFile(file, body);
+  await writeFile(file, noteBody(summary, source));
   return file;
+}
+
+// Path to one pending note, with both parts validated so a crafted id can't
+// traverse out of NOTES_DIR. Throws 400 on a bad id.
+function pendingNoteFile(sessionId, id) {
+  if (!SESSION_ID_RE.test(sessionId) || !NOTE_TOKEN_RE.test(id)) {
+    const e = new Error('invalid note id'); e.statusCode = 400; throw e;
+  }
+  return join(NOTES_DIR, `${sessionId}~${id}.md`);
+}
+
+// Delete a single pending note (user chose to drop it before it's delivered).
+export async function deleteNote(sessionId, id) {
+  try { await unlink(pendingNoteFile(sessionId, id)); }
+  catch (e) { if (e.code !== 'ENOENT') throw e; } // already gone → idempotent
+}
+
+// Rewrite a single pending note's contents verbatim (user tweaked it before
+// delivery). Written as-is — the note file is what the session reads on delivery,
+// so WYSIWYG here, no re-wrapping.
+export async function editNote(sessionId, id, content) {
+  const file = pendingNoteFile(sessionId, id);
+  await stat(file); // 404 if it was already delivered/deleted
+  await writeFile(file, content.endsWith('\n') ? content : content + '\n');
 }
 
 async function listFiles() {
@@ -44,7 +73,8 @@ export async function readPending(sessionId) {
   const out = [];
   for (const f of files) {
     const base = f.split('/').pop();
-    const ms = parseInt(base.slice(sessionId.length + 1, -3), 36);
+    const id = base.slice(sessionId.length + 1, -3); // the `<ts>` token — addresses this note for edit/delete
+    const ms = parseInt(id, 36);
     let text = '';
     try { text = await readFile(f, 'utf8'); } catch { continue; }
     // The ts is base-36 (addNote writes Date.now().toString(36)); if a filename
@@ -52,7 +82,7 @@ export async function readPending(sessionId) {
     let savedAt = null;
     if (Number.isFinite(ms) && ms > 0 && ms < MAX_DATE_MS) savedAt = new Date(ms).toISOString();
     else { try { savedAt = (await stat(f)).mtime.toISOString(); } catch { /* leave null */ } }
-    out.push({ savedAt, text });
+    out.push({ sessionId, id, savedAt, text });
   }
   out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
   return out;
