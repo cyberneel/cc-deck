@@ -106,6 +106,7 @@ const FIELDS = [
   '#{@ccdeck_resume}',
   '#{pane_pid}',
   '#{@ccdeck_kind}',
+  '#{@ccdeck_origin}',
 ].join('\t');
 
 export async function listSessions() {
@@ -113,7 +114,7 @@ export async function listSessions() {
   const sessions = [];
   for (const line of out.split('\n')) {
     if (!line.trim()) continue;
-    const [name, attached, activity, created, title, dir, paneCmd, resume, panePid, kind] = line.split('\t');
+    const [name, attached, activity, created, title, dir, paneCmd, resume, panePid, kind, origin] = line.split('\t');
     if (!isManagedName(name)) continue;
     sessions.push({
       name,
@@ -127,6 +128,7 @@ export async function listSessions() {
       resumedFrom: resume || null,
       panePid: Number(panePid) || null,
       kind: kind || DEFAULT_KIND, // which CLI (claude|codex); older sessions default to claude
+      origin: origin || 'user',   // 'proactive' = Friday-created; older sessions default to user
     });
   }
   sessions.sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0));
@@ -134,6 +136,19 @@ export async function listSessions() {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Paste literal text into a managed pane and SUBMIT it. The settle delay is load-bearing:
+// the CLI coalesces a fast multi-char burst into a "[Pasted text]" block, and an Enter that
+// arrives inside that same burst is swallowed into the paste (becomes a trailing newline)
+// instead of submitting — the symptom being a seeded brief that sits in the prompt, never
+// kicked off. So wait for the coalescing window to close, THEN send Enter.
+// ponytail: fixed 500ms > the CLI's ~100ms paste window; bump if a very large paste still
+// lands unsubmitted.
+async function pasteSubmit(name, text) {
+  await tmux(['send-keys', '-l', '-t', name, String(text)]).catch(() => {});
+  await sleep(500);
+  await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
+}
 
 // Some setup can only happen once the CLI has booted to its prompt: `/rename` (the
 // persisted title comes from the slash command, not `--name`) and seeding an initial
@@ -182,8 +197,7 @@ async function scheduleBoot(name, { rename, seed, provider }) {
         try { seedText = seed && typeof seed.then === 'function' ? await seed : seed; }
         catch (e) { seedText = `cc-deck could not build the context handoff: ${e && e.message ? e.message : e}`; }
         if (seedText) {
-          await tmux(['send-keys', '-l', '-t', name, String(seedText)]).catch(() => {});
-          await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
+          await pasteSubmit(name, seedText);
         }
       }
       return;
@@ -198,11 +212,10 @@ export async function sendText(name, text) {
   assertManaged(name);
   const line = (text || '').toString().replace(/[\r\n]+/g, ' ').trim();
   if (!line) return;
-  await tmux(['send-keys', '-l', '-t', name, line]).catch(() => {});
-  await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
+  await pasteSubmit(name, line);
 }
 
-export async function createSession({ dir, title, resume, fork, seed, browser, kind }) {
+export async function createSession({ dir, title, resume, fork, seed, browser, kind, origin }) {
   const abs = await resolveAllowedDir(dir);
   const provider = getProvider(kind); // claude | codex | … (defaults to claude)
   // Fail clean if the chosen CLI isn't installed here (e.g. a tenant that never
@@ -226,6 +239,7 @@ export async function createSession({ dir, title, resume, fork, seed, browser, k
   await tmux(['set-option', '-t', name, '@ccdeck_title', cleanTitle || abs.split('/').pop() || name]);
   await tmux(['set-option', '-t', name, '@ccdeck_dir', abs]);
   await tmux(['set-option', '-t', name, '@ccdeck_kind', provider.kind]); // which CLI this session runs
+  if (origin && origin !== 'user') await tmux(['set-option', '-t', name, '@ccdeck_origin', origin]); // Friday-created ⇒ 'proactive'
   // Tag the source id only for a plain resume (so we can dedup/Open it). A fork
   // is a new, independent session — matched by PID — so we don't tag it as a
   // resume of the original (that would hijack the original's Open/Resume logic).
