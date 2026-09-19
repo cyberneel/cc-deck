@@ -231,6 +231,7 @@ for the full annotated list.
 | `CCDECK_MCP_TOKEN_READONLY` | — | Read-only MCP bearer (search + leave-note only). Used to auto-wire sessions. |
 | `CCDECK_SESSION_MCP` | off | `on` auto-wires every new session — on any CLI (Claude, Codex, agy) — with the read-only MCP so sessions can leave/receive cross-session notes. |
 | `CCDECK_PUBLIC_URL` | derived | Public origin for OAuth metadata (e.g. `https://claude.example.com`). Auto-derived from request headers if unset. |
+| `CCDECK_FRAME_ANCESTORS` | — | Extra origins allowed to iframe cc-deck (CSP `frame-ancestors`), for embedding in a parent hub. Space/comma-separated bare origins. Unset = same-origin only (blocks cross-origin clickjacking). |
 | `CCDECK_RESTORE` | on | `off` disables snapshot/restore across reboot. |
 | `CCDECK_RESTORE_FILE` | `~/.claude/cc-deck/restore.json` | Snapshot location. |
 | `CCDECK_PRICING_URL` | LiteLLM dataset | Token-pricing source for the Usage tab. |

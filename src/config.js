@@ -31,6 +31,14 @@ export const config = {
   // https://systems.cyberneel.com/account?t=… URL only into hosted-tenant VMs;
   // when set, the UI shows an "Account ↗" link to it. Self-host = unset = hidden.
   accountUrl: (process.env.ACCOUNT_URL || '').trim(),
+  // Origins allowed to iframe cc-deck, beyond same-origin (CSP frame-ancestors).
+  // The unified hub (systems /account) embeds the apps, so add its origin (and the
+  // tenant's own) here. Space/comma-separated. Empty = same-origin framing only,
+  // which blocks cross-origin clickjacking. Each entry must be a bare origin
+  // (scheme://host[:port]) — anything else is dropped so it can't inject a header.
+  frameAncestors: (process.env.CCDECK_FRAME_ANCESTORS || '')
+    .split(/[\s,]+/)
+    .filter((o) => /^https?:\/\/[A-Za-z0-9.-]+(?::\d+)?$/.test(o)),
   // tmux session name prefix for sessions this app manages.
   prefix: 'ccdeck-',
   // Dedicated tmux socket so cc-deck's sessions live on their own server,

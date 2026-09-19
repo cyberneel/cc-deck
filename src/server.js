@@ -121,6 +121,15 @@ function isAuthed(req) {
   return verifyToken(token);
 }
 
+// Clickjacking protection: only same-origin (plus any operator-allowlisted origins,
+// e.g. the systems /account hub via CCDECK_FRAME_ANCESTORS) may iframe cc-deck. A
+// CSP with just frame-ancestors restricts framing only — it doesn't touch scripts
+// or styles, so nothing in the app breaks. Set on every response.
+const FRAME_ANCESTORS = `frame-ancestors 'self' ${config.frameAncestors.join(' ')}`.trim();
+app.addHook('onRequest', async (req, reply) => {
+  reply.header('Content-Security-Policy', FRAME_ANCESTORS);
+});
+
 // Auth gate for every HTTP request except the public allowlist and login assets.
 app.addHook('onRequest', async (req, reply) => {
   if (req.raw.url?.startsWith('/ws/')) return; // websockets auth in their own handler
