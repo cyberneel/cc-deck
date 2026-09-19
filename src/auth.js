@@ -45,6 +45,34 @@ export function verifyToken(token) {
   }
 }
 
+// Redeem a unified-hub SSO token. cc-deck holds NO signing secret by design: the
+// token is opaque and gets validated server-to-server by POSTing it to systems'
+// verify endpoint. Returns true iff systems says ok AND it's for THIS app + tenant.
+// Never throws (any failure → false → caller falls through to normal login).
+export async function redeemSsoToken(token) {
+  if (!config.ssoVerifyUrl) return false;
+  if (!token || typeof token !== 'string' || token.length > 512) return false;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 5000);
+  try {
+    const res = await fetch(config.ssoVerifyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+      signal: ac.signal,
+    });
+    if (!res.ok) return false;
+    const data = await res.json().catch(() => null);
+    if (!data || data.ok !== true || data.app !== 'ccdeck') return false;
+    if (config.tenantId && data.tenant !== config.tenantId) return false; // multi-tenant guard
+    return true;
+  } catch {
+    return false; // network error / timeout / bad JSON → not authenticated
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Extract and verify the auth cookie from a raw Cookie header (used at ws upgrade).
 export function isRequestAuthed(rawCookieHeader) {
   if (!rawCookieHeader) return false;

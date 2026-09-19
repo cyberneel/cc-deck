@@ -11,7 +11,7 @@ import fastifyCookie from '@fastify/cookie';
 import fastifyWebsocket from '@fastify/websocket';
 import fastifyMultipart from '@fastify/multipart';
 import { config } from './config.js';
-import { checkPassword, issueToken, verifyToken } from './auth.js';
+import { checkPassword, issueToken, verifyToken, redeemSsoToken } from './auth.js';
 import {
   listSessions,
   createSession,
@@ -136,6 +136,28 @@ app.addHook('onRequest', async (req, reply) => {
   const path = req.raw.url?.split('?')[0] || '/';
   if (PUBLIC_PATHS.has(path)) return;
   if (isAuthed(req)) return;
+
+  // Unified-hub SSO: the hub frames cc-deck as <url>?sso=<token>. Redeem it
+  // server-side (systems verifies — no CORS, no local secret), set our session
+  // cookie, and 302 to the URL with the token stripped. Only on document GETs; any
+  // failure (bad/expired token, wrong app/tenant) falls through to normal login —
+  // a stale iframe URL is not a key, so never hard-401 on it.
+  if (config.ssoVerifyUrl && req.method === 'GET' && !path.startsWith('/api/')) {
+    const qi = (req.raw.url || '').indexOf('?');
+    const params = qi >= 0 ? new URLSearchParams(req.raw.url.slice(qi + 1)) : null;
+    const token = params?.get('sso');
+    if (token && await redeemSsoToken(token)) {
+      // SameSite=None + Secure so the cookie is sent inside the hub's cross-site
+      // iframe (a Lax cookie would be dropped there). CSRF exposure this opens is
+      // being paired with an Origin guard — see the systems coordination note.
+      reply.setCookie(config.cookieName, issueToken(), {
+        httpOnly: true, sameSite: 'none', secure: true, path: '/', maxAge: config.cookieMaxAge,
+      });
+      params.delete('sso');
+      const qs = params.toString();
+      return reply.redirect(path + (qs ? `?${qs}` : ''));
+    }
+  }
 
   if (path.startsWith('/api/')) {
     return reply.code(401).send({ error: 'unauthorized' });

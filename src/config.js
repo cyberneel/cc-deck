@@ -39,6 +39,13 @@ export const config = {
   frameAncestors: (process.env.CCDECK_FRAME_ANCESTORS || '')
     .split(/[\s,]+/)
     .filter((o) => /^https?:\/\/[A-Za-z0-9.-]+(?::\d+)?$/.test(o)),
+  // Unified-hub SSO. When set, cc-deck redeems an inbound `?sso=<token>` by POSTing
+  // it to this systems verify endpoint (cc-deck holds no signing secret — the token
+  // is opaque and validated server-to-server). Unset = SSO off (self-host / direct).
+  ssoVerifyUrl: (process.env.CCDECK_SSO_VERIFY_URL || '').trim(),
+  // This VM's tenant id (systems injects it); the redeemed token's `tenant` must
+  // match it. Empty = single-tenant / self-host → skip the tenant check.
+  tenantId: (process.env.CCDECK_TENANT_ID || '').trim(),
   // tmux session name prefix for sessions this app manages.
   prefix: 'ccdeck-',
   // Dedicated tmux socket so cc-deck's sessions live on their own server,
