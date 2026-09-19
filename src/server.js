@@ -130,6 +130,16 @@ app.addHook('onRequest', async (req, reply) => {
   reply.header('Content-Security-Policy', FRAME_ANCESTORS);
 });
 
+// Session-cookie attributes. Inside the hub iframe (systems.cyberneel.com) the cookie needs
+// CHIPS — SameSite=None; Secure; Partitioned — to flow on every browser (Safari ITP / Firefox
+// TCP / Chrome 3PC) and in the cross-domain self-host case; Partitioned keys it to the top-level
+// hub site. Over plain-http tailnet access a Secure cookie is dropped, so fall back to Lax there.
+// Must match on set AND clear (a Partitioned cookie lives in partitioned storage).
+const cookieOpts = (req) => {
+  const isHttps = req.headers['x-forwarded-proto'] === 'https' || req.protocol === 'https';
+  return { httpOnly: true, path: '/', sameSite: isHttps ? 'none' : 'lax', secure: isHttps, partitioned: isHttps };
+};
+
 // Auth gate for every HTTP request except the public allowlist and login assets.
 app.addHook('onRequest', async (req, reply) => {
   if (req.raw.url?.startsWith('/ws/')) return; // websockets auth in their own handler
@@ -147,16 +157,9 @@ app.addHook('onRequest', async (req, reply) => {
     const params = qi >= 0 ? new URLSearchParams(req.raw.url.slice(qi + 1)) : null;
     const token = params?.get('sso');
     if (token && await redeemSsoToken(token)) {
-      // Same session cookie as normal login — SameSite=Lax is correct here: the hub
-      // (systems.cyberneel.com) and this tenant app (<id>-ccdeck.cyberneel.com) share
-      // the registrable domain cyberneel.com, so the iframe is SAME-SITE and a Lax
-      // cookie flows inside it. No cross-site cookie ⇒ no added CSRF surface. (Matches
-      // Friday; confirmed by systems. None would only be needed for a cross-domain embed.)
-      reply.setCookie(config.cookieName, issueToken(), {
-        httpOnly: true, sameSite: 'lax',
-        secure: req.headers['x-forwarded-proto'] === 'https' || req.protocol === 'https',
-        path: '/', maxAge: config.cookieMaxAge,
-      });
+      // Same session cookie as normal login (CHIPS over https — see cookieOpts) so it flows
+      // inside the hub iframe on every browser and in the cross-domain self-host case.
+      reply.setCookie(config.cookieName, issueToken(), { ...cookieOpts(req), maxAge: config.cookieMaxAge });
       params.delete('sso');
       const qs = params.toString();
       return reply.redirect(path + (qs ? `?${qs}` : ''));
@@ -201,18 +204,12 @@ app.post('/api/login', async (req, reply) => {
     return reply.code(401).send({ error: 'invalid password' });
   }
   const token = issueToken();
-  reply.setCookie(config.cookieName, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: req.headers['x-forwarded-proto'] === 'https' || req.protocol === 'https',
-    path: '/',
-    maxAge: config.cookieMaxAge,
-  });
+  reply.setCookie(config.cookieName, token, { ...cookieOpts(req), maxAge: config.cookieMaxAge });
   return { ok: true };
 });
 
 app.post('/api/logout', async (req, reply) => {
-  reply.clearCookie(config.cookieName, { path: '/' });
+  reply.clearCookie(config.cookieName, cookieOpts(req));
   return { ok: true };
 });
 
