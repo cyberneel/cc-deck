@@ -147,11 +147,15 @@ app.addHook('onRequest', async (req, reply) => {
     const params = qi >= 0 ? new URLSearchParams(req.raw.url.slice(qi + 1)) : null;
     const token = params?.get('sso');
     if (token && await redeemSsoToken(token)) {
-      // SameSite=None + Secure so the cookie is sent inside the hub's cross-site
-      // iframe (a Lax cookie would be dropped there). CSRF exposure this opens is
-      // being paired with an Origin guard — see the systems coordination note.
+      // Same session cookie as normal login — SameSite=Lax is correct here: the hub
+      // (systems.cyberneel.com) and this tenant app (<id>-ccdeck.cyberneel.com) share
+      // the registrable domain cyberneel.com, so the iframe is SAME-SITE and a Lax
+      // cookie flows inside it. No cross-site cookie ⇒ no added CSRF surface. (Matches
+      // Friday; confirmed by systems. None would only be needed for a cross-domain embed.)
       reply.setCookie(config.cookieName, issueToken(), {
-        httpOnly: true, sameSite: 'none', secure: true, path: '/', maxAge: config.cookieMaxAge,
+        httpOnly: true, sameSite: 'lax',
+        secure: req.headers['x-forwarded-proto'] === 'https' || req.protocol === 'https',
+        path: '/', maxAge: config.cookieMaxAge,
       });
       params.delete('sso');
       const qs = params.toString();
