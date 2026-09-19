@@ -10,6 +10,7 @@
 import { mkdir, writeFile, readdir, rename, readFile, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { listSessions } from './tmux.js';
 
 const NOTES_DIR = join(homedir(), '.claude', 'cc-deck', 'notes');
 // A session's CLI conversation id — a UUID for every provider we support (Claude,
@@ -25,10 +26,28 @@ const NOTE_TOKEN_RE = /^[A-Za-z0-9]{1,32}$/;
 const noteBody = (summary, source) =>
   `# External update from ${source}\n\n_Saved via cc-deck MCP. This summarizes work that happened outside this session._\n\n${summary}\n`;
 
+// A buggy caller sometimes passes a TRUNCATED id (a UUID's first segment, e.g.
+// "0417a662"). Rather than orphan it (invisible) or hard-reject it (lost), expand
+// it to the full id when it's a prefix of exactly one running session's lineage
+// (its live id / @ccdeck_resume). Ambiguous or no match → null (caller errors).
+async function expandSessionId(id) {
+  if (!id) return null;
+  let sessions;
+  try { sessions = await listSessions(); } catch { return null; }
+  const full = new Set();
+  for (const s of sessions) { if (s.resumedFrom) full.add(s.resumedFrom); if (s.liveSessionId) full.add(s.liveSessionId); }
+  const hits = [...full].filter((f) => f === id || f.startsWith(id));
+  return hits.length === 1 ? hits[0] : null;
+}
+
 export async function addNote(sessionId, summary, source = 'an outside Claude chat') {
-  if (!SESSION_ID_RE.test(sessionId)) { const e = new Error('invalid session id'); e.statusCode = 400; throw e; }
+  let id = sessionId;
+  if (!SESSION_ID_RE.test(id)) {
+    id = await expandSessionId(String(sessionId || '')); // recover a truncated id if unambiguous
+    if (!id) { const e = new Error('invalid or ambiguous session id — pass the full session UUID or an exact title'); e.statusCode = 400; throw e; }
+  }
   await mkdir(NOTES_DIR, { recursive: true });
-  const file = join(NOTES_DIR, `${sessionId}~${Date.now().toString(36)}.md`);
+  const file = join(NOTES_DIR, `${id}~${Date.now().toString(36)}.md`);
   await writeFile(file, noteBody(summary, source));
   return file;
 }
