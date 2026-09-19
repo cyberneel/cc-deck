@@ -12,9 +12,12 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 const NOTES_DIR = join(homedir(), '.claude', 'cc-deck', 'notes');
-// Union of every provider's resume-id shape (Claude/Codex UUID, agy id). Never
-// contains `~` (the filename delimiter).
-const SESSION_ID_RE = /^[A-Za-z0-9._:-]{8,128}$/;
+// A session's CLI conversation id — a UUID for every provider we support (Claude,
+// Codex, agy all use UUIDs). FULL UUID only: the old `{8,128}` shape accepted a
+// caller's TRUNCATED id (e.g. a UUID's first 8 chars) and wrote a note that never
+// matched any full-id session — a silent orphan the user never saw. Rejecting
+// non-UUIDs makes such a mistake fail loudly instead.
+const SESSION_ID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 // The per-note token (base-36 timestamp) — the `<ts>` in `<sessionId>~<ts>.md`.
 // Restricted so a note id from the client can't escape NOTES_DIR.
 const NOTE_TOKEN_RE = /^[A-Za-z0-9]{1,32}$/;
