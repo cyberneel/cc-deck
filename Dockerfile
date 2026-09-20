@@ -19,7 +19,11 @@ FROM node:24-bookworm-slim
 # tmux runs the sessions; git for branch detection; the CLIs cc-deck manages.
 RUN apt-get update && apt-get install -y --no-install-recommends tmux git ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install -g @anthropic-ai/claude-code @openai/codex \
+    # chrome-devtools-mcp is pre-installed at the SAME pinned version cc-deck wires
+    # (src/providers/claude.js CHROME_MCP) so the shared-browser MCP resolves from
+    # disk instantly instead of an @latest npx re-resolve that can blow the connect
+    # timeout. Keep the version in sync with claude.js when bumping.
+    && npm install -g @anthropic-ai/claude-code @openai/codex chrome-devtools-mcp@1.9.0 \
     && npm cache clean --force \
     # agy (Google Antigravity CLI): install from Google's official bootstrapper at
     # build time — each build pulls straight from Google, so we never redistribute

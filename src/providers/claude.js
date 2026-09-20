@@ -9,6 +9,12 @@ import { config } from '../config.js';
 const RESUME_ID_RE = /^[0-9a-fA-F-]{36}$/;
 const SESSION_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'session-mcp.json');
 const BROWSER_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'browser-mcp.json');
+// Pin the shared-browser MCP (was `@latest`): `npx …@latest` re-resolves over the
+// network on every session boot and can blow the 30s MCP connect timeout. A pinned
+// version resolves from disk instantly when pre-installed (the Docker image and the
+// owner box `npm i -g` it) and still auto-installs via npx on a bare self-host — so
+// it's fast where we control the env and never breaks where we don't. Bump to update.
+const CHROME_MCP = 'chrome-devtools-mcp@1.9.0';
 const SESSION_NUDGE = "You are one of several cc-deck sessions the user runs in parallel. Before substantial work you may use the cc-deck tools (search_sessions, get_session_context) to check whether related work already lives in another session; if a request clearly belongs to a different session, prefer leaving a handoff note (save_session_summary) over duplicating it here. Coordinate ASYNCHRONOUSLY: leave ONE batched save_session_summary note at the end of a task rather than exchanging live back-and-forth messages with other sessions — live cross-session chatter makes each side re-read its entire context on every message and burns tokens fast, so reserve it for something genuinely urgent. You cannot start or drive other sessions yourself.";
 const BROWSER_NUDGE = "You can drive a shared, already-logged-in Chrome via the chrome-* tools — it is SHARED with other cc-deck sessions and with Friday, so coordinate through cc-deck's broker: call browser_tabs to see what is open and who has each tab; do your work in your OWN tab (chrome new_page, navigate it, then browser_claim it with a short note); NEVER navigate, click, or close a tab you did not open (those hold other agents' logged-in work); when finished, close your tab (chrome close_page) and browser_release it.";
 
@@ -51,7 +57,7 @@ export const claude = {
       try { await ensureDir(); await writeFile(SESSION_MCP_PATH, JSON.stringify(cfg)); flags += ` --mcp-config ${SESSION_MCP_PATH}`; nudges.push(SESSION_NUDGE); } catch { /* skip cc-deck MCP */ }
     }
     if (config.sessionBrowser || browser) {
-      const cfg = { mcpServers: { chrome: { command: 'npx', args: ['chrome-devtools-mcp@latest', '--browser-url', config.browserCdp] } } };
+      const cfg = { mcpServers: { chrome: { command: 'npx', args: [CHROME_MCP, '--browser-url', config.browserCdp] } } };
       try { await ensureDir(); await writeFile(BROWSER_MCP_PATH, JSON.stringify(cfg)); flags += ` --mcp-config ${BROWSER_MCP_PATH}`; if (config.sessionMcp) nudges.push(BROWSER_NUDGE); } catch { /* skip browser */ }
     }
     if (nudges.length) {
