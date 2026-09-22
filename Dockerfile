@@ -14,8 +14,10 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# ---- runtime ----
-FROM node:24-bookworm-slim
+# ---- runtime-base: OS + CLIs, no app code ----
+# Kept app-free so it stays cached across code changes: the hosted VM image
+# (friday dist/hosted/Dockerfile.ccdeck) builds on it via `--target runtime-base`.
+FROM node:24-bookworm-slim AS runtime-base
 # tmux runs the sessions; git for branch detection; the CLIs cc-deck manages.
 RUN apt-get update && apt-get install -y --no-install-recommends tmux git ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
@@ -34,20 +36,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends tmux git ca-cer
     && bash /tmp/agy-install.sh --dir /usr/local/bin \
     && rm -f /tmp/agy-install.sh \
     && agy --version
-# Run as the image's built-in non-root `node` user (uid 1000, home /home/node).
-# cc-deck writes ~/.claude (transcripts, notes, restore) and the CLIs write their
-# auth there, so keep /home/node on a volume.
 WORKDIR /app
-COPY --from=build --chown=node:node /app /app
-COPY --chown=node:node docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-USER node
 # Bind 0.0.0.0 INSIDE the container; restrict exposure with the host port mapping
 # (e.g. `-p 127.0.0.1:8787:8787`). Roots default to the mounted /workspace.
 ENV HOME=/home/node \
     NODE_ENV=production \
     CCDECK_BIND=0.0.0.0 \
     CCDECK_ROOTS=/workspace
+
+# ---- runtime: base + the app (last, so a code change rebuilds only these layers) ----
+FROM runtime-base
+# Run as the image's built-in non-root `node` user (uid 1000, home /home/node).
+# cc-deck writes ~/.claude (transcripts, notes, restore) and the CLIs write their
+# auth there, so keep /home/node on a volume.
+COPY --from=build --chown=node:node /app /app
+COPY --chown=node:node docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+USER node
 EXPOSE 8787
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "src/server.js"]
