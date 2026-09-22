@@ -184,10 +184,9 @@ async function scheduleBoot(name, { rename, seed, provider }) {
       continue; // never type rename/seed into the trust menu; wait for the real prompt
     }
     if (/\? for shortcuts|❯|esc to interrupt/.test(pane)) { // the CLI's UI is up
-      if (rename) {
-        await tmux(['send-keys', '-l', '-t', name, `/rename ${rename}`]).catch(() => {});
-        await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
-      }
+      // pasteSubmit, not send-keys+Enter: an Enter inside the typing burst became a newline,
+      // so the seed landed on the same prompt and the whole brief was submitted as the title.
+      if (rename) await pasteSubmit(name, `/rename ${rename}`);
       if (seed) {
         if (rename) await sleep(600); // let the /rename submit first
         // seed may be a Promise (a handoff summary still building in the background) —
@@ -306,10 +305,8 @@ export async function renameSession(name, title) {
   if (cleanTitle && getProvider(kind).supportsRename) {
     const cmd = (await tmux(['display-message', '-p', '-t', name, '#{pane_current_command}']).catch(() => '')).trim();
     if (/claude|node/i.test(cmd)) {
-      // -l sends the text literally (so titles with key-like words aren't parsed),
-      // then a separate Enter submits the slash command.
-      await tmux(['send-keys', '-l', '-t', name, `/rename ${cleanTitle}`]).catch(() => {});
-      await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
+      // pasteSubmit waits out the paste window before Enter (see its comment).
+      await pasteSubmit(name, `/rename ${cleanTitle}`);
     }
   }
 }
