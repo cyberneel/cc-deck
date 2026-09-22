@@ -56,7 +56,7 @@ function renderList(data, container) {
     const full = data.path.replace(/\/$/, '') + '/' + e.name;
     const lead = e.type === 'file'
       ? `<a class="fx-act" href="/api/files/download?path=${encodeURIComponent(full)}" title="Download" download>⬇</a>`
-      : `<button class="fx-act fx-sess" data-path="${esc(full)}" title="New session here">▶</button>`;
+      : `<button class="fx-act fx-sess" data-path="${esc(full)}" title="New Deep Session here">▶</button>`;
     return `<div class="fx-row ${e.type}" data-name="${esc(e.name)}" data-full="${esc(full)}">
       <span class="fx-ico">${e.type === 'dir' ? '📁' : '📄'}</span>
       <span class="fx-name">${esc(e.name)}</span>
@@ -93,5 +93,5 @@ async function newSessionHere(dir) {
   try {
     const { name } = await gj('/api/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dir }) });
     location.href = `/terminal.html?session=${encodeURIComponent(name)}`;
-  } catch (e) { toast('Could not start session: ' + e.message); }
+  } catch (e) { toast('Could not start Deep Session: ' + e.message); }
 }

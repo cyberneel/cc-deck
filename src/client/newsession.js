@@ -18,7 +18,7 @@ export function openNewModal({ api, cfg = {}, onCreated }) {
   bg.className = 'modal-bg';
   bg.innerHTML = `
     <div class="modal">
-      <h2>New session</h2>
+      <h2>New Deep Session</h2>
       ${cliField}
       <div class="field">
         <label>Directory</label>

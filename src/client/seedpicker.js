@@ -20,13 +20,13 @@ export async function populateSeedSources(listEl, excludeId) {
   listEl.innerHTML =
     (a.length ? `<div class="seed-group">Active</div>${a.join('')}` : '') +
     (h.length ? `<div class="seed-group">Past</div>${h.join('')}` : '')
-    || '<div class="faint" style="padding:8px">(no other sessions found)</div>';
+    || '<div class="faint" style="padding:8px">(no other Deep Sessions found)</div>';
 }
 
 // Reusable "seed with context" field for the New Session modal (multi-select).
 export const SEED_FIELD_HTML = `
   <div class="field">
-    <label class="seed-toggle"><input type="checkbox" id="seed-on" /> Seed with context from other sessions</label>
+    <label class="seed-toggle"><input type="checkbox" id="seed-on" /> Seed with context from other Deep Sessions</label>
     <div id="seed-opts" style="display:none;margin-top:8px">
       <input id="seed-filter" placeholder="filter by title / directory…" spellcheck="false" autocomplete="off" style="margin-bottom:6px" />
       <div id="seed-list" class="seed-list"><div class="faint" style="padding:8px">Loading…</div></div>
@@ -34,7 +34,7 @@ export const SEED_FIELD_HTML = `
         <button type="button" data-v="summary" class="active">AI summary</button>
         <button type="button" data-v="thread">Full transcript</button>
       </div>
-      <div class="faint" id="seed-count" style="margin-top:6px">Pick one or more sessions to seed from.</div>
+      <div class="faint" id="seed-count" style="margin-top:6px">Pick one or more Deep Sessions to seed from.</div>
     </div>
   </div>`;
 
@@ -51,8 +51,8 @@ export function wireSeedSection(root, excludeId) {
   const updateCount = () => {
     const n = list.querySelectorAll('input[data-id]:checked').length;
     count.textContent = n
-      ? `${n} session${n > 1 ? 's' : ''} selected — the new session starts having read ${n > 1 ? 'their combined context' : 'its context'}.`
-      : 'Pick one or more sessions to seed from.';
+      ? `${n} Deep Session${n > 1 ? 's' : ''} selected — the new Deep Session starts having read ${n > 1 ? 'their combined context' : 'its context'}.`
+      : 'Pick one or more Deep Sessions to seed from.';
   };
   on.addEventListener('change', async () => {
     opts.style.display = on.checked ? '' : 'none';

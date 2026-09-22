@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "cc-deck",
-  "short_name": "cc-deck",
-  "description": "Dashboard for your Claude CLI sessions",
+  "name": "Deep Sessions",
+  "short_name": "Deep Sessions",
+  "description": "Your Deep Sessions — Claude CLI coding sessions",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",

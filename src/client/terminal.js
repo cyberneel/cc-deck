@@ -45,22 +45,22 @@ const prevStatus = {};
 document.body.innerHTML = `
   <div id="app-term" class="${sidebarOpen ? '' : 'collapsed'}">
     <aside id="sidebar">
-      <div class="sb-head"><span>Sessions</span><button id="sb-collapse" class="icon" title="Collapse">«</button></div>
-      <button id="sb-new" class="sb-new">+ New session</button>
-      <button id="sb-resume" class="sb-new sb-resume">↩ Resume a session</button>
+      <div class="sb-head"><span>Deep Sessions</span><button id="sb-collapse" class="icon" title="Collapse">«</button></div>
+      <button id="sb-new" class="sb-new">+ New Deep Session</button>
+      <button id="sb-resume" class="sb-new sb-resume">↩ Resume a Deep Session</button>
       <div id="sb-list"></div>
       <div class="sb-foot faint">Alt+\` to cycle · Alt+1–9 to jump</div>
     </aside>
     <div id="sb-backdrop"></div>
     <div id="main">
       <div class="term-bar">
-        <button id="sb-toggle" class="icon" title="Toggle sidebar (sessions)">☰<span id="sb-badge" class="sb-badge" style="display:none"></span></button>
+        <button id="sb-toggle" class="icon" title="Toggle sidebar (Deep Sessions)">☰<span id="sb-badge" class="sb-badge" style="display:none"></span></button>
         <a href="/" title="Back to dashboard">←</a>
         <span class="title" id="title">${currentSession || 'session'}</span>
         <div class="spacer" style="flex:1"></div>
         <button id="notes-btn" class="icon" title="Updates from outside chats" style="display:none"></button>
         <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
-        <button id="upload-btn" class="icon" title="Send files / folder to this session">📎</button>
+        <button id="upload-btn" class="icon" title="Send files / folder to this Deep Session">📎</button>
         <button id="reload-btn" class="icon" title="Reload app">↻</button>
         <button id="scroll-toggle" class="icon" title="Scroll mode — tmux: full history; fast: smooth local scroll"></button>
         <span class="status" id="status">connecting…</span>
@@ -270,7 +270,7 @@ async function openResumeModal() {
   const bg = document.createElement('div');
   bg.className = 'modal-bg';
   bg.innerHTML = `<div class="modal" style="max-width:520px">
-    <h2>Resume a session</h2>
+    <h2>Resume a Deep Session</h2>
     <input id="rs-filter" placeholder="filter by title / directory…" spellcheck="false" autocomplete="off" style="margin-bottom:6px" />
     <div id="rs-list" class="seed-list"><div class="faint" style="padding:8px">Loading…</div></div>
     <div class="modal-actions"><button id="rs-cancel">Cancel</button></div>
@@ -286,7 +286,7 @@ async function openResumeModal() {
   list.innerHTML = items.map((s) =>
     `<div class="seed-item" data-id="${esc(s.sessionId)}" data-dir="${esc(s.cwd)}" data-title="${esc(s.title)}">
       <span class="seed-item-main"><span class="seed-item-title">${esc(s.title)}</span><span class="seed-item-meta faint">${esc(s.cwd)}${s.gitBranch ? ' · ' + esc(s.gitBranch) : ''}</span></span>
-    </div>`).join('') || '<div class="faint" style="padding:8px">No past sessions.</div>';
+    </div>`).join('') || '<div class="faint" style="padding:8px">No past Deep Sessions.</div>';
   bg.querySelector('#rs-filter').addEventListener('input', (e) => {
     const q = e.target.value.toLowerCase();
     list.querySelectorAll('.seed-item').forEach((el) => { el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none'; });
@@ -695,9 +695,9 @@ function sidebarItemHtml(s, i) {
   // Remote sessions (over SSH) are attach-only for now — no rename/kill/share.
   const actions = s.remote
     ? `<span class="sb-remote-tag" title="Remote tmux session on ${esc(s.host)} — attach only">${esc(s.paneCommand || 'remote')}</span>`
-    : `${s.liveSessionId ? `<button class="sb-share" title="Share this session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
-        <button class="sb-rename" title="Rename session" data-rename="${esc(s.name)}">✎</button>
-        <button class="sb-kill" title="Kill session" data-kill="${esc(s.name)}">✕</button>`;
+    : `${s.liveSessionId ? `<button class="sb-share" title="Share this Deep Session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
+        <button class="sb-rename" title="Rename Deep Session" data-rename="${esc(s.name)}">✎</button>
+        <button class="sb-kill" title="Kill Deep Session" data-kill="${esc(s.name)}">✕</button>`;
   return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''} ${s.remote ? 'remote' : ''}" data-name="${esc(s.name)}">
       <span class="sb-dot ${statusDot(s)}"></span>
       <span class="sb-meta"><span class="sb-title">${cliTag}${esc(s.title)}</span><span class="sb-dir">${dirLine}</span></span>
@@ -719,7 +719,7 @@ function renderSidebar() {
   if (remote.length && local.length) html += group('Native');
   html += local.map((s) => sidebarItemHtml(s, idx++)).join('');
   if (remote.length) { html += group('Remote'); html += remote.map((s) => sidebarItemHtml(s, idx++)).join(''); }
-  list.innerHTML = html || '<div class="faint" style="padding:12px">No active sessions</div>';
+  list.innerHTML = html || '<div class="faint" style="padding:12px">No active Deep Sessions</div>';
   list.querySelectorAll('.sb-item').forEach((el) =>
     el.addEventListener('click', (e) => { if (!e.target.closest('.sb-kill, .sb-rename, .sb-share')) switchTo(el.dataset.name); }));
   updateNotesBtn();
@@ -741,7 +741,7 @@ function renderSidebar() {
 
 async function renameSessionFromSidebar(name) {
   const s = sessions.find((x) => x.name === name);
-  const title = prompt('Rename session', s?.title || '');
+  const title = prompt('Rename Deep Session', s?.title || '');
   if (title == null) return;
   try { await api(`/api/sessions/${name}`, { method: 'PATCH', body: JSON.stringify({ title }) }); }
   catch (e) { alert('Rename failed: ' + e.message); return; }
@@ -750,7 +750,7 @@ async function renameSessionFromSidebar(name) {
 
 async function killSessionFromSidebar(name) {
   const s = sessions.find((x) => x.name === name);
-  if (!confirm(`Kill session "${s?.title || name}"? Claude and its tmux session will be terminated.`)) return;
+  if (!confirm(`Kill Deep Session "${s?.title || name}"? Claude and its tmux session will be terminated.`)) return;
   try { await api(`/api/sessions/${name}`, { method: 'DELETE' }); }
   catch (e) { alert('Kill failed: ' + e.message); return; }
   if (panes.has(name)) disposePane(name);
@@ -852,7 +852,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) chec
 
 // ---- boot ----
 if (!currentSession) {
-  setStatus('no session specified', 'closed');
+  setStatus('no Deep Session specified', 'closed');
 } else {
   makePane(currentSession);
   showPane(currentSession);

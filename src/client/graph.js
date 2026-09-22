@@ -20,12 +20,12 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
     <div class="modal graph-modal">
       <div class="graph-top">
         <div class="graph-titles">
-          <h2>${escH(fallbackTitle || 'Session graph')}</h2>
+          <h2>${escH(fallbackTitle || 'Deep Session graph')}</h2>
           <div class="faint" id="gx-sub">loading…</div>
         </div>
         <div class="graph-actions">
-          <button class="gx-share" title="Share this session's context into another session" disabled>Share →</button>
-          <button class="primary gx-fork" title="Fork into a new session that copies this context" disabled>⑂ Fork</button>
+          <button class="gx-share" title="Share this Deep Session's context into another Deep Session" disabled>Share →</button>
+          <button class="primary gx-fork" title="Fork into a new Deep Session that copies this context" disabled>⑂ Fork</button>
           <button class="icon gx-close" title="Close">✕</button>
         </div>
       </div>
@@ -49,7 +49,7 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
   try { g = await gj(`/api/transcripts/${encodeURIComponent(sessionId)}/graph?_=1${cwdQ}`); }
   catch (e) { scroll.innerHTML = `<div class="graph-empty">Couldn’t load graph: ${escH(e.message)}</div>`; return; }
 
-  bg.querySelector('h2').textContent = g.title || fallbackTitle || 'Session graph';
+  bg.querySelector('h2').textContent = g.title || fallbackTitle || 'Deep Session graph';
   bg.querySelector('#gx-sub').textContent =
     `${g.cwd || ''}${g.gitBranch ? ' · ' + g.gitBranch : ''} · ${g.stats.messages} msgs · ` +
     `${g.stats.branchPoints} branch${g.stats.branchPoints === 1 ? '' : 'es'} · ~${tok(g.stats.totalTokens)} tokens`;
@@ -181,17 +181,17 @@ export async function openShare(sessionId, meta, getSelectedId = () => null) {
       </div>
       ${selId ? `<div class="field"><label>Range</label>
         <div class="seg" id="sh-range">
-          <button data-v="whole" class="active">Whole session</button>
+          <button data-v="whole" class="active">Whole Deep Session</button>
           <button data-v="node">Up to selected message</button>
         </div></div>` : ''}
       <div class="field"><label>Send to</label>
         <div class="seg" id="sh-dest">
-          <button data-v="new" class="active">New session</button>
-          <button data-v="running">Running session</button>
+          <button data-v="new" class="active">New Deep Session</button>
+          <button data-v="running">Running Deep Session</button>
         </div></div>
       <div class="field" id="sh-new-wrap"><label>Directory</label>
         <input id="sh-dir" value="${escH(g.cwd || cwd || '')}" spellcheck="false" /></div>
-      <div class="field" id="sh-run-wrap" style="display:none"><label>Target session</label>
+      <div class="field" id="sh-run-wrap" style="display:none"><label>Target Deep Session</label>
         <select id="sh-target"></select></div>
       <div class="error" id="sh-err"></div>
       <div class="modal-actions">
@@ -225,7 +225,7 @@ export async function openShare(sessionId, meta, getSelectedId = () => null) {
     const { sessions } = await gj('/api/sessions?_=1');
     sm.querySelector('#sh-target').innerHTML =
       (sessions || []).map((s) => `<option value="${escH(s.name)}">${escH(s.title || s.name)}</option>`).join('')
-      || '<option value="">(no running sessions)</option>';
+      || '<option value="">(no running Deep Sessions)</option>';
   } catch { /* leave empty */ }
 
   sm.querySelector('#sh-go').addEventListener('click', async () => {

@@ -187,7 +187,7 @@ function wireGroupToggles(container) {
 function render() {
   app.innerHTML = `
     <div class="topbar">
-      <div class="brand"><span class="dot"></span> cc-deck</div>
+      <div class="brand"><span class="dot"></span> Deep Sessions</div>
       <button id="menu-btn" class="icon menu-btn" title="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
       <div class="toggle tabs" id="tabs">
         <button data-tab="active" class="${tab === 'active' ? 'active' : ''}">Active</button>
@@ -197,8 +197,8 @@ function render() {
       </div>
       <div class="spacer"></div>
       <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
-      <button class="primary" id="new-btn" title="New session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New session'}</button>
-      <button id="snapshot-btn" class="icon" title="Snapshot sessions (restore after a reboot)">💾<span class="snap-age" id="snap-age"></span></button>
+      <button class="primary" id="new-btn" title="New Deep Session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New Deep Session'}</button>
+      <button id="snapshot-btn" class="icon" title="Snapshot Deep Sessions (restore after a reboot)">💾<span class="snap-age" id="snap-age"></span></button>
       <button id="storage-btn" class="icon" title="Storage &amp; cleanup">🗄</button>
       <button id="help-btn" class="icon help-btn" title="Help">?</button>
       <button id="reload-btn" class="icon" title="Reload app">↻</button>
@@ -207,7 +207,7 @@ function render() {
       <button id="opts-btn" class="icon opts-btn" title="Options" aria-haspopup="true" aria-expanded="false">⋯</button>
       <div class="opts-menu" id="opts-menu">
         <button data-target="help-btn">❔&nbsp; Help</button>
-        <button data-target="snapshot-btn">💾&nbsp; Snapshot sessions</button>
+        <button data-target="snapshot-btn">💾&nbsp; Snapshot Deep Sessions</button>
         <button data-target="storage-btn">🗄&nbsp; Storage &amp; cleanup</button>
         <button data-target="reload-btn">↻&nbsp; Reload app</button>
         ${cfg.account_url ? '<button data-target="account-link">👤&nbsp; Account ↗</button>' : ''}
@@ -291,7 +291,7 @@ function render() {
     try {
       const r = await api('/api/restore/snapshot', { method: 'POST' });
       const safe = !r.busy;
-      toast(`💾 Snapshot saved · ${r.count} session${r.count === 1 ? '' : 's'} · ${safe ? '✓ all idle — safe to reboot' : `⚠ ${r.busy} still working — let them finish first`}`);
+      toast(`💾 Snapshot saved · ${r.count} Deep Session${r.count === 1 ? '' : 's'} · ${safe ? '✓ all idle — safe to reboot' : `⚠ ${r.busy} still working — let them finish first`}`);
       loadSnap();
     } catch (err) { toast('Snapshot failed: ' + err.message); }
     finally { b.disabled = false; }
@@ -335,7 +335,7 @@ function renderStats() {
     tile('Running', running) +
     tile('Attached', attached) +
     tile('Directories', dirs) +
-    tile('Past sessions', historyLoaded ? historyTotal : '…', { tab: 'history', accent: tab === 'history' });
+    tile('Past Deep Sessions', historyLoaded ? historyTotal : '…', { tab: 'history', accent: tab === 'history' });
   el.querySelectorAll('.tile.clickable').forEach((t) =>
     t.addEventListener('click', () => {
       tab = t.dataset.go;
@@ -361,8 +361,8 @@ function renderActive() {
   if (!container) return;
   if (!sessions.length) {
     container.innerHTML = `<div class="empty">
-      <p style="font-size:18px">No Claude sessions running.</p>
-      <p class="muted">Launch one with <strong>+ New session</strong> — it starts <code>${esc(cfg.launchCommand)}</code> in the directory you choose.</p>
+      <p style="font-size:18px">No Deep Sessions running.</p>
+      <p class="muted">Launch one with <strong>+ New Deep Session</strong> — it starts <code>${esc(cfg.launchCommand)}</code> in the directory you choose.</p>
     </div>`;
     return;
   }
@@ -390,7 +390,7 @@ function wireActiveCards(container) {
     el.querySelector('.kill-btn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       const s = sessions.find((x) => x.name === name);
-      if (!confirm(`Kill session "${s.title}"? Claude and its tmux session will be terminated.`)) return;
+      if (!confirm(`Kill Deep Session "${s.title}"? Claude and its tmux session will be terminated.`)) return;
       await api(`/api/sessions/${name}`, { method: 'DELETE' });
       await refresh();
     });
@@ -407,7 +407,7 @@ function wireActiveCards(container) {
     el.querySelector('.rename-btn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       const s = sessions.find((x) => x.name === name);
-      const title = prompt('Rename session', s.title);
+      const title = prompt('Rename Deep Session', s.title);
       if (title == null) return;
       await api(`/api/sessions/${name}`, { method: 'PATCH', body: JSON.stringify({ title }) });
       await refresh();
@@ -427,9 +427,9 @@ function cardHtml(s) {
       <span class="faint">${s.attached ? 'attached · ' : ''}${fmtTime(s.lastActivity)}</span>
       <div class="spacer"></div>
       ${s.noteCount ? `<button class="icon note-btn" title="${s.noteCount} update(s) from outside chats — view / apply" data-note="${esc(s.name)}" data-live="${esc(s.liveSessionId || '')}">📝${s.noteCount}</button>` : ''}
-      ${s.liveSessionId ? `<button class="icon graph-btn" title="Session graph" data-graph="${esc(s.liveSessionId)}" data-cwd="${esc(s.dir || '')}" data-gtitle="${esc(s.title)}">⎇</button>` : ''}
+      ${s.liveSessionId ? `<button class="icon graph-btn" title="Deep Session graph" data-graph="${esc(s.liveSessionId)}" data-cwd="${esc(s.dir || '')}" data-gtitle="${esc(s.title)}">⎇</button>` : ''}
       <button class="icon rename-btn" title="Rename">✎</button>
-      <button class="icon danger kill-btn" title="Kill session">✕</button>
+      <button class="icon danger kill-btn" title="Kill Deep Session">✕</button>
     </div>
   </div>`;
 }
@@ -478,11 +478,11 @@ function renderHistory() {
   const container = document.getElementById('cards');
   if (!container) return;
   if (!historyLoaded) {
-    container.innerHTML = `<div class="empty"><p class="muted">Loading past sessions…</p></div>`;
+    container.innerHTML = `<div class="empty"><p class="muted">Loading past Deep Sessions…</p></div>`;
     return;
   }
   if (!history.length) {
-    container.innerHTML = `<div class="empty"><p style="font-size:18px">No past sessions found.</p>
+    container.innerHTML = `<div class="empty"><p style="font-size:18px">No past Deep Sessions found.</p>
       <p class="muted">Claude transcripts live in <code>~/.claude/projects</code>.</p></div>`;
     return;
   }
@@ -556,7 +556,7 @@ const FORK_ICON = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" s
 // Fork a session into a NEW one that copies its context (claude --fork-session),
 // then jump into it. Used from history cards and the graph viewer.
 async function forkFrom(resume, dir, title, btn) {
-  if (!dir) { alert('No recorded directory for this session — can’t fork.'); return; }
+  if (!dir) { alert('No recorded directory for this Deep Session — can’t fork.'); return; }
   if (btn) btn.disabled = true;
   try {
     const { name } = await api('/api/sessions', {
@@ -574,8 +574,8 @@ function historyCardHtml(s) {
   const noCwd = !s.cwd;
   const runningName = liveClaudeMap.get(s.sessionId) || null;
   const noteBadge = s.noteCount ? `<button class="icon note-btn" title="${s.noteCount} update(s) from outside chats — view (applied on resume)" data-note-id="${esc(s.sessionId)}">📝${s.noteCount}</button>` : '';
-  const graphBtn = `<button class="icon graph-btn" title="Session graph" data-graph="${esc(s.sessionId)}" data-cwd="${esc(s.cwd || '')}" data-gtitle="${esc(s.title)}">⎇</button>`;
-  const forkBtn = noCwd ? '' : `<button class="icon fork-btn" title="Fork into a new session (copies this session's context)" data-fork="${esc(s.sessionId)}" data-cwd="${esc(s.cwd || '')}" data-gtitle="${esc(s.title)}">${FORK_ICON}</button>`;
+  const graphBtn = `<button class="icon graph-btn" title="Deep Session graph" data-graph="${esc(s.sessionId)}" data-cwd="${esc(s.cwd || '')}" data-gtitle="${esc(s.title)}">⎇</button>`;
+  const forkBtn = noCwd ? '' : `<button class="icon fork-btn" title="Fork into a new Deep Session (copies this Deep Session's context)" data-fork="${esc(s.sessionId)}" data-cwd="${esc(s.cwd || '')}" data-gtitle="${esc(s.title)}">${FORK_ICON}</button>`;
   const foot = runningName
     ? `<span class="badge live"><span class="pulse"></span>running</span><div class="spacer"></div>
        ${noteBadge}${graphBtn}${forkBtn}<button class="primary open-btn">▶ Open</button>`
@@ -638,10 +638,10 @@ function renderSnapAge() {
   const el = document.getElementById('snap-age');
   const btn = document.getElementById('snapshot-btn');
   if (!el || !btn) return;
-  if (!lastSnap || !lastSnap.at) { el.textContent = ''; btn.title = 'Snapshot sessions (restore after a reboot)'; return; }
+  if (!lastSnap || !lastSnap.at) { el.textContent = ''; btn.title = 'Snapshot Deep Sessions (restore after a reboot)'; return; }
   const age = ageShort(Date.now() - lastSnap.at);
   el.textContent = age;
-  btn.title = `Last snapshot: ${lastSnap.count} session${lastSnap.count === 1 ? '' : 's'}, ${age} ago · click to snapshot now`;
+  btn.title = `Last snapshot: ${lastSnap.count} Deep Session${lastSnap.count === 1 ? '' : 's'}, ${age} ago · click to snapshot now`;
 }
 async function loadSnap() { try { lastSnap = await api('/api/restore'); } catch { /* */ } renderSnapAge(); }
 
@@ -710,7 +710,7 @@ function renderUsage() {
     <tbody>${u.byModel.map((m) =>
       `<tr><td>${esc(m.model)}</td><td>${m.messages.toLocaleString()}</td><td>${tokensFmt(m.input)}</td><td>${tokensFmt(m.output)}</td><td>${tokensFmt(m.cacheWrite + m.cacheRead)}</td><td>${tokensFmt(m.totalTokens)}</td><td>${money(m.cost)}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td>Total</td><td>${tot.messages.toLocaleString()}</td><td>${tokensFmt(tot.input)}</td><td>${tokensFmt(tot.output)}</td><td>${tokensFmt(tot.cache)}</td><td>${tokensFmt(tot.total)}</td><td>${money(tot.cost)}</td></tr></tfoot></table>
-    <p class="faint">Covers all Claude Code CLI usage on this machine (cc-deck sessions, direct <code>claude</code> runs, and headless <code>claude -p</code>) — <strong>not</strong> claude.ai web/mobile. For account-wide plan usage, see the ccburn pill.<br>
+    <p class="faint">Covers all Claude Code CLI usage on this machine (Deep Sessions, direct <code>claude</code> runs, and headless <code>claude -p</code>) — <strong>not</strong> claude.ai web/mobile. For account-wide plan usage, see the ccburn pill.<br>
     Estimated by applying Anthropic API list prices (including cache read/write rates) to your actual token usage. Your subscription isn't billed per token — this is what the same usage would cost on the pay-as-you-go API.<br>${pricingNote(u.pricing)}</p>
   </div></div>`;
 
