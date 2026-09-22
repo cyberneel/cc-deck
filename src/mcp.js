@@ -1,4 +1,4 @@
-// cc-deck MCP server: exposes your past Claude session transcripts as tools so
+// Deep Sessions MCP server: exposes your past Deep Session transcripts as tools so
 // another Claude (claude.ai web/mobile, Claude Code, etc.) can search them and
 // pull relevant context. Reuses the transcript machinery from graph/handoff/history.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -16,6 +16,7 @@ import { addNote } from './notes.js';
 import { createSession, sendText, listSessions } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
 import { listTabs, claimTab, releaseTab } from './browser.js';
+import { proactiveSet } from './origin.js';
 
 const exec = promisify(execFile);
 
@@ -53,6 +54,34 @@ async function resolveTranscriptId(arg) {
   const hist = (await listHistory().catch(() => ({ sessions: [] }))).sessions || [];
   const h = pickByTitle(hist, (x) => x.title, val);
   return h ? h.sessionId : null;
+}
+
+// Resolve an id-or-title to the session's working directory: the cwd recorded in
+// its transcript (works for live + past), falling back to a live session's tmux
+// dir (for a just-booted session with no transcript yet). Absolute, or null.
+async function resolveSessionCwd(arg) {
+  const id = await resolveTranscriptId(arg);
+  if (id) { try { const g = await buildGraph(id); if (g.cwd) return resolve(g.cwd); } catch { /* */ } }
+  const sessions = await liveSessions();
+  const val = String(arg || '').trim();
+  const s = isSessionId(val)
+    ? sessions.find((x) => x.liveSessionId === val || x.resumedFrom === val)
+    : pickByTitle(sessions, (x) => x.title, val);
+  return s && s.dir ? resolve(s.dir) : null;
+}
+
+// Files changed/created in the last 24h under `cwd` (deliverable-hunting for a
+// non-git dir; git dirs use `git status` instead). ponytail: shell `find`, not a
+// hand-rolled walk — it's on the box and does the prune + mtime filter in one call.
+async function recentFiles(cwd) {
+  try {
+    const { stdout } = await exec('find', [cwd, '-type', 'f', '-mmin', '-1440',
+      '-not', '-path', '*/.git/*', '-not', '-path', '*/node_modules/*',
+      '-not', '-path', '*/target/*', '-not', '-path', '*/dist/*'],
+      { timeout: 8000, maxBuffer: 1 << 20 });
+    return stdout.split('\n').filter(Boolean)
+      .map((p) => (p.startsWith(cwd + '/') ? p.slice(cwd.length + 1) : p)).slice(0, 40);
+  } catch { return []; }
 }
 
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
@@ -133,9 +162,11 @@ async function searchSessions(query, limit) {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return [];
   const files = await allTranscripts();
+  const hidden = await proactiveSet(); // Friday-made sessions don't clutter the user's search
   const results = [];
   for (const f of files) {
     if (results.length >= limit) break;
+    if (hidden.has(f.id)) continue;
     let text;
     try { text = (await readFile(f.file, 'utf8')).slice(0, READ_CAP); } catch { continue; }
     if (!words.every((w) => text.toLowerCase().includes(w))) continue; // cheap pre-filter
@@ -156,7 +187,7 @@ async function searchSessions(query, limit) {
 async function getContext(sessionId, format, maxChars) {
   const g = await buildGraph(sessionId); // throws 404 if not found
   const head = g.nodes.find((n) => n.current) || g.nodes[g.nodes.length - 1];
-  if (!head) return `Session ${sessionId} has no conversation content.`;
+  if (!head) return `Deep Session ${sessionId} has no conversation content.`;
   const { messages } = await buildThread(sessionId, head.id);
   const header = `# ${g.title}\n_dir: ${g.cwd || '?'}${g.gitBranch ? ' · branch: ' + g.gitBranch : ''} · ${messages.length} messages_\n\n`;
   if (format === 'summary') {
@@ -164,7 +195,13 @@ async function getContext(sessionId, format, maxChars) {
     return header + redact(await summarize(src));
   }
   const body = redact(messages.map((m) => `## ${m.role === 'user' ? 'User' : 'Claude'}\n${m.text}`).join('\n\n'));
-  const capped = body.length > maxChars ? body.slice(0, maxChars) + '\n\n…[truncated; ask for format:"summary" for the whole thing]' : body;
+  // Keep the END, not the start: the latest messages (the deliverable / current
+  // state) are what a caller wants; the old opening is the disposable part. Marker
+  // deliberately avoids the word "truncated" so Friday's relay (which falls back to
+  // the lossy summary on "[truncated") trusts this intact tail. ponytail: char slice.
+  const capped = body.length > maxChars
+    ? '…[earlier context omitted — ask for format:"summary" for the whole thing]\n\n' + body.slice(body.length - maxChars)
+    : body;
   return header + capped;
 }
 
@@ -174,55 +211,56 @@ export function createMcpServer({ sessionControl = false } = {}) {
   const server = new McpServer({ name: 'cc-deck', version: '1.0.0' });
 
   server.registerTool('search_sessions', {
-    title: 'Search past cc-deck sessions',
-    description: "Search the user's past Claude Code (cc-deck) session transcripts by keyword to find sessions relevant to the current question. Returns matching sessions with a snippet and a sessionId you can pass to get_session_context.",
+    title: 'Search past Deep Sessions',
+    description: "Search the user's past Deep Session transcripts by keyword to find Deep Sessions relevant to the current question. Returns matching Deep Sessions with a snippet and a sessionId you can pass to get_session_context.",
     inputSchema: {
-      query: z.string().min(1).max(200).describe('Keywords to search for across session transcripts (e.g. "logsync annotations", "proto field ids").'),
+      query: z.string().min(1).max(200).describe('Keywords to search for across Deep Session transcripts (e.g. "logsync annotations", "proto field ids").'),
       limit: z.number().int().min(1).max(25).optional().describe('Max results (default 8).'),
     },
   }, async ({ query, limit }) => {
     const r = await searchSessions(query, limit || 8);
-    if (!r.length) return text(`No sessions matched "${query}".`);
+    if (!r.length) return text(`No Deep Sessions matched "${query}".`);
     return text(r.map((s, i) =>
       `${i + 1}. ${s.title}\n   sessionId: ${s.sessionId}\n   dir: ${s.cwd || '?'}${s.gitBranch ? ' · ' + s.gitBranch : ''} · ${s.lastModified.slice(0, 10)}\n   …${s.snippet}…`).join('\n\n'));
   });
 
   server.registerTool('list_recent_sessions', {
-    title: 'List recent cc-deck sessions',
-    description: "List the user's most recent Claude Code (cc-deck) sessions (title, directory, date). Use to see what they've been working on lately.",
+    title: 'List recent Deep Sessions',
+    description: "List the user's most recent Deep Sessions (title, directory, date). Use to see what they've been working on lately.",
     inputSchema: { limit: z.number().int().min(1).max(40).optional().describe('How many (default 15).') },
   }, async ({ limit }) => {
     const { sessions } = await listHistory();
-    const top = sessions.slice(0, limit || 15);
-    if (!top.length) return text('No past sessions found.');
+    const hidden = await proactiveSet(); // hide Friday-made sessions from "what have I worked on"
+    const top = sessions.filter((s) => !hidden.has(s.sessionId)).slice(0, limit || 15);
+    if (!top.length) return text('No past Deep Sessions found.');
     return text(top.map((s, i) =>
       `${i + 1}. ${redact(s.title)}\n   sessionId: ${s.sessionId}\n   dir: ${s.cwd || '?'}${s.gitBranch ? ' · ' + s.gitBranch : ''} · ${new Date(s.lastModified).toISOString().slice(0, 10)}`).join('\n\n'));
   });
 
   server.registerTool('get_session_context', {
-    title: 'Get context from a cc-deck session',
-    description: "Fetch the content of a specific past session so you can use it as context. format 'summary' returns a concise AI briefing (goal, decisions, current state, files, next steps); format 'transcript' returns the raw conversation (truncated).",
+    title: 'Get context from a Deep Session',
+    description: "Fetch the content of a specific past Deep Session so you can use it as context. format 'summary' returns a concise AI briefing (goal, decisions, current state, files, next steps); format 'transcript' returns the raw conversation (truncated).",
     inputSchema: {
-      session_id: z.string().describe("A sessionId (from search_sessions / list_recent_sessions) OR the session's title."),
+      session_id: z.string().describe("A sessionId (from search_sessions / list_recent_sessions) OR the Deep Session's title."),
       format: z.enum(['summary', 'transcript']).optional().describe("'summary' (default) or 'transcript'."),
       max_chars: z.number().int().min(2000).max(120000).optional().describe('For transcript format, cap on characters (default 40000).'),
     },
   }, async ({ session_id, format, max_chars }) => {
     const id = await resolveTranscriptId(session_id);
-    if (!id) return text(`No session matches "${session_id}". Pass a sessionId from search_sessions / list_recent_sessions, or an exact session title.`);
+    if (!id) return text(`No Deep Session matches "${session_id}". Pass a sessionId from search_sessions / list_recent_sessions, or an exact Deep Session title.`);
     try { return text(await getContext(id, format || 'summary', max_chars || 40000)); }
-    catch (e) { return text(`Could not load session: ${e.message}`); }
+    catch (e) { return text(`Could not load Deep Session: ${e.message}`); }
   });
 
   server.registerTool('save_session_summary', {
-    title: 'Save a summary back to a cc-deck session',
+    title: 'Save a summary back to a Deep Session',
     description:
-      "Save a concise summary of THIS conversation's outcomes back into a specific cc-deck session (any CLI — Claude, Codex, or agy), so that session becomes aware of what happened here the next time the user opens or resumes it. This is the cross-session note channel: it reaches a session even while it is offline. " +
-      'IMPORTANT: Only call this AFTER explicitly asking the user whether they want a summary saved back to that session, and confirming which session_id it should attach to (from a prior search_sessions / get_session_context result). ' +
-      'The summary should capture decisions made, conclusions reached, and any action items relevant to that session\'s work.',
+      "Save a concise summary of THIS conversation's outcomes back into a specific Deep Session (any CLI — Claude, Codex, or agy), so that Deep Session becomes aware of what happened here the next time the user opens or resumes it. This is the cross-Deep-Session note channel: it reaches a Deep Session even while it is offline. " +
+      'IMPORTANT: Only call this AFTER explicitly asking the user whether they want a summary saved back to that Deep Session, and confirming which session_id it should attach to (from a prior search_sessions / get_session_context result). ' +
+      'The summary should capture decisions made, conclusions reached, and any action items relevant to that Deep Session\'s work.',
     inputSchema: {
-      session_id: z.string().describe('The cc-deck sessionId this summary attaches to (from search_sessions / get_session_context) — or the session title.'),
-      summary: z.string().min(1).max(8000).describe('A concise summary of the outcomes/decisions/action-items from this conversation, written for the other session to pick up.'),
+      session_id: z.string().describe('The sessionId this summary attaches to (from search_sessions / get_session_context) — or the Deep Session title.'),
+      summary: z.string().min(1).max(8000).describe('A concise summary of the outcomes/decisions/action-items from this conversation, written for the other Deep Session to pick up.'),
     },
   }, async ({ session_id, summary }) => {
     // Resolve id-or-title; if that misses but the arg is itself a valid CLI
@@ -230,20 +268,20 @@ export function createMcpServer({ sessionControl = false } = {}) {
     // key the note to it directly so cross-provider notes still land.
     const arg = String(session_id || '').trim();
     const id = (await resolveTranscriptId(arg)) || (ANY_ID_RE.test(arg) ? arg : null);
-    if (!id) return text(`No session matches "${session_id}". Pass a sessionId (from search_sessions / get_session_context / list_sessions) or an exact session title.`);
+    if (!id) return text(`No Deep Session matches "${session_id}". Pass a sessionId (from search_sessions / get_session_context / list_sessions) or an exact Deep Session title.`);
     try { await addNote(id, summary); }
     catch (e) { return text(`Could not save: ${e.message}`); }
-    return text('Saved. This summary will surface in that cc-deck session the next time the user opens or resumes it.');
+    return text('Saved. This summary will surface in that Deep Session the next time the user opens or resumes it.');
   });
 
   server.registerTool('list_sessions', {
-    title: 'List active cc-deck sessions with live status',
+    title: 'List active Deep Sessions with live status',
     description:
-      "List the user's currently ACTIVE cc-deck (Claude Code) sessions with live, structured status — for detecting state transitions (a session finishing, waiting for the user, or exiting). " +
+      "List the user's currently ACTIVE Deep Sessions (Claude Code) with live, structured status — for detecting state transitions (a Deep Session finishing, waiting for the user, or exiting). " +
       'Returns a JSON array; poll and diff the `status`/`needs_input` fields to notice transitions. Each item: ' +
       '{ session_id, name, title, dir, status, needs_input, waiting_for, attached, last_activity }. ' +
       "`status` is one of: running (Claude is working), waiting_input (blocked on the user — a prompt/permission/question), idle (at its prompt, not working), done (Claude exited, the shell remains). " +
-      '`name` is stable for the session\'s lifetime; `session_id` is the live Claude id (changes across resume/fork) or null if Claude isn\'t running.',
+      '`name` is stable for the Deep Session\'s lifetime; `session_id` is the live Claude id (changes across resume/fork) or null if Claude isn\'t running.',
     inputSchema: {},
   }, async () => {
     const sessions = await listSessions();
@@ -275,13 +313,13 @@ export function createMcpServer({ sessionControl = false } = {}) {
   if (config.sessionBrowser) {
     server.registerTool('browser_tabs', {
       title: 'List shared-browser tabs + who has them',
-      description: "See every tab in the SHARED logged-in browser and who has claimed it (the visible lock registry). Call this BEFORE touching the browser so you don't disturb tabs other cc-deck sessions or Friday rely on. Returns JSON: [{ target_id, title, url, claimed_by, claimed_since }].",
+      description: "See every tab in the SHARED logged-in browser and who has claimed it (the visible lock registry). Call this BEFORE touching the browser so you don't disturb tabs other Deep Sessions or Friday rely on. Returns JSON: [{ target_id, title, url, claimed_by, claimed_since }].",
       inputSchema: {},
     }, async () => { try { return text(JSON.stringify(await listTabs(), null, 2)); } catch (e) { return text('Shared browser unavailable: ' + e.message); } });
 
     server.registerTool('browser_claim', {
       title: 'Claim a shared-browser tab',
-      description: "Register a tab you are driving in the SHARED browser so other sessions/Friday see it's in use. Open your OWN tab first (chrome new_page) and navigate it, then claim it by target_id or url with a short note. Never claim or drive a tab someone else already claimed — open your own instead.",
+      description: "Register a tab you are driving in the SHARED browser so other Deep Sessions/Friday see it's in use. Open your OWN tab first (chrome new_page) and navigate it, then claim it by target_id or url with a short note. Never claim or drive a tab someone else already claimed — open your own instead.",
       inputSchema: {
         note: z.string().min(1).max(200).describe('Short description of what you are using the tab for (shown to other agents).'),
         target_id: z.string().optional().describe('The tab target id (from browser_tabs).'),
@@ -300,12 +338,12 @@ export function createMcpServer({ sessionControl = false } = {}) {
   // the static-bearer caller (e.g. Claude Code / a headless agent), never OAuth connectors.
   if (sessionControl) {
     server.registerTool('create_session', {
-      title: 'Start a cc-deck coding session',
-      description: 'Launch a new cc-deck (Claude Code) session in a repo directory, seeded with a task/context prompt that is typed into Claude once it boots. Use to spin up work on a task.',
+      title: 'Start a Deep Session',
+      description: 'Launch a new Deep Session (Claude Code) in a repo directory, seeded with a task/context prompt that is typed into Claude once it boots. Use to spin up work on a task.',
       inputSchema: {
         dir: z.string().describe('Absolute path to the repo/working directory (must be under an allowed root).'),
         prompt: z.string().min(1).describe('The task + context to type into Claude after it boots.'),
-        title: z.string().optional().describe('Short session title; defaults to the folder name.'),
+        title: z.string().optional().describe('Short Deep Session title; defaults to the folder name.'),
       },
     }, async ({ dir, prompt, title }) => {
       try {
@@ -316,9 +354,9 @@ export function createMcpServer({ sessionControl = false } = {}) {
         if (config.roots.some((r) => abs === r || abs.startsWith(r + '/'))) {
           await mkdir(abs, { recursive: true });
         }
-        const name = await createSession({ dir: abs, title, seed: prompt });
-        return text(redact(`Started session ${name} in ${abs}. It's booting; its Claude sessionId will appear shortly via list_recent_sessions.`));
-      } catch (e) { return text(`ERROR: could not start session — ${e.message}`); }
+        const name = await createSession({ dir: abs, title, seed: prompt, origin: 'proactive' });
+        return text(redact(`Started Deep Session ${name} in ${abs}. It's booting; its Claude sessionId will appear shortly via list_recent_sessions.`));
+      } catch (e) { return text(`ERROR: could not start Deep Session — ${e.message}`); }
     });
 
     // "Start it in my sds folder" — the caller (Friday) runs elsewhere (a microVM on hosted),
@@ -350,10 +388,10 @@ export function createMcpServer({ sessionControl = false } = {}) {
     });
 
     server.registerTool('send_to_session', {
-      title: 'Send input to a running cc-deck session',
-      description: 'Type a line into an already-running cc-deck session (a live nudge, submitted with Enter). The session must be active — resume it in cc-deck first if not.',
+      title: 'Send input to a running Deep Session',
+      description: 'Type a line into an already-running Deep Session (a live nudge, submitted with Enter). The Deep Session must be active — resume it in Deep Sessions first if not.',
       inputSchema: {
-        session_id: z.string().describe("A Claude session id OR the session's title (as shown in cc-deck) — the session must be live."),
+        session_id: z.string().describe("A Claude session id OR the Deep Session's title (as shown in Deep Sessions) — the Deep Session must be live."),
         text: z.string().min(1).describe('The text to send; it is submitted with Enter.'),
       },
     }, async ({ session_id, text: line }) => {
@@ -362,9 +400,49 @@ export function createMcpServer({ sessionControl = false } = {}) {
       const s = isSessionId(val)
         ? sessions.find((x) => x.liveSessionId === val || x.resumedFrom === val)
         : pickByTitle(sessions, (x) => x.title, val);
-      if (!s) return text(`ERROR: no live session matches "${session_id}". Live now: ${liveHint(sessions)}. Pass one of those ids or an exact title (resume a past session in cc-deck first if it isn't listed).`);
+      if (!s) return text(`ERROR: no live Deep Session matches "${session_id}". Live now: ${liveHint(sessions)}. Pass one of those ids or an exact title (resume a past Deep Session in Deep Sessions first if it isn't listed).`);
       try { await sendText(s.name, line); return text(redact(`Sent to "${s.title || s.name}".`)); }
       catch (e) { return text(`ERROR: could not send — ${e.message}`); }
+    });
+
+    server.registerTool('get_session_files', {
+      title: 'List files a Deep Session changed',
+      description: "Show the files a Deep Session created/modified in its working directory (git status --short, or recently-modified files for a non-git dir). Use this to find the deliverable a Deep Session produced — a report, doc, or code file — then read_session_file to read it.",
+      inputSchema: {
+        session_id: z.string().describe("A sessionId (from search_sessions / list_recent_sessions) OR the Deep Session's title."),
+      },
+    }, async ({ session_id }) => {
+      const cwd = await resolveSessionCwd(session_id);
+      if (!cwd) return text(`No Deep Session/dir matches "${session_id}". Pass a sessionId or an exact Deep Session title.`);
+      const parts = [`dir: ${cwd}`];
+      try {
+        const { stdout } = await exec('git', ['-C', cwd, 'status', '--short'], { timeout: 8000, maxBuffer: 1 << 20 });
+        parts.push(stdout.trim() ? 'changed files (git status --short):\n' + stdout.trimEnd() : '(git repo, working tree clean)');
+      } catch {
+        const recent = await recentFiles(cwd);
+        parts.push(recent.length ? 'recently modified files (last 24h):\n' + recent.join('\n') : '(not a git repo; no files modified in the last 24h)');
+      }
+      return text(redact(parts.join('\n\n')));
+    });
+
+    server.registerTool('read_session_file', {
+      title: 'Read a file from a Deep Session directory',
+      description: "Read the contents of a file inside a Deep Session's working directory (e.g. a report/doc/code file it produced). The path is confined to the Deep Session's own directory and secrets are redacted. Use get_session_files to discover paths.",
+      inputSchema: {
+        session_id: z.string().describe("A sessionId OR the Deep Session's title."),
+        path: z.string().min(1).describe("File path relative to the Deep Session's working directory (an absolute path inside it also works)."),
+      },
+    }, async ({ session_id, path }) => {
+      const cwd = await resolveSessionCwd(session_id);
+      if (!cwd) return text(`No Deep Session/dir matches "${session_id}".`);
+      const abs = resolve(cwd, path); // absolute `path` overrides cwd; the guard below re-confines it
+      if (abs !== cwd && !abs.startsWith(cwd + '/')) return text(`ERROR: path escapes the Deep Session directory (${cwd}).`);
+      try {
+        const st = await stat(abs);
+        if (!st.isFile()) return text(`ERROR: not a file: ${path}`);
+        if (st.size > 512_000) return text(`ERROR: file too large (${st.size} bytes, cap 512KB). Read a smaller file or a specific part.`);
+        return text(redact(`# ${path}\n\n` + await readFile(abs, 'utf8')));
+      } catch (e) { return text(`Could not read "${path}": ${e.message}`); }
     });
   }
 

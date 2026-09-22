@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { listSessions, createSession } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
+import { markProactive } from './origin.js';
 
 const DIR = join(homedir(), '.claude', 'cc-deck');
 const FILE = process.env.CCDECK_RESTORE_FILE || join(DIR, 'restore.json');
@@ -20,9 +21,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function captureSnapshot({ skipIfEmpty = false } = {}) {
   const sessions = await listSessions();
   try { matchAgents(sessions, await getAgents()); } catch { /* resume ids best-effort */ }
+  // Now that liveSessionIds are known, record proactive ones so search/history can
+  // hide them (their sessionId is only knowable once the CLI has booted).
+  await markProactive(
+    sessions.filter((s) => s.origin === 'proactive').flatMap((s) => [s.liveSessionId, s.resumedFrom]),
+  ).catch(() => {});
   const entries = sessions
     .filter((s) => s.dir)
-    .map((s) => ({ dir: s.dir, title: s.title, resume: s.liveSessionId || s.resumedFrom || null, kind: s.kind || undefined }));
+    .map((s) => ({ dir: s.dir, title: s.title, resume: s.liveSessionId || s.resumedFrom || null, kind: s.kind || undefined, origin: s.origin !== 'user' ? s.origin : undefined }));
   if (!entries.length && skipIfEmpty) return -1; // keep last-good snapshot
   await mkdir(DIR, { recursive: true });
   const tmp = `${FILE}.tmp`;
@@ -48,11 +54,11 @@ export async function restoreIfBoot() {
   let restored = 0;
   for (const e of snap.sessions) {
     try {
-      await createSession({ dir: e.dir, title: e.title, resume: e.resume || undefined, kind: e.kind });
+      await createSession({ dir: e.dir, title: e.title, resume: e.resume || undefined, kind: e.kind, origin: e.origin });
       restored += 1;
     } catch {
       // Resume id invalid / transcript gone → fall back to a fresh session in the dir.
-      if (e.resume) { try { await createSession({ dir: e.dir, title: e.title, kind: e.kind }); restored += 1; } catch { /* dir gone */ } }
+      if (e.resume) { try { await createSession({ dir: e.dir, title: e.title, kind: e.kind, origin: e.origin }); restored += 1; } catch { /* dir gone */ } }
     }
     await sleep(800); // stagger claude launches
   }

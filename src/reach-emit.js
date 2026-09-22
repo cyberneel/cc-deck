@@ -38,6 +38,23 @@ function eventFor(s, from, to) {
       detail: s.waitingFor || undefined,
     };
   }
+  // Session FINISHED — Claude exited ('done'), or went from working back to its prompt
+  // ('running' -> 'idle', i.e. done with the current task). Fire a requireMatch reach carrying
+  // the title so an armed "call me when <session> finishes" Agenda condition rings INSTANTLY.
+  // requireMatch makes Friday drop it silently when nothing is armed, so this never adds a push
+  // for every session that finishes — Friday's own 60s poll still sends the proactive "want to
+  // see it?" nudge (a different key, so the two don't coalesce-clobber each other).
+  // ponytail: emits on every running->idle (once per turn) — fine, requireMatch drops the noise.
+  if (to === 'done' || (from === 'running' && to === 'idle')) {
+    const t = s.title || s.name;
+    return {
+      key: `ccdeck:${s.name}:finish-cb`,
+      urgency: 'high',
+      title: 'cc-deck',
+      body: `“${t}” finished.`,
+      requireMatch: true,
+    };
+  }
   return null;
 }
 
