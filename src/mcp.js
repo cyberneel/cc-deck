@@ -6,6 +6,8 @@ import { z } from 'zod';
 import { readdir, readFile, stat, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { config } from './config.js';
 import { buildGraph, buildThread, isSessionId } from './graph.js';
 import { listHistory } from './history.js';
@@ -14,6 +16,8 @@ import { addNote } from './notes.js';
 import { createSession, sendText, listSessions } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
 import { listTabs, claimTab, releaseTab } from './browser.js';
+
+const exec = promisify(execFile);
 
 // Callers (Friday, other agents) naturally refer to a session by the human TITLE
 // they see, not its UUID — so these tools accept either. Resolve leniently: a valid
@@ -315,6 +319,34 @@ export function createMcpServer({ sessionControl = false } = {}) {
         const name = await createSession({ dir: abs, title, seed: prompt });
         return text(redact(`Started session ${name} in ${abs}. It's booting; its Claude sessionId will appear shortly via list_recent_sessions.`));
       } catch (e) { return text(`ERROR: could not start session — ${e.message}`); }
+    });
+
+    // "Start it in my sds folder" — the caller (Friday) runs elsewhere (a microVM on hosted),
+    // so only THIS host can say which folders exist here. Searches folder NAMES under the
+    // allowed roots; spaces/case/punctuation ignored so "SDS 324E" matches sds324e.
+    server.registerTool('find_folders', {
+      title: 'Find a folder on this machine',
+      description: "Find existing folders on this cc-deck's machine by name (the user's repos, class folders, projects), under its allowed roots. Call this BEFORE create_session to start work in the user's existing folder instead of inventing one. Returns absolute paths on this machine.",
+      inputSchema: {
+        query: z.string().min(1).describe('Folder name or part of it, e.g. "sds 324e" or "friday". Case, spaces, and punctuation are ignored.'),
+      },
+    }, async ({ query }) => {
+      const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const q = norm(query);
+      if (!q) return text('ERROR: query has no letters or digits.');
+      const hits = [];
+      for (const root of config.roots) {
+        // ponytail: depth 4 + pruned hidden/build dirs (~0.4s on a full home); raise the depth if a folder sits deeper
+        const { stdout } = await exec('find', [root, '-maxdepth', '4',
+          '(', '-name', '.*', '-o', '-name', 'node_modules', '-o', '-name', 'target', '-o', '-name', '__pycache__', '-o', '-name', 'venv', ')',
+          '-prune', '-o', '-type', 'd', '-print'], { timeout: 15000, maxBuffer: 8 << 20 }).catch((e) => ({ stdout: e.stdout || '' }));
+        for (const p of stdout.split('\n')) if (p && norm(p.slice(p.lastIndexOf('/') + 1)).includes(q)) hits.push(p);
+      }
+      // Exact name first, then shallower paths (the project root over its subfolders).
+      const exact = (p) => norm(p.slice(p.lastIndexOf('/') + 1)) === q;
+      hits.sort((a, b) => exact(b) - exact(a) || a.split('/').length - b.split('/').length);
+      if (!hits.length) return text(`No folder matching "${query}" under ${config.roots.join(', ')}. create_session will create a new folder under a root if you pass a new path.`);
+      return text(hits.slice(0, 20).join('\n'));
     });
 
     server.registerTool('send_to_session', {
