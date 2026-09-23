@@ -13,7 +13,7 @@ const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 // a single transcript — and before the result cap, so excluded churn can't push
 // real sessions out of the list.
 const EXCLUDED_ENCODED = config.excludeDirs.map((d) => d.replace(/\//g, '-'));
-function isExcludedProjectDir(name) {
+export function isExcludedProjectDir(name) {
   return EXCLUDED_ENCODED.some((enc) => name === enc || name.startsWith(enc + '-'));
 }
 const SESSION_ID_RE = /^[0-9a-fA-F-]{36}$/;

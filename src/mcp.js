@@ -10,7 +10,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { config } from './config.js';
 import { buildGraph, buildThread, isSessionId } from './graph.js';
-import { listHistory } from './history.js';
+import { listHistory, isExcludedProjectDir } from './history.js';
 import { summarize } from './handoff.js';
 import { addNote } from './notes.js';
 import { createSession, sendText, listSessions } from './tmux.js';
@@ -143,7 +143,7 @@ async function allTranscripts() {
   let dirs;
   try { dirs = await readdir(PROJECTS_DIR, { withFileTypes: true }); } catch { return out; }
   for (const d of dirs) {
-    if (!d.isDirectory()) continue;
+    if (!d.isDirectory() || isExcludedProjectDir(d.name)) continue; // same CCDECK_EXCLUDE_DIRS as History
     let names; try { names = await readdir(join(PROJECTS_DIR, d.name)); } catch { continue; }
     for (const n of names) {
       if (!n.endsWith('.jsonl')) continue;
@@ -195,7 +195,9 @@ async function getContext(sessionId, format, maxChars) {
   const folder = g.cwd ? basename(g.cwd) : '';
   const header = `# ${redact((live && live.title) || g.title)}\n_folder: ${folder || '?'} (${g.cwd || '?'})${g.gitBranch ? ' · branch: ' + g.gitBranch : ''} · ${messages.length} messages_\n\n`;
   if (format === 'summary') {
-    const src = redact(messages.map((m) => `${m.role === 'user' ? 'User' : 'Claude'}: ${m.text}`).join('\n\n').slice(0, 120_000));
+    // Tail, not head: a long session's current state is at the end (Friday's episodic memory
+    // was getting summaries of only the opening of multi-day sessions).
+    const src = redact(messages.map((m) => `${m.role === 'user' ? 'User' : 'Claude'}: ${m.text}`).join('\n\n').slice(-120_000));
     return header + redact(await summarize(src));
   }
   const body = redact(messages.map((m) => `## ${m.role === 'user' ? 'User' : 'Claude'}\n${m.text}`).join('\n\n'));

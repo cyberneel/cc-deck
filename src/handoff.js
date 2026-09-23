@@ -30,7 +30,9 @@ export function summarize(text) {
       'Use tight bullet points. No pleasantries, no preamble.\n\n=== SESSION TRANSCRIPT ===\n' + text;
     let out = '', errOut = '';
     let child;
-    try { child = spawn('claude', ['-p', '--model', 'sonnet'], { env: { ...process.env, PATH } }); }
+    // --no-session-persistence: a summary run must not leave a transcript behind — each one
+    // was showing up as a "You are writing a CONTEXT HANDOFF…" session in History/search.
+    try { child = spawn('claude', ['-p', '--model', 'sonnet', '--no-session-persistence'], { env: { ...process.env, PATH } }); }
     catch (e) { return reject(err(500, 'could not launch claude: ' + e.message)); }
     const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* */ } reject(err(504, 'summary timed out')); }, 120_000);
     child.stdout.on('data', (d) => { out += d; });
