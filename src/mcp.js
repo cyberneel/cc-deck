@@ -3,8 +3,8 @@
 // pull relevant context. Reuses the transcript machinery from graph/handoff/history.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { readdir, readFile, stat, mkdir } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { readdir, readFile, stat, mkdir, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -184,6 +184,11 @@ async function searchSessions(query, limit) {
   return results;
 }
 
+// `${sessionId}:${headId}` → summary text (see getContext). Loaded once at startup.
+const SUMMARY_FILE = process.env.CCDECK_SUMMARY_FILE || join(homedir(), '.claude', 'cc-deck', 'summaries.json');
+const savedSummaries = readFile(SUMMARY_FILE, 'utf8').then(JSON.parse).catch(() => ({})); // missing/corrupt → cold
+const inflightSummaries = new Map(); // same key → Promise, so concurrent asks share one claude -p
+
 async function getContext(sessionId, format, maxChars) {
   const g = await buildGraph(sessionId); // throws 404 if not found
   const head = g.nodes.find((n) => n.current) || g.nodes[g.nodes.length - 1];
@@ -195,10 +200,31 @@ async function getContext(sessionId, format, maxChars) {
   const folder = g.cwd ? basename(g.cwd) : '';
   const header = `# ${redact((live && live.title) || g.title)}\n_folder: ${folder || '?'} (${g.cwd || '?'})${g.gitBranch ? ' · branch: ' + g.gitBranch : ''} · ${messages.length} messages_\n\n`;
   if (format === 'summary') {
-    // Tail, not head: a long session's current state is at the end (Friday's episodic memory
-    // was getting summaries of only the opening of multi-day sessions).
-    const src = redact(messages.map((m) => `${m.role === 'user' ? 'User' : 'Claude'}: ${m.text}`).join('\n\n').slice(-120_000));
-    return header + redact(await summarize(src));
+    // Memoized per (session, latest message): the claude -p summary takes ~40s, which a voice
+    // call spent in dead air. Friday's episode indexer fetches this once a session settles, so
+    // by the time the user asks about it the answer is warm. New activity → new head.id → fresh.
+    // Persisted so a cc-deck restart doesn't put the next ask back at 40s.
+    const key = `${sessionId}:${head.id}`;
+    const saved = await savedSummaries;
+    if (saved[key]) return header + saved[key];
+    let p = inflightSummaries.get(key);
+    if (!p) {
+      // Tail, not head: a long session's current state is at the end (Friday's episodic memory
+      // was getting summaries of only the opening of multi-day sessions).
+      const src = redact(messages.map((m) => `${m.role === 'user' ? 'User' : 'Claude'}: ${m.text}`).join('\n\n').slice(-120_000));
+      p = summarize(src).then(redact).then(async (s) => {
+        saved[key] = s;
+        const keys = Object.keys(saved); // insertion order → oldest first
+        for (const k of keys.slice(0, Math.max(0, keys.length - 50))) delete saved[k];
+        try {
+          await mkdir(dirname(SUMMARY_FILE), { recursive: true });
+          await writeFile(SUMMARY_FILE, JSON.stringify(saved), { mode: 0o600 });
+        } catch { /* best effort — still cached in memory */ }
+        return s;
+      }).finally(() => inflightSummaries.delete(key)); // a failed summary is never saved
+      inflightSummaries.set(key, p);
+    }
+    return header + await p;
   }
   const body = redact(messages.map((m) => `## ${m.role === 'user' ? 'User' : 'Claude'}\n${m.text}`).join('\n\n'));
   // Keep the END, not the start: the latest messages (the deliverable / current
