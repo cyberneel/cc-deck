@@ -1,4 +1,4 @@
-import { readdir, stat, unlink } from 'node:fs/promises';
+import { readdir, stat, unlink, statfs } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { findTranscriptFile, isSessionId } from './graph.js';
@@ -60,8 +60,8 @@ async function listTranscripts() {
 // Everything the hub manages: cc-deck's own artifacts (handoffs, caches) plus all
 // Claude transcripts grouped by directory.
 export async function listArtifacts() {
-  const [handoffs, caches, transcripts] = await Promise.all([
-    listFiles(HANDOFF_DIR), listFiles(CACHE_DIR), listTranscripts(),
+  const [handoffs, caches, transcripts, fsu] = await Promise.all([
+    listFiles(HANDOFF_DIR), listFiles(CACHE_DIR), listTranscripts(), statfs(homedir()).catch(() => null),
   ]);
   const sum = (a) => a.reduce((n, x) => n + x.sizeKb, 0);
   const tKb = transcripts.reduce((n, g) => n + g.sizeKb, 0);
@@ -70,6 +70,9 @@ export async function listArtifacts() {
     handoffs, caches, transcripts,
     dirs: { handoffs: HANDOFF_DIR, caches: CACHE_DIR },
     totals: { handoffsKb: sum(handoffs), cachesKb: sum(caches), transcriptsKb: tKb, transcriptCount: tCount },
+    // df-style used/total of HOME's filesystem. In the hosted VM HOME is /data, so this is the honest
+    // "disk used" for systems /account — the host's view of the VM disk file never shrinks on delete.
+    disk: fsu && { total: fsu.blocks * fsu.bsize, used: (fsu.blocks - fsu.bfree) * fsu.bsize },
   };
 }
 
