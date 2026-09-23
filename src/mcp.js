@@ -255,7 +255,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
   server.registerTool('save_session_summary', {
     title: 'Save a summary back to a Deep Session',
     description:
-      "Save a concise summary of THIS conversation's outcomes back into a specific Deep Session (any CLI — Claude, Codex, or agy), so that Deep Session becomes aware of what happened here the next time the user opens or resumes it. This is the cross-Deep-Session note channel: it reaches a Deep Session even while it is offline. " +
+      "Save a concise summary of THIS conversation's outcomes back into a specific Deep Session (any CLI — Claude, Codex, or agy), so that Deep Session becomes aware of what happened here the next time the user opens or resumes it. This is the cross-Deep-Session note channel: it reaches a Deep Session even while it is offline. Never target your OWN session — its transcript already records the work. " +
       'IMPORTANT: Only call this AFTER explicitly asking the user whether they want a summary saved back to that Deep Session, and confirming which session_id it should attach to (from a prior search_sessions / get_session_context result). ' +
       'The summary should capture decisions made, conclusions reached, and any action items relevant to that Deep Session\'s work.',
     inputSchema: {
