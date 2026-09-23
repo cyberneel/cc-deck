@@ -4,7 +4,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { readdir, readFile, stat, mkdir } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -189,7 +189,11 @@ async function getContext(sessionId, format, maxChars) {
   const head = g.nodes.find((n) => n.current) || g.nodes[g.nodes.length - 1];
   if (!head) return `Deep Session ${sessionId} has no conversation content.`;
   const { messages } = await buildThread(sessionId, head.id);
-  const header = `# ${g.title}\n_dir: ${g.cwd || '?'}${g.gitBranch ? ' · branch: ' + g.gitBranch : ''} · ${messages.length} messages_\n\n`;
+  // The deck title ("lhrdash → lhre-2027 prod migration") is the name the user knows; the
+  // transcript's own title is often just the first prompt. Folder = what a voice can say.
+  const live = (await liveSessions()).find((x) => x.liveSessionId === sessionId || x.resumedFrom === sessionId);
+  const folder = g.cwd ? basename(g.cwd) : '';
+  const header = `# ${redact((live && live.title) || g.title)}\n_folder: ${folder || '?'} (${g.cwd || '?'})${g.gitBranch ? ' · branch: ' + g.gitBranch : ''} · ${messages.length} messages_\n\n`;
   if (format === 'summary') {
     const src = redact(messages.map((m) => `${m.role === 'user' ? 'User' : 'Claude'}: ${m.text}`).join('\n\n').slice(0, 120_000));
     return header + redact(await summarize(src));
