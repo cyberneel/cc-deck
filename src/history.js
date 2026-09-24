@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs';
 import { readdir, stat, open } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 import { createInterface } from 'node:readline';
 import { homedir } from 'node:os';
 import { config } from './config.js';
@@ -46,7 +46,12 @@ async function readTailTitles(file, size, bytes = 49152) {
   let customTitle = null;
   let aiTitle = null;
   let permissionMode = null;
+  let cwd = null;
+  const enc = basename(dirname(file)); // project-dir name = the cwd Claude resumes from, encoded
   for (const line of text.split('\n')) {
+    // Latest cwd that still encodes to this project dir: a repo moved from a/b-c to
+    // a/b/c keeps the same dir name, so the head's (old) cwd no longer exists.
+    for (const m of line.matchAll(/"cwd":"([^"]+)"/g)) if (m[1].replace(/\//g, '-') === enc) cwd = m[1];
     if (line.includes('"customTitle"')) {
       try { const v = JSON.parse(line).customTitle; if (v) customTitle = v; } catch { /* partial line */ }
     } else if (line.includes('"aiTitle"')) {
@@ -56,7 +61,7 @@ async function readTailTitles(file, size, bytes = 49152) {
     const pm = line.match(/"permissionMode":"([a-zA-Z]+)"/);
     if (pm) permissionMode = pm[1];
   }
-  return { customTitle, aiTitle, permissionMode };
+  return { customTitle, aiTitle, permissionMode, cwd };
 }
 
 // Read cwd, git branch, first user prompt, and any title lines from the head.
@@ -92,7 +97,7 @@ async function extractMeta(file, size) {
   // Prefer the latest title (tail) over an early one (head); custom over ai.
   const name =
     tail.customTitle || head.customTitle || tail.aiTitle || head.aiTitle || head.firstPrompt || '';
-  return { cwd: head.cwd, gitBranch: head.gitBranch, title: name, mode: tail.permissionMode || head.permissionMode || null };
+  return { cwd: tail.cwd || head.cwd, gitBranch: head.gitBranch, title: name, mode: tail.permissionMode || head.permissionMode || null };
 }
 
 function contentToText(content) {
