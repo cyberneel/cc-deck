@@ -21,7 +21,8 @@
     "build": "node esbuild.config.js",
     "start": "node src/server.js",
     "snapshot": "node scripts/snapshot.mjs",
-    "dev": "node esbuild.config.js --watch & node --watch src/server.js"
+    "dev": "node esbuild.config.js --watch & node --watch src/server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

@@ -1,4 +1,4 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { access, open, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -14,7 +14,7 @@ export function isSessionId(id) {
 export async function findTranscriptFile(sessionId, cwd) {
   if (cwd) {
     const guess = join(PROJECTS_DIR, cwd.replace(/\//g, '-'), `${sessionId}.jsonl`);
-    try { await readFile(guess, { encoding: 'utf8', flag: 'r' }); return guess; } catch { /* fall through */ }
+    try { await access(guess); return guess; } catch { /* fall through */ }
   }
   let dirs;
   try { dirs = await readdir(PROJECTS_DIR, { withFileTypes: true }); } catch { return null; }
@@ -27,15 +27,52 @@ export async function findTranscriptFile(sessionId, cwd) {
   return null;
 }
 
-async function parseEntries(file) {
-  const raw = await readFile(file, 'utf8');
-  const entries = [];
-  for (const line of raw.split('\n')) {
-    if (!line) continue;
-    let o; try { o = JSON.parse(line); } catch { continue; }
-    if (o && o.uuid) entries.push(o);
+// Keep only what buildGraph/buildThread read. Tool results and images are most of a
+// transcript's bytes (a 258MB one slims to a few MB), so the cache below stays small.
+function slim(o) {
+  const m = o.message;
+  let content = m?.content;
+  if (Array.isArray(content)) {
+    content = content
+      .filter((p) => p && ((p.type === 'text' && p.text) || (p.type === 'tool_use' && p.name)))
+      .map((p) => (p.type === 'text' ? { type: 'text', text: p.text } : { type: 'tool_use', name: p.name }));
   }
-  return entries;
+  return {
+    uuid: o.uuid, parentUuid: o.parentUuid, type: o.type, isSidechain: o.isSidechain,
+    timestamp: o.timestamp, cwd: o.cwd, gitBranch: o.gitBranch,
+    customTitle: o.customTitle, aiTitle: o.aiTitle,
+    message: m ? { content, usage: m.usage } : undefined,
+  };
+}
+
+// file → { size, entries }. Transcripts are append-only, so a grown file only needs its
+// new bytes parsed: the full 7s parse happens once per file per process, not per ask.
+// ponytail: unbounded map of slim entries; LRU-cap it if many huge sessions get read.
+const parsed = new Map();
+
+async function parseEntries(file) {
+  const { size } = await stat(file);
+  let c = parsed.get(file);
+  if (!c || size < c.size) c = { size: 0, entries: [] }; // new, or rewritten/truncated
+  if (size > c.size) {
+    const fh = await open(file, 'r');
+    let buf;
+    try {
+      buf = Buffer.alloc(size - c.size);
+      await fh.read(buf, 0, buf.length, c.size);
+    } finally { await fh.close(); }
+    // Only consume through the last newline: a line still being written waits for next time.
+    const end = buf.lastIndexOf(0x0a) + 1;
+    const entries = c.entries.slice();
+    for (const line of buf.toString('utf8', 0, end).split('\n')) {
+      if (!line) continue;
+      let o; try { o = JSON.parse(line); } catch { continue; }
+      if (o && o.uuid) entries.push(slim(o));
+    }
+    c = { size: c.size + end, entries };
+    parsed.set(file, c);
+  }
+  return c.entries;
 }
 
 function contentToText(content) {
