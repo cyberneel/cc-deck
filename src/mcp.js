@@ -433,7 +433,8 @@ export function createMcpServer({ sessionControl = false } = {}) {
         ? sessions.find((x) => x.liveSessionId === val || x.resumedFrom === val)
         : pickByTitle(sessions, (x) => x.title, val);
       if (!s) return text(`ERROR: no live Deep Session matches "${session_id}". Live now: ${liveHint(sessions)}. Pass one of those ids or an exact title (resume a past Deep Session in Deep Sessions first if it isn't listed).`);
-      try { await sendText(s.name, line); return text(redact(`Sent to "${s.title || s.name}".`)); }
+      // Only the instruction was delivered — callers narrated "Sent to X" as the task being done.
+      try { await sendText(s.name, line); return text(redact(`Delivered to "${s.title || s.name}". It's working on it now; the result isn't known until it replies.`)); }
       catch (e) { return text(`ERROR: could not send — ${e.message}`); }
     });
 
