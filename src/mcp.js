@@ -13,7 +13,7 @@ import { buildGraph, buildThread, isSessionId } from './graph.js';
 import { listHistory, isExcludedProjectDir } from './history.js';
 import { summarize } from './handoff.js';
 import { addNote } from './notes.js';
-import { createSession, sendText, listSessions } from './tmux.js';
+import { createSession, sendText, listSessions, capturePane } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
 import { listTabs, claimTab, releaseTab } from './browser.js';
 import { proactiveSet } from './origin.js';
@@ -435,6 +435,27 @@ export function createMcpServer({ sessionControl = false } = {}) {
       if (!s) return text(`ERROR: no live Deep Session matches "${session_id}". Live now: ${liveHint(sessions)}. Pass one of those ids or an exact title (resume a past Deep Session in Deep Sessions first if it isn't listed).`);
       try { await sendText(s.name, line); return text(redact(`Sent to "${s.title || s.name}".`)); }
       catch (e) { return text(`ERROR: could not send — ${e.message}`); }
+    });
+
+    // Friday's in-thread picture-in-picture polls this every few seconds while a thread is
+    // driving the session, so it must stay cheap: one tmux capture, no transcript parse.
+    server.registerTool('peek_session', {
+      title: "Peek at a Deep Session's live screen",
+      description: "The live terminal screen of an active Deep Session (the bottom of its tmux pane, plain text): what it's doing right now — tool calls in flight, spinners, a pending prompt. Cheap. Use get_session_context for the conversation itself.",
+      inputSchema: {
+        session_id: z.string().describe("A Claude session id, the Deep Session's name (from list_sessions), or its title."),
+        lines: z.number().int().min(5).max(200).optional().describe('Scrollback lines above the visible screen to include (default 40).'),
+      },
+    }, async ({ session_id, lines }) => {
+      const sessions = await liveSessions();
+      const val = String(session_id || '').trim();
+      const s = sessions.find((x) => x.name === val)
+        || (isSessionId(val)
+          ? sessions.find((x) => x.liveSessionId === val || x.resumedFrom === val)
+          : pickByTitle(sessions, (x) => x.title, val));
+      if (!s) return text(`ERROR: no active Deep Session matches "${session_id}". Active now: ${liveHint(sessions)}.`);
+      try { return text(redact((await capturePane(s.name, lines || 40)).replace(/\s+$/, ''))); }
+      catch (e) { return text(`ERROR: could not read the screen — ${e.message}`); }
     });
 
     server.registerTool('get_session_files', {
