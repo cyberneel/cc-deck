@@ -4,7 +4,7 @@ import { statSync, createWriteStream, createReadStream } from 'node:fs';
 import { mkdir, stat, readdir, rm, access, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { pipeline } from 'node:stream/promises';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import fastifyCookie from '@fastify/cookie';
@@ -41,6 +41,7 @@ import { consumeNotesSeed, consumeNotesSeedMany, pendingCounts, readPending, rea
 const lineageIds = (s) => [s?.liveSessionId, s?.resumedFrom];
 import { captureSnapshot, restoreIfBoot, loadSnapshot } from './restore.js';
 import { startReachMonitor } from './reach-emit.js';
+import { onHook, hookKey, startTurnTelemetry } from './turn-telemetry.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
 // Claude's own session name (custom /rename title, else its auto-title), and the
@@ -109,6 +110,7 @@ const PUBLIC_PATHS = new Set([
   '/login.html', '/login.css', '/api/login', '/favicon.ico', '/sw.js',
   '/manifest.webmanifest', '/icon-180.png', '/icon-192.png', '/icon-512.png',
   '/mcp', // MCP endpoint does its own bearer/OAuth auth (below)
+  '/api/turn-hook', // Claude Code turn hooks (telemetry) — shared-key auth (below)
   '/api/creds/import', // AI-cred sync from the tenant's Friday — MCP-token bearer auth (below)
   // OAuth endpoints for claude.ai connectors — reachable without a cc-deck cookie.
   '/.well-known/oauth-protected-resource', '/.well-known/oauth-authorization-server',
@@ -174,6 +176,14 @@ app.addHook('onRequest', async (req, reply) => {
 
 // Liveness for the hosted rollout health poll (public — 200 = the server is serving).
 app.get('/healthz', async () => ({ ok: true }));
+// Claude Code UserPromptSubmit/Stop hooks (see turn-telemetry.js). The key is baked into the
+// hook settings each claude session launches with; the body is read for ids only, never kept.
+app.post('/api/turn-hook', async (req, reply) => {
+  const k = Buffer.from(String(req.headers['x-turn-key'] || '')), want = Buffer.from(hookKey());
+  if (k.length !== want.length || !timingSafeEqual(k, want)) return reply.code(401).send();
+  onHook(req.body);
+  return reply.code(204).send();
+});
 
 // AI-cred sync: the tenant's Friday (same account, MCP-token authed) mirrors a just-connected
 // engine's creds here so cc-deck's claude/codex/agy sessions use the SAME account — "Connect
@@ -712,6 +722,7 @@ registerAgyMcp().catch(() => {});
 // Push session-state transitions to Friday the instant they happen (opt-in; no-op unless
 // CCDECK_FRIDAY_REACH_URL is set) — so Friday reacts without polling.
 startReachMonitor();
+startTurnTelemetry(); // per-turn RAM/CPU → systems (hosted only; inert otherwise)
 
 // On a fresh boot (no sessions running), restore the sessions that were active
 // before the box went down; then keep a periodic snapshot as a safety net.

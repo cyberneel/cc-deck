@@ -109,6 +109,12 @@ export const config = {
     url: process.env.CCDECK_FRIDAY_REACH_URL || '',
     password: process.env.CCDECK_FRIDAY_REACH_PASSWORD || '',
   },
+  // Per-turn RAM/CPU → the systems fleet telemetry ingest (hosted tier sizing). OPT-IN: inert
+  // unless url + token are set (systems seeds both at provision; the tenant is CCDECK_TENANT_ID).
+  telemetry: {
+    url: process.env.CCDECK_TELEMETRY_URL || '',
+    token: process.env.CCDECK_TELEMETRY_TOKEN || '',
+  },
   cookieName: 'ccdeck',
   cookieMaxAge: 60 * 60 * 24 * 30, // 30 days (seconds)
 };

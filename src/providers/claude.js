@@ -5,8 +5,10 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { config } from '../config.js';
+import { enabled as turnTelemetry, hookKey } from '../turn-telemetry.js';
 
 const RESUME_ID_RE = /^[0-9a-fA-F-]{36}$/;
+const TURN_HOOKS_PATH = join(homedir(), '.claude', 'cc-deck', 'turn-hooks.json');
 const SESSION_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'session-mcp.json');
 const BROWSER_MCP_PATH = join(homedir(), '.claude', 'cc-deck', 'browser-mcp.json');
 // Pin the shared-browser MCP (was `@latest`): `npx …@latest` re-resolves over the
@@ -59,6 +61,13 @@ export const claude = {
     if (config.sessionBrowser || browser) {
       const cfg = { mcpServers: { chrome: { command: 'npx', args: [CHROME_MCP, '--browser-url', config.browserCdp] } } };
       try { await ensureDir(); await writeFile(BROWSER_MCP_PATH, JSON.stringify(cfg)); flags += ` --mcp-config ${BROWSER_MCP_PATH}`; if (config.sessionMcp) nudges.push(BROWSER_NUDGE); } catch { /* skip browser */ }
+    }
+    if (turnTelemetry()) {
+      // Turn start/end → /api/turn-hook (per-turn RAM/CPU telemetry). -o /dev/null matters: a
+      // UserPromptSubmit hook's stdout is injected into the prompt. `|| true` = never block a turn.
+      const cmd = `curl -s -m 2 -o /dev/null -H 'Content-Type: application/json' -H 'X-Turn-Key: ${hookKey()}' --data-binary @- http://127.0.0.1:${config.port}/api/turn-hook || true`;
+      const h = [{ hooks: [{ type: 'command', command: cmd }] }];
+      try { await ensureDir(); await writeFile(TURN_HOOKS_PATH, JSON.stringify({ hooks: { UserPromptSubmit: h, Stop: h } })); flags += ` --settings ${TURN_HOOKS_PATH}`; } catch { /* skip telemetry */ }
     }
     if (nudges.length) {
       const nudge = nudges.join(' ').replace(/'/g, "'\\''"); // shell-safe single quotes
