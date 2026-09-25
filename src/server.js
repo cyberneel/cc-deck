@@ -530,7 +530,19 @@ app.post('/api/storage/delete', async (req, reply) => {
 // Lets another Claude (claude.ai, Claude Code, …) search + pull context from your
 // past sessions. Bearer-gated; disabled unless CCDECK_MCP_TOKEN is set. Stateful:
 // initialize creates a session (server+transport) keyed by Mcp-Session-Id.
-const mcpSessions = new Map(); // sessionId -> { server, transport }
+const mcpSessions = new Map(); // sessionId -> { server, transport, seen, streams }
+// Clients that never DELETE (Friday opens a session per tool call) would pile sessions up
+// until node OOMs — that took down a 1 GB hosted VM in ~15h. Drop sessions idle this long
+// unless a GET stream is open; an expired id gets 404, which tells spec clients to re-init.
+const MCP_IDLE_MS = Number(process.env.CCDECK_MCP_IDLE_MS) || 30 * 60_000;
+setInterval(() => {
+  const cutoff = Date.now() - MCP_IDLE_MS;
+  for (const [id, e] of mcpSessions) {
+    if (e.streams > 0 || e.seen > cutoff) continue;
+    mcpSessions.delete(id);
+    e.server.close().catch(() => {});
+  }
+}, Math.min(60_000, MCP_IDLE_MS)).unref();
 // Accept either the static bearer token (Claude Code) or an OAuth access token (claude.ai).
 function mcpAuthed(req) {
   const h = req.headers.authorization || '';
@@ -583,17 +595,19 @@ app.post('/mcp', async (req, reply) => {
   const isInit = req.body && !Array.isArray(req.body) && req.body.method === 'initialize';
   let transport;
   if (sid && mcpSessions.has(sid)) {
-    transport = mcpSessions.get(sid).transport;
+    const entry = mcpSessions.get(sid);
+    entry.seen = Date.now();
+    transport = entry.transport;
   } else if (!sid && isInit) {
     const server = createMcpServer({ sessionControl: mcpIsStatic(req) });
     transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
-      onsessioninitialized: (id) => mcpSessions.set(id, { server, transport }),
+      onsessioninitialized: (id) => mcpSessions.set(id, { server, transport, seen: Date.now(), streams: 0 }),
     });
     transport.onclose = () => { if (transport.sessionId) mcpSessions.delete(transport.sessionId); };
     await server.connect(transport);
   } else {
-    return reply.code(400).send({ jsonrpc: '2.0', id: null, error: { code: -32000, message: 'No valid session ID' } });
+    return reply.code(sid ? 404 : 400).send({ jsonrpc: '2.0', id: null, error: { code: -32000, message: sid ? 'Session not found' : 'No valid session ID' } });
   }
   reply.hijack();
   await transport.handleRequest(req.raw, reply.raw, req.body);
@@ -603,7 +617,12 @@ async function mcpBySession(req, reply) {
   if (!mcpAuthed(req)) return reply.code(401).send({ error: 'Unauthorized' });
   const sid = req.headers['mcp-session-id'];
   const entry = sid && mcpSessions.get(sid);
-  if (!entry) return reply.code(400).send({ error: 'No valid session ID' });
+  if (!entry) return reply.code(sid ? 404 : 400).send({ error: sid ? 'Session not found' : 'No valid session ID' });
+  entry.seen = Date.now();
+  if (req.method === 'GET') {
+    entry.streams++;
+    req.raw.on('close', () => { entry.streams--; entry.seen = Date.now(); });
+  }
   reply.hijack();
   await entry.transport.handleRequest(req.raw, reply.raw);
 }
