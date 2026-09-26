@@ -12,7 +12,7 @@ import { config } from './config.js';
 import { buildGraph, buildThread, isSessionId } from './graph.js';
 import { listHistory, isExcludedProjectDir } from './history.js';
 import { summarize } from './handoff.js';
-import { addNote } from './notes.js';
+import { addNote, pendingCounts, countNotes, readPending, readPendingMany, consumeNotesSeedMany } from './notes.js';
 import { createSession, sendText, listSessions, capturePane } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
 import { listTabs, claimTab, releaseTab } from './browser.js';
@@ -311,13 +311,15 @@ export function createMcpServer({ sessionControl = false } = {}) {
     description:
       "List the user's currently ACTIVE Deep Sessions (Claude Code) with live, structured status — for detecting state transitions (a Deep Session finishing, waiting for the user, or exiting). " +
       'Returns a JSON array; poll and diff the `status`/`needs_input` fields to notice transitions. Each item: ' +
-      '{ session_id, name, title, dir, status, needs_input, waiting_for, attached, last_activity }. ' +
+      '{ session_id, name, title, dir, status, needs_input, waiting_for, attached, last_activity, pending_notes }. ' +
+      '`pending_notes` counts saved notes (save_session_summary) not yet delivered — read them with pending_notes, deliver with apply_notes. ' +
       "`status` is one of: running (Claude is working), waiting_input (blocked on the user — a prompt/permission/question), idle (at its prompt, not working), done (Claude exited, the shell remains). " +
       '`name` is stable for the Deep Session\'s lifetime; `session_id` is the live Claude id (changes across resume/fork) or null if Claude isn\'t running.',
     inputSchema: {},
   }, async () => {
     const sessions = await listSessions();
     try { matchAgents(sessions, await getAgents()); } catch { /* claude agents unavailable → status degrades to idle/done */ }
+    const notes = await pendingCounts().catch(() => new Map());
     const out = sessions.map((s) => {
       const claudeAlive = s.paneCommand === 'claude' || !!s.liveSessionId;
       const status = !claudeAlive ? 'done'
@@ -334,9 +336,27 @@ export function createMcpServer({ sessionControl = false } = {}) {
         waiting_for: s.waitingFor || null,
         attached: s.attached,
         last_activity: s.lastActivity ? new Date(s.lastActivity).toISOString() : null,
+        pending_notes: countNotes(notes, [s.liveSessionId, s.resumedFrom]),
       };
     });
     return text(JSON.stringify(out, null, 2));
+  });
+
+  server.registerTool('pending_notes', {
+    title: "Read a Deep Session's undelivered notes",
+    description: "The notes saved to a Deep Session (save_session_summary) that it hasn't received yet — they're delivered when the user resumes it, or right away with apply_notes. Returns JSON [{ id, savedAt, text }], newest first; [] means none pending.",
+    inputSchema: {
+      session_id: z.string().describe("A Claude session id, the Deep Session's name (from list_sessions), or its title."),
+    },
+  }, async ({ session_id }) => {
+    const val = String(session_id || '').trim();
+    const sessions = await liveSessions();
+    const s = sessions.find((x) => x.name === val || x.liveSessionId === val || x.resumedFrom === val)
+      || (isSessionId(val) ? null : pickByTitle(sessions, (x) => x.title, val));
+    const id = s ? null : await resolveTranscriptId(val);
+    if (!s && !id) return text(`No Deep Session matches "${session_id}". Live now: ${liveHint(sessions)}.`);
+    const notes = s ? await readPendingMany([s.liveSessionId, s.resumedFrom]) : await readPending(id);
+    return text(redact(JSON.stringify(notes.map(({ id, savedAt, text: t }) => ({ id, savedAt, text: t })), null, 2)));
   });
 
   // Shared-browser broker: a visible lock registry over the one logged-in browser,
@@ -436,6 +456,28 @@ export function createMcpServer({ sessionControl = false } = {}) {
       // Only the instruction was delivered — callers narrated "Sent to X" as the task being done.
       try { await sendText(s.name, line); return text(redact(`Delivered to "${s.title || s.name}". It's working on it now; the result isn't known until it replies.`)); }
       catch (e) { return text(`ERROR: could not send — ${e.message}`); }
+    });
+
+    // Same as the dashboard's "apply notes" button (POST /api/sessions/:name/apply-notes).
+    server.registerTool('apply_notes', {
+      title: 'Deliver pending notes to a running Deep Session',
+      description: "Deliver a LIVE Deep Session's pending notes (see pending_notes / list_sessions.pending_notes) into it now, instead of waiting for the next resume: types the 'Heads up — related chats saved an update…' line pointing it at the note files.",
+      inputSchema: {
+        session_id: z.string().describe("A Claude session id, the Deep Session's name (from list_sessions), or its title — must be live."),
+      },
+    }, async ({ session_id }) => {
+      const sessions = await liveSessions();
+      const val = String(session_id || '').trim();
+      const s = sessions.find((x) => x.name === val || x.liveSessionId === val || x.resumedFrom === val)
+        || (isSessionId(val) ? null : pickByTitle(sessions, (x) => x.title, val));
+      if (!s) return text(`ERROR: no live Deep Session matches "${session_id}". Live now: ${liveHint(sessions)}.`);
+      if (!s.liveSessionId) return text(`ERROR: "${s.title || s.name}" has no running Claude to deliver to — resume it first (notes are delivered on resume anyway).`);
+      try {
+        const seed = await consumeNotesSeedMany([s.liveSessionId, s.resumedFrom]);
+        if (!seed) return text(redact(`"${s.title || s.name}" has no pending notes.`));
+        await sendText(s.name, seed);
+        return text(redact(`Delivered the pending notes to "${s.title || s.name}".`));
+      } catch (e) { return text(`ERROR: could not apply notes — ${e.message}`); }
     });
 
     // Friday's in-thread picture-in-picture polls this every few seconds while a thread is
