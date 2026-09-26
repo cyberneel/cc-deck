@@ -5,7 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { config } from '../config.js';
-import { enabled as turnTelemetry, hookKey } from '../turn-telemetry.js';
+import { enabled as turnTelemetry, hookCurl } from '../turn-telemetry.js';
 
 const RESUME_ID_RE = /^[0-9a-fA-F-]{36}$/;
 const TURN_HOOKS_PATH = join(homedir(), '.claude', 'cc-deck', 'turn-hooks.json');
@@ -65,8 +65,7 @@ export const claude = {
     if (turnTelemetry()) {
       // Turn start/end → /api/turn-hook (per-turn RAM/CPU telemetry). -o /dev/null matters: a
       // UserPromptSubmit hook's stdout is injected into the prompt. `|| true` = never block a turn.
-      const cmd = `curl -s -m 2 -o /dev/null -H 'Content-Type: application/json' -H 'X-Turn-Key: ${hookKey()}' --data-binary @- http://127.0.0.1:${config.port}/api/turn-hook || true`;
-      const h = [{ hooks: [{ type: 'command', command: cmd }] }];
+      const h = [{ hooks: [{ type: 'command', command: hookCurl('claude') }] }];
       try { await ensureDir(); await writeFile(TURN_HOOKS_PATH, JSON.stringify({ hooks: { UserPromptSubmit: h, Stop: h } })); flags += ` --settings ${TURN_HOOKS_PATH}`; } catch { /* skip telemetry */ }
     }
     if (nudges.length) {

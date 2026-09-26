@@ -64,7 +64,7 @@ async function enrichedSessions() {
 import { getBurn } from './burn.js';
 import { listRemoteSessions } from './remote.js';
 import { availableProviders } from './providers/index.js';
-import { registerAgyMcp } from './providers/agy.js';
+import { registerAgyMcp, registerAgyHooks } from './providers/agy.js';
 import { getUsage } from './usage.js';
 import { getPricing } from './pricing.js';
 
@@ -110,7 +110,7 @@ const PUBLIC_PATHS = new Set([
   '/login.html', '/login.css', '/api/login', '/favicon.ico', '/sw.js',
   '/manifest.webmanifest', '/icon-180.png', '/icon-192.png', '/icon-512.png',
   '/mcp', // MCP endpoint does its own bearer/OAuth auth (below)
-  '/api/turn-hook', // Claude Code turn hooks (telemetry) — shared-key auth (below)
+  '/api/turn-hook', // CLI turn hooks (telemetry) — shared-key auth (below)
   '/api/creds/import', // AI-cred sync from the tenant's Friday — MCP-token bearer auth (below)
   // OAuth endpoints for claude.ai connectors — reachable without a cc-deck cookie.
   '/.well-known/oauth-protected-resource', '/.well-known/oauth-authorization-server',
@@ -176,12 +176,12 @@ app.addHook('onRequest', async (req, reply) => {
 
 // Liveness for the hosted rollout health poll (public — 200 = the server is serving).
 app.get('/healthz', async () => ({ ok: true }));
-// Claude Code UserPromptSubmit/Stop hooks (see turn-telemetry.js). The key is baked into the
-// hook settings each claude session launches with; the body is read for ids only, never kept.
+// claude/codex/agy turn start/end hooks (see turn-telemetry.js). The key is baked into each
+// CLI's hook command; the body is read for ids only, never kept.
 app.post('/api/turn-hook', async (req, reply) => {
   const k = Buffer.from(String(req.headers['x-turn-key'] || '')), want = Buffer.from(hookKey());
   if (k.length !== want.length || !timingSafeEqual(k, want)) return reply.code(401).send();
-  onHook(req.body);
+  onHook(req.body, { engine: req.headers['x-turn-engine'], event: req.headers['x-turn-event'] });
   return reply.code(204).send();
 });
 
@@ -718,6 +718,7 @@ await initServer().catch(() => {});
 // Register the read-only cc-deck MCP with agy (persistent, idempotent) so agy
 // sessions get the same handoff-aware toolset as Claude/Codex. Best-effort.
 registerAgyMcp().catch(() => {});
+registerAgyHooks().catch(() => {}); // + turn-telemetry hooks (hosted only)
 
 // Push session-state transitions to Friday the instant they happen (opt-in; no-op unless
 // CCDECK_FRIDAY_REACH_URL is set) — so Friday reacts without polling.

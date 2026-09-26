@@ -6,7 +6,11 @@
 // the same handoff-aware toolset as Claude/Codex plus the CLI-agnostic surface.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join, dirname } from 'node:path';
 import { config } from '../config.js';
+import { enabled as turnTelemetry, hookCurl } from '../turn-telemetry.js';
 
 const pexec = promisify(execFile);
 
@@ -51,4 +55,19 @@ export async function registerAgyMcp() {
     await pexec(bin[0], [...bin.slice(1), 'mcp', 'add', '--type', 'http',
       '--header', `Authorization: Bearer ${config.mcpTokenReadonly}`, 'cc-deck', url]);
   } catch { /* agy not installed / add failed — agy sessions just launch without the MCP */ }
+}
+
+// Turn-telemetry hooks (see turn-telemetry.js). No per-launch hook flag either, so like the MCP
+// they persist to agy's global hooks.json — merged in under our own name, the user's own hooks
+// left as-is. agy hooks must print a JSON object, hence `echo {}`.
+const AGY_HOOKS_PATH = join(homedir(), '.gemini', 'config', 'hooks.json');
+export async function registerAgyHooks() {
+  if (!turnTelemetry()) return;
+  let cur = {};
+  try { cur = JSON.parse(await readFile(AGY_HOOKS_PATH, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') return; } // unparseable → don't touch it
+  const h = (ev) => [{ type: 'command', command: `${hookCurl('agy', ev)}; echo {}`, timeout: 5 }];
+  const want = { PreInvocation: h('PreInvocation'), Stop: h('Stop') };
+  if (JSON.stringify(cur['cc-deck-telemetry']) === JSON.stringify(want)) return;
+  await mkdir(dirname(AGY_HOOKS_PATH), { recursive: true });
+  await writeFile(AGY_HOOKS_PATH, JSON.stringify({ ...cur, 'cc-deck-telemetry': want }, null, 2));
 }
