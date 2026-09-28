@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 
 const exec = promisify(execFile);
 
@@ -11,6 +12,15 @@ function childPids(pid) {
     return readFileSync(`/proc/${pid}/task/${pid}/children`, 'utf8').trim().split(/\s+/).filter(Boolean).map(Number);
   } catch {
     return [];
+  }
+}
+// A PARKED interactive session (its conversation handed to a background job) is left
+// out of `claude agents`; its registry file names the job that now owns the conversation.
+function parkedJobId(pid) {
+  try {
+    return JSON.parse(readFileSync(join(homedir(), '.claude', 'sessions', `${pid}.json`), 'utf8')).parkedJobId || null;
+  } catch {
+    return null;
   }
 }
 // claude lives alongside node (nvm bin); ensure it's found under a minimal PATH.
@@ -29,7 +39,7 @@ export async function getAgents() {
       timeout: 12_000, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, PATH },
     });
     const parsed = JSON.parse(stdout);
-    if (Array.isArray(parsed)) data = parsed.filter((a) => a.kind === 'interactive' || !a.kind);
+    if (Array.isArray(parsed)) data = parsed; // background jobs kept: a parked pane maps to its job
   } catch {
     data = []; // claude unavailable / older version — degrade gracefully
   }
@@ -39,20 +49,24 @@ export async function getAgents() {
 
 // Attach each cc-deck session's live Claude status by matching it to an agent.
 // Two passes so a directory-shared guess never overrides a confident match:
-//   1. by claude PID (the pane's child) or the resumed id — unambiguous.
+//   1. by claude PID (the pane's child), the resumed id, or the job a parked pane
+//      handed off to — unambiguous.
 //   2. cwd fallback, but ONLY when exactly one unused agent is in that directory.
 // Guessing among several sessions that share a cwd mislabels them — e.g. a big/idle
 // session that `claude agents` doesn't report would otherwise steal a sibling's
 // agent (and its title). When we can't match confidently, we leave the session
 // unmatched and its cc-deck label (@ccdeck_title) stands.
-export function matchAgents(sessions, agents) {
+export function matchAgents(sessions, all) {
+  const agents = all.filter((a) => a.kind === 'interactive' || !a.kind);
+  const jobsById = new Map(all.filter((a) => a.kind === 'background' && a.id).map((a) => [a.id, a]));
   const used = new Set();
   const take = (pred) => { const a = agents.find((x) => !used.has(x) && pred(x)); if (a) used.add(a); return a; };
   const assign = (s, a) => { s.liveSessionId = a?.sessionId || null; s.claudeStatus = a?.status || null; s.waitingFor = a?.waitingFor || null; };
   const pending = [];
   for (const s of sessions) {
     const kids = s.panePid ? childPids(s.panePid) : [];
-    const a = take((x) => kids.includes(x.pid)) || (s.resumedFrom && take((x) => x.sessionId === s.resumedFrom));
+    let a = take((x) => kids.includes(x.pid)) || (s.resumedFrom && take((x) => x.sessionId === s.resumedFrom));
+    if (!a) a = kids.map((k) => jobsById.get(parkedJobId(k))).find(Boolean);
     if (a) assign(s, a); else pending.push(s);
   }
   for (const s of pending) {
