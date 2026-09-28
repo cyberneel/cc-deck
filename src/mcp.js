@@ -3,14 +3,14 @@
 // pull relevant context. Reuses the transcript machinery from graph/handoff/history.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { readdir, readFile, stat, mkdir, writeFile } from 'node:fs/promises';
+import { readdir, readFile, stat, mkdir, writeFile, open } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { config } from './config.js';
-import { buildGraph, buildThread, isSessionId } from './graph.js';
-import { listHistory, isExcludedProjectDir } from './history.js';
+import { buildGraph, buildThread, isSessionId, findTranscriptFile } from './graph.js';
+import { listHistory, isExcludedProjectDir, transcriptMeta } from './history.js';
 import { summarize } from './handoff.js';
 import { addNote, pendingCounts, countNotes, readPending, readPendingMany, consumeNotesSeedMany } from './notes.js';
 import { createSession, sendText, listSessions, capturePane } from './tmux.js';
@@ -61,7 +61,8 @@ async function resolveTranscriptId(arg) {
 // dir (for a just-booted session with no transcript yet). Absolute, or null.
 async function resolveSessionCwd(arg) {
   const id = await resolveTranscriptId(arg);
-  if (id) { try { const g = await buildGraph(id); if (g.cwd) return resolve(g.cwd); } catch { /* */ } }
+  // Head+tail meta (cached), not buildGraph: a full parse just for the cwd took ~5s on big transcripts.
+  if (id) { try { const m = await transcriptMeta(await findTranscriptFile(id)); if (m.cwd) return resolve(m.cwd); } catch { /* */ } }
   const sessions = await liveSessions();
   const val = String(arg || '').trim();
   const s = isSessionId(val)
@@ -75,9 +76,12 @@ async function resolveSessionCwd(arg) {
 // hand-rolled walk — it's on the box and does the prune + mtime filter in one call.
 async function recentFiles(cwd) {
   try {
-    const { stdout } = await exec('find', [cwd, '-type', 'f', '-mmin', '-1440',
-      '-not', '-path', '*/.git/*', '-not', '-path', '*/node_modules/*',
-      '-not', '-path', '*/target/*', '-not', '-path', '*/dist/*'],
+    // -prune, not -not -path: the latter still descends every node_modules/target tree
+    // (18s on ~/Documents/github → hit the timeout → []); pruned it's <1s.
+    const { stdout } = await exec('find', [cwd,
+      '(', '-name', '.git', '-o', '-name', 'node_modules', '-o', '-name', 'target', '-o', '-name', 'dist',
+      '-o', '-name', '.venv', '-o', '-name', '__pycache__', ')', '-prune',
+      '-o', '-type', 'f', '-mmin', '-1440', '-print'],
       { timeout: 8000, maxBuffer: 1 << 20 });
     return stdout.split('\n').filter(Boolean)
       .map((p) => (p.startsWith(cwd + '/') ? p.slice(cwd.length + 1) : p)).slice(0, 40);
@@ -158,17 +162,40 @@ async function allTranscripts() {
   return out;
 }
 
+// Transcripts containing `word` (case-insensitive) via ripgrep — scanning all 1.5GB in
+// JS took ~17s. null = rg unavailable (e.g. no ripgrep in the image) → caller scans all.
+async function rgFiles(word) {
+  try {
+    const { stdout } = await exec('rg', ['-l', '-i', '-F', '--no-ignore', '--glob', '*.jsonl', '-e', word, PROJECTS_DIR], { timeout: 15000, maxBuffer: 8 << 20 });
+    return new Set(stdout.split('\n').filter(Boolean));
+  } catch (e) {
+    return e.code === 1 ? new Set() : null; // exit 1 = no matches
+  }
+}
+
+// First `n` bytes of a file without reading the rest (readFile().slice read it all).
+async function readHead(file, n) {
+  const fh = await open(file, 'r');
+  try {
+    const buf = Buffer.alloc(n);
+    const { bytesRead } = await fh.read(buf, 0, n, 0);
+    return buf.toString('utf8', 0, bytesRead);
+  } finally { await fh.close(); }
+}
+
 async function searchSessions(query, limit) {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return [];
-  const files = await allTranscripts();
+  let files = await allTranscripts();
+  const hits = await rgFiles(words.reduce((a, b) => (b.length > a.length ? b : a)));
+  if (hits) files = files.filter((f) => hits.has(f.file));
   const hidden = await proactiveSet(); // Friday-made sessions don't clutter the user's search
   const results = [];
   for (const f of files) {
     if (results.length >= limit) break;
     if (hidden.has(f.id)) continue;
     let text;
-    try { text = (await readFile(f.file, 'utf8')).slice(0, READ_CAP); } catch { continue; }
+    try { text = await readHead(f.file, READ_CAP); } catch { continue; }
     if (!words.every((w) => text.toLowerCase().includes(w))) continue; // cheap pre-filter
     const meta = parseTranscript(text);
     const hay = meta.body.toLowerCase();
@@ -189,7 +216,7 @@ const SUMMARY_FILE = process.env.CCDECK_SUMMARY_FILE || join(homedir(), '.claude
 const savedSummaries = readFile(SUMMARY_FILE, 'utf8').then(JSON.parse).catch(() => ({})); // missing/corrupt → cold
 const inflightSummaries = new Map(); // same key → Promise, so concurrent asks share one claude -p
 
-async function getContext(sessionId, format, maxChars) {
+async function getContext(sessionId, format, maxChars, allowStale = false) {
   const g = await buildGraph(sessionId); // throws 404 if not found
   const head = g.nodes.find((n) => n.current) || g.nodes[g.nodes.length - 1];
   if (!head) return `Deep Session ${sessionId} has no conversation content.`;
@@ -207,6 +234,12 @@ async function getContext(sessionId, format, maxChars) {
     const key = `${sessionId}:${head.id}`;
     const saved = await savedSummaries;
     if (saved[key]) return header + saved[key];
+    // allowStale (opt-in, for latency-critical callers like a voice call): any new message in
+    // a live session changes head.id, forcing a cold ~40s summary. Serve the session's latest
+    // saved summary now and refresh in the background. Opt-in because background callers
+    // (episode indexing, "build finished" gists) must see the fresh state, not an old one.
+    let stale = null;
+    if (allowStale) for (const k of Object.keys(saved)) if (k.startsWith(sessionId + ':')) stale = saved[k];
     let p = inflightSummaries.get(key);
     if (!p) {
       // Tail, not head: a long session's current state is at the end (Friday's episodic memory
@@ -224,6 +257,7 @@ async function getContext(sessionId, format, maxChars) {
       }).finally(() => inflightSummaries.delete(key)); // a failed summary is never saved
       inflightSummaries.set(key, p);
     }
+    if (stale) { p.catch(() => {}); return header.replace(/_\n\n$/, ' · summary may lag the newest messages_\n\n') + stale; }
     return header + await p;
   }
   const body = redact(messages.map((m) => `## ${m.role === 'user' ? 'User' : 'Claude'}\n${m.text}`).join('\n\n'));
@@ -276,11 +310,12 @@ export function createMcpServer({ sessionControl = false } = {}) {
       session_id: z.string().describe("A sessionId (from search_sessions / list_recent_sessions) OR the Deep Session's title."),
       format: z.enum(['summary', 'transcript']).optional().describe("'summary' (default) or 'transcript'."),
       max_chars: z.number().int().min(2000).max(120000).optional().describe('For transcript format, cap on characters (default 40000).'),
+      allow_stale: z.boolean().optional().describe("Summary format only: if the session moved on since its last summary, return that earlier summary instantly (refreshing in the background) instead of waiting ~40s for a new one. Use when latency matters more than the last few messages (e.g. a live voice call)."),
     },
-  }, async ({ session_id, format, max_chars }) => {
+  }, async ({ session_id, format, max_chars, allow_stale }) => {
     const id = await resolveTranscriptId(session_id);
     if (!id) return text(`No Deep Session matches "${session_id}". Pass a sessionId from search_sessions / list_recent_sessions, or an exact Deep Session title.`);
-    try { return text(await getContext(id, format || 'summary', max_chars || 40000)); }
+    try { return text(await getContext(id, format || 'summary', max_chars || 40000, !!allow_stale)); }
     catch (e) { return text(`Could not load Deep Session: ${e.message}`); }
   });
 

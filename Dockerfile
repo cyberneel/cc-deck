@@ -18,8 +18,9 @@ RUN npm run build
 # Kept app-free so it stays cached across code changes: the hosted VM image
 # (friday dist/hosted/Dockerfile.ccdeck) builds on it via `--target runtime-base`.
 FROM node:24-bookworm-slim AS runtime-base
-# tmux runs the sessions; git for branch detection; the CLIs cc-deck manages.
-RUN apt-get update && apt-get install -y --no-install-recommends tmux git ca-certificates curl \
+# tmux runs the sessions; git for branch detection; ripgrep prefilters MCP
+# search_sessions (else it scans every transcript in JS); the CLIs cc-deck manages.
+RUN apt-get update && apt-get install -y --no-install-recommends tmux git ripgrep ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
     # chrome-devtools-mcp is pre-installed at the SAME pinned version cc-deck wires
     # (src/providers/claude.js CHROME_MCP) so the shared-browser MCP resolves from

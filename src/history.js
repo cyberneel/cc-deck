@@ -92,6 +92,19 @@ function readHead(file) {
 
 const metaCache = new Map(); // file -> { key, meta }
 
+// Cheap cached meta (cwd, branch, title, mode) for one transcript: head + tail only,
+// keyed by mtime:size — so callers needing just a cwd don't full-parse a 300MB file.
+export async function transcriptMeta(file, s) {
+  s = s || await stat(file);
+  const key = `${s.mtimeMs}:${s.size}`;
+  let meta = metaCache.get(file);
+  if (!meta || meta.key !== key) {
+    meta = { key, ...(await extractMeta(file, s.size)) };
+    metaCache.set(file, meta);
+  }
+  return meta;
+}
+
 async function extractMeta(file, size) {
   const [head, tail] = await Promise.all([readHead(file), readTailTitles(file, size)]);
   // Prefer the latest title (tail) over an early one (head); custom over ai.
@@ -167,12 +180,7 @@ export async function listHistory() {
 
   const sessions = await Promise.all(
     top.map(async (f) => {
-      const key = `${f.mtime}:${f.size}`;
-      let meta = metaCache.get(f.file);
-      if (!meta || meta.key !== key) {
-        meta = { key, ...(await extractMeta(f.file, f.size)) };
-        metaCache.set(f.file, meta);
-      }
+      const meta = await transcriptMeta(f.file, { mtimeMs: f.mtime, size: f.size });
       return {
         sessionId: f.id,
         cwd: meta.cwd || '',

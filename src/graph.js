@@ -1,5 +1,5 @@
 import { access, open, readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, basename, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
@@ -244,7 +244,10 @@ export async function buildGraph(sessionId, cwd) {
   return {
     sessionId,
     title: deriveTitle(entries),
-    cwd: entries.find((e) => e.cwd)?.cwd || '',
+    // Latest cwd that still encodes to this project dir (a moved repo keeps the dir name,
+    // so the first cwd can point at a path that no longer exists), else the first.
+    cwd: entries.findLast((e) => e.cwd && e.cwd.replace(/\//g, '-') === basename(dirname(file)))?.cwd
+      || entries.find((e) => e.cwd)?.cwd || '',
     gitBranch: entries.find((e) => e.gitBranch)?.gitBranch || '',
     nodes: out,
     maxCol: lane,
