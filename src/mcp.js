@@ -4,7 +4,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { readdir, readFile, stat, mkdir, writeFile, open } from 'node:fs/promises';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -14,6 +14,7 @@ import { listHistory, isExcludedProjectDir, transcriptMeta } from './history.js'
 import { summarize } from './handoff.js';
 import { addNote, pendingCounts, countNotes, readPending, readPendingMany, consumeNotesSeedMany } from './notes.js';
 import { createSession, sendText, listSessions, capturePane } from './tmux.js';
+import { PROVIDER_KINDS, DEFAULT_KIND, getProvider, providerAvailable } from './providers/index.js';
 import { getAgents, matchAgents } from './agents.js';
 import { listTabs, claimTab, releaseTab } from './browser.js';
 import { proactiveSet } from './origin.js';
@@ -426,23 +427,29 @@ export function createMcpServer({ sessionControl = false } = {}) {
   if (sessionControl) {
     server.registerTool('create_session', {
       title: 'Start a Deep Session',
-      description: 'Launch a new Deep Session (Claude Code) in a repo directory, seeded with a task/context prompt that is typed into Claude once it boots. Use to spin up work on a task.',
+      description: 'Launch a new Deep Session (a coding-agent CLI: Claude Code, Codex or agy) in a repo directory, seeded with a task/context prompt that is typed into the CLI once it boots. Use to spin up work on a task.',
       inputSchema: {
-        dir: z.string().describe('Absolute path to the repo/working directory (must be under an allowed root).'),
-        prompt: z.string().min(1).describe('The task + context to type into Claude after it boots.'),
+        dir: z.string().describe(`Path to the repo/working directory: absolute under an allowed root (${config.roots.join(', ')}), or relative to ${config.roots[0]} (e.g. friday-sessions/fix-printer). Missing folders are created.`),
+        prompt: z.string().min(1).describe('The task + context to type into the CLI after it boots.'),
         title: z.string().optional().describe('Short Deep Session title; defaults to the folder name.'),
+        kind: z.enum(PROVIDER_KINDS).optional().describe(`Which CLI runs the session (default ${DEFAULT_KIND}).`),
       },
-    }, async ({ dir, prompt, title }) => {
+    }, async ({ dir, prompt, title, kind }) => {
       try {
-        // Auto-create the target dir if it's UNDER an allowed root but missing
-        // (the common "new project folder" case). Never mkdir outside a root —
-        // createSession's resolveAllowedDir still refuses those.
-        const abs = resolve(dir);
-        if (config.roots.some((r) => abs === r || abs.startsWith(r + '/'))) {
-          await mkdir(abs, { recursive: true });
+        // Relative (or ~/) paths land under the first root — callers (Friday in a
+        // microVM) don't know this host's layout, and resolve() against our cwd
+        // would put "friday-sessions/x" outside every root.
+        const abs = isAbsolute(dir) ? resolve(dir) : resolve(config.roots[0], dir.replace(/^~\/?/, ''));
+        if (!config.roots.some((r) => abs === r || abs.startsWith(r + '/'))) {
+          return text(`ERROR: could not start Deep Session — ${abs} is outside this deck's roots (${config.roots.join(', ')}). Retry with a folder under one, e.g. friday-sessions/<short-slug>.`);
         }
-        const name = await createSession({ dir: abs, title, seed: prompt, origin: 'proactive' });
-        return text(redact(`Started Deep Session ${name} in ${abs}. It's booting; its Claude sessionId will appear shortly via list_recent_sessions.`));
+        // Auto-create the missing target (the common "new project folder" case).
+        await mkdir(abs, { recursive: true });
+        // Asked-for CLI not installed here → run the default rather than fail the hand-off.
+        let note = '';
+        if (kind && !(await providerAvailable(kind))) { note = ` (${getProvider(kind).label} isn't installed on this deck)`; kind = DEFAULT_KIND; }
+        const name = await createSession({ dir: abs, title, seed: prompt, origin: 'proactive', kind });
+        return text(redact(`Started Deep Session ${name} in ${abs} running ${getProvider(kind).label}${note}. It's booting; its sessionId will appear shortly via list_recent_sessions.`));
       } catch (e) { return text(`ERROR: could not start Deep Session — ${e.message}`); }
     });
 
