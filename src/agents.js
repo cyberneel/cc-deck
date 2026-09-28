@@ -23,6 +23,10 @@ function parkedJobId(pid) {
     return null;
   }
 }
+// Pane title minus Claude's leading status glyph ("✳ Friday (ctx)" → "Friday (ctx)").
+export function shownName(title) {
+  return (title || '').replace(/^[^\p{L}\p{N}]+/u, '').trim();
+}
 // claude lives alongside node (nvm bin); ensure it's found under a minimal PATH.
 const PATH = `${dirname(process.execPath)}:${process.env.PATH || ''}`;
 
@@ -66,7 +70,13 @@ export function matchAgents(sessions, all) {
   for (const s of sessions) {
     const kids = s.panePid ? childPids(s.panePid) : [];
     let a = take((x) => kids.includes(x.pid)) || (s.resumedFrom && take((x) => x.sessionId === s.resumedFrom));
-    if (!a) a = kids.map((k) => jobsById.get(parkedJobId(k))).find(Boolean);
+    const parked = !a && kids.map(parkedJobId).find(Boolean);
+    // parkedJobId is set once at park time; the pane can later attach to another job,
+    // so prefer the job its title names (names are unique across live jobs).
+    if (parked) {
+      const shown = shownName(s.paneTitle);
+      a = [...jobsById.values()].find((j) => j.name && j.name === shown) || jobsById.get(parked);
+    }
     if (a) assign(s, a); else pending.push(s);
   }
   for (const s of pending) {
