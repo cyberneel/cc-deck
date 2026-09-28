@@ -18,6 +18,7 @@
   },
   "scripts": {
     "setup": "bash setup.sh",
+    "update": "bash update.sh",
     "build": "node esbuild.config.js",
     "start": "node src/server.js",
     "snapshot": "node scripts/snapshot.mjs",

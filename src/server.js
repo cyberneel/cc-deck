@@ -62,6 +62,7 @@ async function enrichedSessions() {
   return sessions;
 }
 import { getBurn } from './burn.js';
+import { startUpdateChecks, updateBehind, ROOT } from './update.js';
 import { listRemoteSessions } from './remote.js';
 import { availableProviders } from './providers/index.js';
 import { registerAgyMcp, registerAgyHooks } from './providers/agy.js';
@@ -709,9 +710,12 @@ app.get('/api/config', async () => {
 
 // Build version = the client bundle's mtime. The UI polls this and offers a
 // reload when it changes (so a redeploy is picked up without manual refresh).
+// behind = upstream commits not installed yet (self-host git checkouts; else null).
 app.get('/api/version', async () => {
-  try { return { v: Math.round(statSync(join(publicDir, 'dashboard.js')).mtimeMs) }; }
-  catch { return { v: 0 }; }
+  let v = 0;
+  try { v = Math.round(statSync(join(publicDir, 'dashboard.js')).mtimeMs); } catch { /* not built */ }
+  const behind = updateBehind();
+  return behind ? { v, behind, dir: ROOT } : { v };
 });
 
 // ---- Usage / ROI ----
@@ -767,6 +771,7 @@ registerAgyHooks().catch(() => {}); // + turn-telemetry hooks (hosted only)
 // CCDECK_FRIDAY_REACH_URL is set) — so Friday reacts without polling.
 startReachMonitor();
 startTurnTelemetry(); // per-turn RAM/CPU → systems (hosted only; inert otherwise)
+startUpdateChecks(); // self-host "update" pill (off on hosted tenants)
 
 // On a fresh boot (no sessions running), restore the sessions that were active
 // before the box went down; then keep a periodic snapshot as a safety net.

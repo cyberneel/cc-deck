@@ -55,7 +55,9 @@ There's no test framework; cc-deck is verified by running it. For a change, plea
 
 ## Submitting a change
 
-1. Branch off `main`.
+1. Branch off `main`. Self-hosters update straight from `main` via `./update.sh`, so every merge
+   must leave it installable and buildable. Call out a lockfile change or a new `.env` setting in
+   the PR.
 2. Write a clear commit message: a short imperative summary line, then a body explaining the
    *why* if it isn't obvious.
 3. Open a PR describing the change and how you verified it. Screenshots help for UI changes

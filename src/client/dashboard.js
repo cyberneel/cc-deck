@@ -50,7 +50,9 @@ let appVersion = null;
 let pendingWorker = null;
 async function checkVersion() {
   try {
-    const { v } = await api('/api/version');
+    const { v, behind, dir } = await api('/api/version');
+    upstream = behind ? { behind, dir } : null;
+    renderUpdatePill();
     if (appVersion === null) appVersion = v;
     else if (v && v !== appVersion) showUpdateToast();
   } catch { /* */ }
@@ -62,6 +64,29 @@ function showUpdateToast(worker) {
   t.id = 'update-toast'; t.className = 'toast';
   t.innerHTML = 'New version available <button class="primary" style="margin-left:8px;padding:5px 12px">Reload</button>';
   t.querySelector('button').addEventListener('click', () => applyUpdate(pendingWorker));
+  document.body.appendChild(t);
+}
+// Self-host: upstream commits this git checkout doesn't have yet (never set on hosted/Docker).
+let upstream = null; // { behind, dir }
+function renderUpdatePill() {
+  const b = document.getElementById('update-btn');
+  if (!b) return;
+  b.style.display = upstream ? '' : 'none';
+  if (upstream) b.title = `${upstream.behind} new commit${upstream.behind === 1 ? '' : 's'} upstream — how to update`;
+}
+function showUpdateHowTo() {
+  document.getElementById('update-howto')?.remove();
+  if (!upstream) return;
+  const cmd = `cd ${/\s/.test(upstream.dir) ? JSON.stringify(upstream.dir) : upstream.dir} && ./update.sh`;
+  const t = document.createElement('div');
+  t.id = 'update-howto'; t.className = 'toast';
+  t.innerHTML = `cc-deck is ${upstream.behind} commit${upstream.behind === 1 ? '' : 's'} behind. Run this in any terminal — sessions keep running:<br>
+    <code>${esc(cmd)}</code> <button data-a="copy">Copy</button> <button data-a="close">✕</button>`;
+  t.addEventListener('click', async (e) => {
+    const a = e.target.dataset?.a;
+    if (a === 'copy') { try { await navigator.clipboard.writeText(cmd); e.target.textContent = 'Copied'; } catch { /* select it by hand */ } }
+    if (a === 'close') t.remove();
+  });
   document.body.appendChild(t);
 }
 registerServiceWorker((w) => showUpdateToast(w));
@@ -197,6 +222,7 @@ function render() {
       </div>
       <div class="spacer"></div>
       <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
+      <button id="update-btn" class="burn-pill" style="display:none">${matchMedia('(max-width: 700px)').matches ? '⬆' : '⬆ Update'}</button>
       <button class="primary" id="new-btn" title="New Deep Session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New Deep Session'}</button>
       <button id="snapshot-btn" class="icon" title="Snapshot Deep Sessions (restore after a reboot)">💾<span class="snap-age" id="snap-age"></span></button>
       <button id="storage-btn" class="icon" title="Storage &amp; cleanup">🗄</button>
@@ -282,6 +308,8 @@ function render() {
   const burnBtn = document.getElementById('burn-btn');
   renderBurnPill(burnBtn, burnData);
   burnBtn.addEventListener('click', (e) => { e.stopPropagation(); openBurnPopover(burnBtn, burnData, async () => { await loadBurn(); return burnData; }); });
+  renderUpdatePill();
+  document.getElementById('update-btn').addEventListener('click', showUpdateHowTo);
   document.getElementById('new-btn').addEventListener('click', openNewModal);
   document.getElementById('storage-btn').addEventListener('click', openStorage);
   renderSnapAge();

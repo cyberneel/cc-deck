@@ -46,6 +46,9 @@ export const config = {
   // This VM's tenant id (systems injects it); the redeemed token's `tenant` must
   // match it. Empty = single-tenant / self-host → skip the tenant check.
   tenantId: (process.env.CCDECK_TENANT_ID || '').trim(),
+  // Self-host update check (fetch the upstream branch every few hours → "update"
+  // pill). Never on hosted tenants: their cc-deck is rolled by image, not git.
+  updateCheck: !(process.env.CCDECK_TENANT_ID || '').trim() && process.env.CCDECK_UPDATE_CHECK !== 'off',
   // tmux session name prefix for sessions this app manages.
   prefix: 'ccdeck-',
   // Dedicated tmux socket so cc-deck's sessions live on their own server,

@@ -146,6 +146,26 @@ npm start
 Rebuild the frontend after editing anything in `src/client/` with `npm run build`
 (or `npm run dev` for watch mode + server auto-restart).
 
+## Updating
+
+`main` is the release channel. A git-clone install checks its upstream branch every few hours;
+when there are new commits, the dashboard shows a **⬆ Update** pill with the command to run:
+
+```bash
+./update.sh     # fast-forward to upstream, npm ci if the lockfile changed, rebuild, restart
+```
+
+It refuses to run with local changes to tracked files or diverged history, reinstalls
+dependencies only when `package-lock.json` changed, and restarts the systemd user service if it
+runs this checkout (otherwise it tells you to restart `npm start`). Your sessions keep running
+across the restart (see `KillMode=process` below). If the install or build fails, it rolls
+back to the previous commit and leaves the running server alone. You can run it from a cc-deck
+terminal: the page drops for a moment during the restart, then offers a reload.
+
+Set `CCDECK_UPDATE_CHECK=off` to disable the background check (it's a `git fetch` of your
+upstream). Docker: `git pull && docker compose up -d --build`. Hosted cc-deck is updated for
+you, so it never shows the pill.
+
 ## Run with Docker (Windows, macOS, Linux)
 
 cc-deck needs Linux + tmux + `node-pty`, which is awkward on Windows/macOS — so the container
@@ -401,6 +421,8 @@ restarts.
 
 **Remember:** changes to `.env` need `systemctl --user restart cc-deck`; changes to `src/client/*`
 need `npm run build` first. With `KillMode=process`, restarts no longer disturb running sessions.
+To pull a new version, run `./update.sh` (see [Updating](#updating)): it rebuilds and restarts
+this service for you.
 
 ## Exposing on your own domain via Cloudflare (access off-VPN)
 
@@ -473,12 +495,14 @@ src/browser.js     shared-browser lock registry (browser_tabs/claim/release over
 src/reach-emit.js  optional: push "needs input" transitions to a webhook (CCDECK_FRIDAY_REACH_URL)
 src/sw.js          service-worker source (built to public/sw.js by esbuild)
 src/storage.js     retention hub — inventory + selective delete of artifacts/transcripts
+src/update.js      self-host update check (behind upstream? → dashboard "Update" pill)
 src/config.js      env config
 src/client/*.js    dashboard + terminal + PWA (bundled by esbuild into public/)
 public/*.html      login / dashboard / terminal pages + manifest/icons
 systemd/           user-service unit template (filled in by setup.sh)
 scripts/           snapshot CLI + screenshot generator
 setup.sh           one-command installer
+update.sh          self-host updater (fast-forward, rebuild, restart; rolls back on failure)
 ```
 
 ## Contributing
