@@ -185,25 +185,43 @@ app.post('/api/turn-hook', async (req, reply) => {
   return reply.code(204).send();
 });
 
-// AI-cred sync with the tenant's Friday (same account, static MCP bearer) so cc-deck's
-// claude/codex/agy sessions use the SAME logins as Friday, both ways: "Connect AI" in Friday
-// covers cc-deck, and a login or token refresh here reaches Friday. Newest copy of each file
-// wins (codex rotates its refresh token on refresh — the older copy is dead).
-// Only AI-login files under HOME move, never arbitrary paths.
-const credDest = (rel) => (typeof rel === 'string' && /^\.(claude|codex|gemini)\/[\w.\-/]+$/.test(rel) && !rel.includes('..'))
-  ? join(process.env.HOME || homedir(), rel) : null;
+// AI-login sync with the tenant's Friday (same account, static MCP bearer). The account's
+// logins live in Friday (connected/disconnected on the /account page); the deck follows so its
+// claude/codex/agy sessions use the SAME accounts. Friday offers the mtimes of the logins it
+// holds: we return our newer copies (a token refresh here — codex rotates its refresh token, the
+// older copy is dead), list the ones we want, and delete the ones the account disconnected. A
+// login made by hand here that Friday doesn't hold is never touched. Only these files ever move.
+const CRED_FILES = {
+  claude: ['.claude/.credentials.json'],
+  codex: ['.codex/auth.json'],
+  agy: ['.gemini/antigravity-cli/antigravity-oauth-token', '.gemini/oauth_creds.json'],
+};
+const credDest = (rel) => Object.values(CRED_FILES).flat().includes(rel) ? join(process.env.HOME || homedir(), rel) : null;
 const mtimeOf = async (p) => Math.floor((await stat(p).catch(() => null))?.mtimeMs || 0);
+// Logins Friday offered on its last sync = the account's. ponytail: in memory, so after a
+// restart the picker says "on this deck" until Friday's next tick (≤1 min).
+let accountCreds = new Set();
+// For the New Session picker: is this CLI signed in through the account, on this deck, or not at all?
+async function signin(kind) {
+  const rels = CRED_FILES[kind] || [];
+  if (rels.some((r) => accountCreds.has(r))) return 'account';
+  for (const r of rels) if (await mtimeOf(credDest(r))) return 'deck';
+  return null;
+}
 
-// Friday offers its files' mtimes (no secrets); reply with our newer copies and the ones we want.
 app.post('/api/creds/sync', async (req, reply) => {
   if (!mcpIsStatic(req)) return reply.code(401).send({ error: 'unauthorized' });
   const theirs = req.body?.mtimes;
   if (!theirs || typeof theirs !== 'object') return reply.code(400).send({ error: 'no mtimes' });
-  const newer = {}, want = [];
-  for (const [rel, t] of Object.entries(theirs)) {
+  for (const rel of Array.isArray(req.body?.remove) ? req.body.remove : []) {
     const dest = credDest(rel);
-    if (!dest) continue;
-    const mine = await mtimeOf(dest), their = Number(t) || 0;
+    if (dest && !(rel in theirs)) await rm(dest, { force: true });
+  }
+  accountCreds = new Set(Object.keys(theirs).filter(credDest));
+  const newer = {}, want = [];
+  for (const rel of accountCreds) {
+    const dest = credDest(rel);
+    const mine = await mtimeOf(dest), their = Number(theirs[rel]) || 0;
     if (mine > their) newer[rel] = { b64: (await readFile(dest)).toString('base64'), mtime: mine };
     else if (their > mine) want.push(rel);
   }
@@ -686,7 +704,7 @@ app.post('/api/fs', async (req, reply) => {
 });
 
 app.get('/api/config', async () => {
-  return { roots: config.roots, launchCommand: config.launchCommand, home: process.env.HOME || '', providers: await availableProviders(), account_url: config.accountUrl };
+  return { roots: config.roots, launchCommand: config.launchCommand, home: process.env.HOME || '', providers: await Promise.all((await availableProviders()).map(async (p) => ({ ...p, signin: await signin(p.kind) }))), account_url: config.accountUrl };
 });
 
 // Build version = the client bundle's mtime. The UI polls this and offers a

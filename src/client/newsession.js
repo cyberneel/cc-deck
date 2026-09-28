@@ -10,9 +10,19 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 export function openNewModal({ api, cfg = {}, onCreated }) {
   let currentPath = (cfg.roots && cfg.roots[0]) || cfg.home || '/';
   const providers = (cfg.providers && cfg.providers.length) ? cfg.providers : [{ kind: 'claude', label: 'Claude' }];
-  // CLI picker only appears when more than one provider is available.
+  // CLI picker only appears when more than one provider is available; the line under it says
+  // which login that CLI will use (logins are managed on the account page when there is one).
+  const signinLine = (kind) => {
+    const p = providers.find((x) => x.kind === kind) || providers[0];
+    if (!('signin' in p)) return ''; // an older server that doesn't report logins
+    if (p.signin === 'account') return `${esc(p.label)}: signed in through your account`;
+    if (p.signin === 'deck') return `${esc(p.label)}: signed in on this deck`;
+    return `${esc(p.label)}: no login found here` + (cfg.account_url
+      ? ` — <a href="${esc(cfg.account_url)}" target="_blank" rel="noopener">connect it on your account page</a>` : '');
+  };
   const cliField = providers.length > 1
-    ? `<div class="field"><label>CLI</label><select id="cli-mode">${providers.map((p) => `<option value="${esc(p.kind)}">${esc(p.label)}</option>`).join('')}</select></div>`
+    ? `<div class="field"><label>CLI</label><select id="cli-mode">${providers.map((p) => `<option value="${esc(p.kind)}">${esc(p.label)}</option>`).join('')}</select>
+        <div class="faint" id="cli-signin" style="margin-top:6px">${signinLine(providers[0].kind)}</div></div>`
     : '';
   const bg = document.createElement('div');
   bg.className = 'modal-bg';
@@ -85,6 +95,8 @@ export function openNewModal({ api, cfg = {}, onCreated }) {
   }
   bg.querySelector('#mkdir-btn').addEventListener('click', createFolder);
   mkdirName.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); createFolder(); } });
+
+  bg.querySelector('#cli-mode')?.addEventListener('change', (e) => { bg.querySelector('#cli-signin').innerHTML = signinLine(e.target.value); });
 
   const getSeed = wireSeedSection(bg);
   const close = () => bg.remove();
