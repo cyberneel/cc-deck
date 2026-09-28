@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve, sep, basename, relative } from 'node:path';
 import { statSync, createWriteStream, createReadStream } from 'node:fs';
-import { mkdir, stat, readdir, rm, access, writeFile, utimes } from 'node:fs/promises';
+import { mkdir, stat, readdir, rm, access, writeFile, utimes, readFile, rename } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { pipeline } from 'node:stream/promises';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
@@ -111,7 +111,7 @@ const PUBLIC_PATHS = new Set([
   '/manifest.webmanifest', '/icon-180.png', '/icon-192.png', '/icon-512.png',
   '/mcp', // MCP endpoint does its own bearer/OAuth auth (below)
   '/api/turn-hook', // CLI turn hooks (telemetry) — shared-key auth (below)
-  '/api/creds/import', // AI-cred sync from the tenant's Friday — MCP-token bearer auth (below)
+  '/api/creds/import', '/api/creds/sync', // AI-cred sync with the tenant's Friday — MCP-token bearer auth (below)
   // OAuth endpoints for claude.ai connectors — reachable without a cc-deck cookie.
   '/.well-known/oauth-protected-resource', '/.well-known/oauth-authorization-server',
   '/.well-known/oauth-protected-resource/mcp',
@@ -185,28 +185,48 @@ app.post('/api/turn-hook', async (req, reply) => {
   return reply.code(204).send();
 });
 
-// AI-cred sync: the tenant's Friday (same account, MCP-token authed) mirrors a just-connected
-// engine's creds here so cc-deck's claude/codex/agy sessions use the SAME account — "Connect
-// AI" once in Friday covers cc-deck too. Writes HOME-relative files (0600). Static-bearer only.
+// AI-cred sync with the tenant's Friday (same account, static MCP bearer) so cc-deck's
+// claude/codex/agy sessions use the SAME logins as Friday, both ways: "Connect AI" in Friday
+// covers cc-deck, and a login or token refresh here reaches Friday. Newest copy of each file
+// wins (codex rotates its refresh token on refresh — the older copy is dead).
+// Only AI-login files under HOME move, never arbitrary paths.
+const credDest = (rel) => (typeof rel === 'string' && /^\.(claude|codex|gemini)\/[\w.\-/]+$/.test(rel) && !rel.includes('..'))
+  ? join(process.env.HOME || homedir(), rel) : null;
+const mtimeOf = async (p) => Math.floor((await stat(p).catch(() => null))?.mtimeMs || 0);
+
+// Friday offers its files' mtimes (no secrets); reply with our newer copies and the ones we want.
+app.post('/api/creds/sync', async (req, reply) => {
+  if (!mcpIsStatic(req)) return reply.code(401).send({ error: 'unauthorized' });
+  const theirs = req.body?.mtimes;
+  if (!theirs || typeof theirs !== 'object') return reply.code(400).send({ error: 'no mtimes' });
+  const newer = {}, want = [];
+  for (const [rel, t] of Object.entries(theirs)) {
+    const dest = credDest(rel);
+    if (!dest) continue;
+    const mine = await mtimeOf(dest), their = Number(t) || 0;
+    if (mine > their) newer[rel] = { b64: (await readFile(dest)).toString('base64'), mtime: mine };
+    else if (their > mine) want.push(rel);
+  }
+  return { newer, want };
+});
+
+// Friday sends files (right after a connect, or the ones /sync said we want).
 app.post('/api/creds/import', async (req, reply) => {
-  const h = req.headers.authorization || '';
-  const tok = h.startsWith('Bearer ') ? h.slice(7) : '';
-  if (!config.mcpToken || tok !== config.mcpToken) return reply.code(401).send({ error: 'unauthorized' });
+  if (!mcpIsStatic(req)) return reply.code(401).send({ error: 'unauthorized' });
   const files = req.body?.files;
   if (!files || typeof files !== 'object') return reply.code(400).send({ error: 'no files' });
-  const home = process.env.HOME || homedir();
   let written = 0, kept = 0;
   for (const [rel, b64] of Object.entries(files)) {
-    // rel is HOME-relative (e.g. ".claude/.credentials.json"); reject traversal / absolute.
-    if (typeof rel !== 'string' || rel.includes('..') || rel.startsWith('/') || typeof b64 !== 'string') continue;
-    const dest = join(home, rel);
-    // Newest wins: Friday re-sends on every change + after a restart, so keep a copy this
-    // deck's CLI refreshed since (codex rotates its refresh token — the older one is dead).
+    const dest = credDest(rel);
+    if (!dest || typeof b64 !== 'string') continue;
     const mt = Number(req.body?.mtimes?.[rel]) || 0;
-    if (mt && ((await stat(dest).catch(() => null))?.mtimeMs || 0) > mt) { kept++; continue; }
+    if (mt && (await mtimeOf(dest)) > mt) { kept++; continue; }
     await mkdir(dirname(dest), { recursive: true });
-    await writeFile(dest, Buffer.from(b64, 'base64'), { mode: 0o600 });
-    if (mt) await utimes(dest, new Date(), new Date(mt)); // stamp the source's time so the next compare is fair
+    // temp + rename: a running CLI may read this file at any moment.
+    const tmp = `${dest}.sync-tmp`;
+    await writeFile(tmp, Buffer.from(b64, 'base64'), { mode: 0o600 });
+    if (mt) await utimes(tmp, new Date(), new Date(mt)); // the source's time, so the next compare is fair
+    await rename(tmp, dest);
     written++;
   }
   return { ok: true, written, kept };
