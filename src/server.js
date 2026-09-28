@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve, sep, basename, relative } from 'node:path';
 import { statSync, createWriteStream, createReadStream } from 'node:fs';
-import { mkdir, stat, readdir, rm, access, writeFile } from 'node:fs/promises';
+import { mkdir, stat, readdir, rm, access, writeFile, utimes } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { pipeline } from 'node:stream/promises';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
@@ -195,16 +195,21 @@ app.post('/api/creds/import', async (req, reply) => {
   const files = req.body?.files;
   if (!files || typeof files !== 'object') return reply.code(400).send({ error: 'no files' });
   const home = process.env.HOME || homedir();
-  let written = 0;
+  let written = 0, kept = 0;
   for (const [rel, b64] of Object.entries(files)) {
     // rel is HOME-relative (e.g. ".claude/.credentials.json"); reject traversal / absolute.
     if (typeof rel !== 'string' || rel.includes('..') || rel.startsWith('/') || typeof b64 !== 'string') continue;
     const dest = join(home, rel);
+    // Newest wins: Friday re-sends on every change + after a restart, so keep a copy this
+    // deck's CLI refreshed since (codex rotates its refresh token — the older one is dead).
+    const mt = Number(req.body?.mtimes?.[rel]) || 0;
+    if (mt && ((await stat(dest).catch(() => null))?.mtimeMs || 0) > mt) { kept++; continue; }
     await mkdir(dirname(dest), { recursive: true });
     await writeFile(dest, Buffer.from(b64, 'base64'), { mode: 0o600 });
+    if (mt) await utimes(dest, new Date(), new Date(mt)); // stamp the source's time so the next compare is fair
     written++;
   }
-  return { ok: true, written };
+  return { ok: true, written, kept };
 });
 
 // ---- Auth routes ----
