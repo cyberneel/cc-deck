@@ -28,7 +28,7 @@ export async function captureSnapshot({ skipIfEmpty = false } = {}) {
   ).catch(() => {});
   const entries = sessions
     .filter((s) => s.dir)
-    .map((s) => ({ dir: s.dir, title: s.title, resume: s.liveSessionId || s.resumedFrom || null, kind: s.kind || undefined, origin: s.origin !== 'user' ? s.origin : undefined }));
+    .map((s) => ({ dir: s.dir, title: s.title, resume: s.parked?.main || s.liveSessionId || s.resumedFrom || null, kind: s.kind || undefined, origin: s.origin !== 'user' ? s.origin : undefined }));
   if (!entries.length && skipIfEmpty) return -1; // keep last-good snapshot
   await mkdir(DIR, { recursive: true });
   const tmp = `${FILE}.tmp`;

@@ -57,6 +57,7 @@ document.body.innerHTML = `
         <button id="sb-toggle" class="icon" title="Toggle sidebar (Deep Sessions)">☰<span id="sb-badge" class="sb-badge" style="display:none"></span></button>
         <a href="/" title="Back to dashboard">←</a>
         <span class="title" id="title">${currentSession || 'session'}</span>
+        <button id="main-btn" class="burn-pill" style="display:none">↩ main</button>
         <div class="spacer" style="flex:1"></div>
         <button id="notes-btn" class="icon" title="Updates from outside chats" style="display:none"></button>
         <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
@@ -73,6 +74,23 @@ document.body.innerHTML = `
 
 const statusEl = document.getElementById('status');
 const titleEl = document.getElementById('title');
+// Shown when this pane is on a background job (summary-seeded) instead of its full-context
+// main conversation; one click swaps the pane for main.
+const mainBtn = document.getElementById('main-btn');
+function renderParked() {
+  const p = sessions.find((s) => s.name === currentSession)?.parked;
+  mainBtn.style.display = p ? '' : 'none';
+  if (p) mainBtn.title = `On background job${p.jobName ? ` “${p.jobName}”` : ''} (summary-only context) — back to your full-context main conversation`;
+}
+mainBtn.addEventListener('click', async () => {
+  const old = currentSession;
+  try {
+    const { name } = await api(`/api/sessions/${encodeURIComponent(old)}/main`, { method: 'POST' });
+    switchTo(name);
+    disposePane(old);
+    await refreshSessions();
+  } catch (err) { toast(err.message); }
+});
 const appEl = document.getElementById('app-term');
 const termHost = document.getElementById('terminal');
 
@@ -649,6 +667,7 @@ async function refreshSessions() {
     }
     attention.delete(currentSession);
     titleEl.textContent = titleOf(currentSession);
+    renderParked();
     renderSidebar();
   } catch { /* */ }
 }
@@ -771,6 +790,7 @@ function switchTo(name) {
   attention.delete(name); // you're now viewing it
   history.replaceState({}, '', `?session=${encodeURIComponent(name)}`);
   titleEl.textContent = titleOf(name);
+  renderParked();
   if (isMobile && sidebarOpen) { sidebarOpen = false; applySidebar(); } // close the drawer
   showPane(name);
   renderSidebar();

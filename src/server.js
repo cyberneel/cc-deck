@@ -361,6 +361,24 @@ app.delete('/api/sessions/:name', async (req, reply) => {
   }
 });
 
+// A parked pane is showing a background job (summary-seeded), not its full-context main
+// conversation. Swap the pane for one resumed on main. Killing the pane only drops the
+// job's viewer — the job itself runs in Claude's daemon.
+app.post('/api/sessions/:name/main', async (req, reply) => {
+  try {
+    const all = await enrichedSessions();
+    const s = all.find((x) => x.name === req.params.name);
+    if (!s?.parked?.main) return reply.code(409).send({ error: 'This session is not on a background job' });
+    const open = all.find((x) => x !== s && (x.liveSessionId === s.parked.main || x.resumedFrom === s.parked.main));
+    if (open) return { name: open.name, alreadyRunning: true };
+    await killSession(s.name); // before resuming, so two processes never share main
+    const name = await createSession({ dir: s.dir, title: s.title, resume: s.parked.main, kind: s.kind, origin: s.origin });
+    return { name };
+  } catch (err) {
+    return reply.code(err.statusCode || 500).send({ error: err.message });
+  }
+});
+
 // Inject any pending external notes into a RUNNING session (live), then consume.
 app.post('/api/sessions/:name/apply-notes', async (req, reply) => {
   try {

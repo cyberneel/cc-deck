@@ -15,10 +15,11 @@ function childPids(pid) {
   }
 }
 // A PARKED interactive session (its conversation handed to a background job) is left
-// out of `claude agents`; its registry file names the job that now owns the conversation.
-function parkedJobId(pid) {
+// out of `claude agents`; its registry file names the job it parked into (parkedJobId)
+// and keeps sessionId = the full-context main conversation the pane came from.
+function registry(pid) {
   try {
-    return JSON.parse(readFileSync(join(homedir(), '.claude', 'sessions', `${pid}.json`), 'utf8')).parkedJobId || null;
+    return JSON.parse(readFileSync(join(homedir(), '.claude', 'sessions', `${pid}.json`), 'utf8'));
   } catch {
     return null;
   }
@@ -70,12 +71,17 @@ export function matchAgents(sessions, all) {
   for (const s of sessions) {
     const kids = s.panePid ? childPids(s.panePid) : [];
     let a = take((x) => kids.includes(x.pid)) || (s.resumedFrom && take((x) => x.sessionId === s.resumedFrom));
-    const parked = !a && kids.map(parkedJobId).find(Boolean);
+    const reg = !a && kids.map(registry).find((r) => r?.parkedJobId);
     // parkedJobId is set once at park time; the pane can later attach to another job,
     // so prefer the job its title names (names are unique across live jobs).
-    if (parked) {
+    if (reg) {
       const shown = shownName(s.paneTitle);
-      a = [...jobsById.values()].find((j) => j.name && j.name === shown) || jobsById.get(parked);
+      a = [...jobsById.values()].find((j) => j.name && j.name === shown) || jobsById.get(reg.parkedJobId);
+      // The pane is showing a background job (summary-seeded context), not the main
+      // conversation → the UI offers "back to main" (POST /api/sessions/:name/main).
+      if (reg.sessionId && reg.sessionId !== a?.sessionId) {
+        s.parked = { main: reg.sessionId, job: a?.id || reg.parkedJobId, jobName: a?.name || null };
+      }
     }
     if (a) assign(s, a); else pending.push(s);
   }

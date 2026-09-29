@@ -370,6 +370,7 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--bg-card); bor
 /* ccburn quick-view pill + popover (terminal top bar) */
 .burn-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; font-size: 12px; font-family: var(--mono); border: 1px solid var(--border); border-radius: 8px; background: var(--bg-elev); color: var(--text-dim); cursor: pointer; flex: 0 0 auto; }
 .burn-pill:hover { border-color: var(--border-hover); }
+.main-btn, #main-btn { color: var(--accent); border-color: var(--accent); } /* pane is on a background job, not main */
 .bp-seg.burn-ok { color: var(--green); }
 .bp-seg.burn-warn { color: var(--accent); }
 .bp-seg.burn-crit { color: #ff8d85; }

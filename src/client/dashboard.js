@@ -422,6 +422,13 @@ function wireActiveCards(container) {
       await api(`/api/sessions/${name}`, { method: 'DELETE' });
       await refresh();
     });
+    el.querySelector('.main-btn')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        const r = await api(`/api/sessions/${name}/main`, { method: 'POST' });
+        location.href = `/terminal.html?session=${encodeURIComponent(r.name)}`;
+      } catch (err) { toast(err.message); }
+    });
     el.querySelector('.graph-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       const b = e.currentTarget;
@@ -443,6 +450,9 @@ function wireActiveCards(container) {
   });
 }
 
+// A parked pane shows a background job, seeded from a summary — not the full conversation.
+const parkedTip = (s) => `On background job${s.parked.jobName ? ` “${s.parked.jobName}”` : ''} (summary-only context) — reopen your full-context main conversation`;
+
 function cardHtml(s) {
   const st = statusOf(s);
   return `<div class="card" data-name="${esc(s.name)}">
@@ -454,6 +464,7 @@ function cardHtml(s) {
       ${modeChip(s)}
       <span class="faint">${s.attached ? 'attached · ' : ''}${fmtTime(s.lastActivity)}</span>
       <div class="spacer"></div>
+      ${s.parked ? `<button class="burn-pill main-btn" title="${esc(parkedTip(s))}">↩ main</button>` : ''}
       ${s.noteCount ? `<button class="icon note-btn" title="${s.noteCount} update(s) from outside chats — view / apply" data-note="${esc(s.name)}" data-live="${esc(s.liveSessionId || '')}">📝${s.noteCount}</button>` : ''}
       ${s.liveSessionId ? `<button class="icon graph-btn" title="Deep Session graph" data-graph="${esc(s.liveSessionId)}" data-cwd="${esc(s.dir || '')}" data-gtitle="${esc(s.title)}">⎇</button>` : ''}
       <button class="icon rename-btn" title="Rename">✎</button>
