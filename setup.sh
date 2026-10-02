@@ -23,7 +23,7 @@ need() {
   fi
 }
 echo "Checking prerequisites:"
-need node "install Node.js >= 18 (https://nodejs.org)"
+need node "install Node.js >= 20 (https://nodejs.org)"
 need npm  "comes with Node.js"
 need tmux "install tmux (your package manager)"
 need claude "install the Claude CLI (https://claude.com/claude-code) — or set CCDECK_LAUNCH to another command"
@@ -34,8 +34,8 @@ fi
 
 NODE_BIN="$(command -v node)"
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-if [ "$NODE_MAJOR" -lt 18 ]; then
-  warn "Node $NODE_MAJOR detected; cc-deck needs >= 18."
+if [ "$NODE_MAJOR" -lt 20 ]; then
+  warn "Node $NODE_MAJOR detected; cc-deck needs >= 20."
   exit 1
 fi
 

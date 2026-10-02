@@ -2,7 +2,7 @@
   "name": "cc-deck",
   "version": "0.1.0",
   "type": "module",
-  "description": "Web dashboard to view, launch, resume, and attach to Claude CLI sessions (tmux-backed) from the browser.",
+  "description": "Self-hosted web dashboard to view, launch, resume, and attach to coding-CLI sessions (Claude Code, Codex, agy) — tmux-backed, in the browser.",
   "license": "Apache-2.0",
   "keywords": [
     "claude",
@@ -14,7 +14,7 @@
     "self-hosted"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "scripts": {
     "setup": "bash setup.sh",

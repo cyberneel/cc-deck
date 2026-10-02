@@ -10,6 +10,7 @@
 
 ## Checklist
 
+- [ ] `npm test` passes
 - [ ] Rebuilt the client (`npm run build`) if I touched `src/client/**`
 - [ ] No new runtime dependency (or explained why one is needed)
 - [ ] Subprocess calls still use `execFile`/`spawn` with arg arrays (no shell)

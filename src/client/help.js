@@ -16,7 +16,7 @@ const SECTIONS = [
     <ul>
       <li><b>Directory</b> — where the CLI runs. Browse to it, or create a folder inline. Must be
         under an allowed root.</li>
-      <li><b>CLI</b> — Claude or Codex (when both are available).</li>
+      <li><b>CLI</b> — Claude, Codex, or agy (only the ones installed are offered).</li>
       <li><b>Title</b> — optional label.</li>
       <li><b>Browser access</b> — optionally let the Deep Session drive a shared logged-in Chrome.</li>
       <li><b>Context from prior Deep Sessions</b> — seed the new Deep Session with a handoff summary or
@@ -35,7 +35,7 @@ const SECTIONS = [
     </ul>`],
 
   ['Find &amp; organize', `
-    <p>The status tiles up top double as filters. <b>Fuzzy search</b> matches title, directory, and
+    <p>The status tiles up top double as tab switches. <b>Fuzzy search</b> matches title, directory, and
     git branch instantly. Toggle <b>Grid / List / Group</b> views; grouped view collapses by
     directory so you can scan many at once.</p>`],
 
@@ -47,7 +47,9 @@ const SECTIONS = [
         (wheel scrolls the local buffer instantly).</li>
       <li><b>Warm Deep Sessions</b> — the current + 2 most-recent stay attached in the background, so
         switching between them is instant.</li>
-      <li><b>Mobile</b> — an on-screen key bar (Esc/Tab/Ctrl/arrows) plus <b>🎤</b> to dictate or
+      <li><b>Parked panes</b> — if a Deep Session is showing a background job instead of its main
+        conversation, its card and the terminal bar say <b>↩ main</b>; click it to swap back.</li>
+      <li><b>Mobile</b> — an on-screen key bar (Esc/Tab/Shift+Tab/Ctrl/arrows) plus <b>🎤</b> to dictate or
         type a message and send it (iOS dictation is clean there, unlike straight into the terminal).</li>
       <li><b>Copy / paste</b> — ⧉ copies the on-screen text; ⎘ pastes into the Deep Session.</li>
     </ul>`],
@@ -58,7 +60,9 @@ const SECTIONS = [
     <ul>
       <li><b>Alt+\` / Alt+Shift+\`</b> — cycle most-recently-used.</li>
       <li><b>Alt+1–9</b> — jump to a Deep Session by its number.</li>
-    </ul>`],
+    </ul>
+    <p><b>↩ Resume a Deep Session</b> at the top of the sidebar opens a searchable list of past Deep
+    Sessions — pick one to resume it and switch straight in.</p>`],
 
   ['Resume &amp; fork', `
     <p>From <b>History</b>, <b>Resume</b> continues a past Deep Session; <b>fork</b> branches a copy and
@@ -91,7 +95,8 @@ const SECTIONS = [
     <p>Deep Sessions can hand context to each other. A <b>context handoff</b> seeds a new (or running)
     Deep Session with an AI summary or transcript of prior Deep Sessions. <b>External notes</b> (left via the
     MCP <code>save_session_summary</code> tool) surface on a Deep Session's card (📝) and are injected when
-    you next open/resume it — so a Deep Session picks up what happened elsewhere.</p>`],
+    you next open/resume it — so a Deep Session picks up what happened elsewhere. Open a note to apply it
+    to a running Deep Session now, edit it, or delete it.</p>`],
 
   ['Reliability', `
     <p><b>Snapshot / restore</b>: your active Deep Sessions are snapshotted periodically, on graceful stop, and
@@ -102,7 +107,7 @@ const SECTIONS = [
   ['Remote control (MCP)', `
     <p>Deep Sessions exposes an <b>MCP endpoint</b> (<code>/mcp</code>) so Claude.ai, Claude Code, or your own
     agent can search your past Deep Sessions, read a Deep Session's context, leave handoff notes, and — with the
-    right token — create and drive Deep Sessions. New Deep Sessions can be auto-wired "handoff-aware" so they
+    right token — create, resume, and drive Deep Sessions and read the files they produce. New Deep Sessions can be auto-wired "handoff-aware" so they
     discover related work and hand off instead of duplicating.</p>`],
 
   ['Shared browser', `
@@ -121,7 +126,7 @@ const SECTIONS = [
 
   ['Setup &amp; config', `
     <p>Run it natively (<code>./setup.sh</code>) or via <b>Docker</b> (<code>docker compose up -d</code> —
-    works on Windows/macOS/Linux and bundles both CLIs). Log the CLIs in once. All settings are
+    works on Windows/macOS/Linux and bundles the Claude Code, Codex, and agy CLIs). Log the CLIs in once. All settings are
     environment variables (password, roots, permission mode, remote hosts, MCP tokens, shared browser…).
     See the project <b>README</b> for the full list and for serving over Tailscale/Cloudflare.</p>`],
 ];
@@ -163,7 +168,7 @@ export function maybeShowIntro() {
   bg.className = 'modal-bg';
   bg.innerHTML = `<div class="modal intro-modal">
     <h2>Welcome to Deep Sessions 👋</h2>
-    <p>Manage your <b>Claude Code and Codex</b> Deep Sessions from the browser — the real CLIs, running in
+    <p>Manage your <b>Claude Code, Codex, and agy</b> Deep Sessions from the browser — the real CLIs, running in
     tmux on the server, through a fast in-browser terminal.</p>
     <ol class="intro-steps">
       <li><b>+ New Deep Session</b> — pick a directory and CLI, and launch.</li>

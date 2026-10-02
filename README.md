@@ -1,8 +1,9 @@
 # cc-deck
 
-A self-hosted web dashboard for your **coding-CLI** sessions (Claude Code and Codex). See every running session
-in a grid/list/grouped view, launch a new `claude` in any directory, resume or fork past
-conversations, and click into a fast, smooth in-browser terminal — the real CLI, no wrapper.
+A self-hosted web dashboard for your **coding-CLI** sessions (Claude Code, Codex, and agy). See every
+running session in a grid/list/grouped view, launch a new `claude` in any directory, resume or fork
+past conversations, and click into a fast, smooth in-browser terminal — the real CLI, no wrapper.
+In the app, sessions are called **Deep Sessions**.
 Sessions can hand context to each other through notes, and cc-deck exposes an **MCP endpoint**
 so Claude.ai, Claude Code, or your own agents can search past work and drive sessions remotely.
 
@@ -46,15 +47,21 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
   **scroll-mode toggle** switches between *tmux* (native copy-mode, full history) and *fast*
   (strips the alt-screen so the wheel scrolls xterm's local buffer instantly). Per-device
   window-size ownership means a desktop and a phone attached at once don't fight over the size.
+- **Parked panes** — if a pane ends up showing a Claude Code *background job* instead of its main
+  conversation, the card and terminal bar flag it with **↩ main**; one click swaps the pane back to
+  the full main conversation.
 - **In-terminal session switcher** — a collapsible sidebar (off-canvas drawer on mobile) lists
   every active session with live/idle and "needs-attention" dots (unseen activity since you last
   looked). Click to switch in place, **Alt+` / Alt+Shift+`** to cycle most-recently-used
   (Zen-style overlay), or **Alt+1–9** to jump directly. The current + 2 most-recent sessions are
   kept **warm** (attached in the background), so switching between them is instant.
+  **↩ Resume a Deep Session** at the top of the sidebar opens a filterable picker of past
+  sessions — click one to resume it and switch straight in.
 
 ### Organize & find
 - **Status panel** — at-a-glance counts (active, running, attached, distinct directories, total
-  past sessions); the tiles double as tab switches.
+  past sessions); the tiles double as tab switches. Cards also show each session's CLI and current
+  permission mode (auto / plan / edits / …).
 - **Fuzzy search** — instant subsequence search across title, directory, and git branch, ranked
   by relevance, in both Active and History tabs.
 - **Three views** — grid (with live pane previews), compact list, or **grouped by directory**
@@ -62,7 +69,8 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
 - **History tab** — past Claude sessions from `~/.claude/projects` with directory, branch, time,
   and opening prompt (hides currently-running ones and any dir in `CCDECK_EXCLUDE_DIRS`).
 - **Session graph** — a git-log-style branch/thread viewer for a transcript, so forked and
-  resumed lineages are readable.
+  resumed lineages are readable. Transcripts are parsed off the main thread, so even a
+  multi-hundred-MB session doesn't stall the dashboard.
 - **Files & uploads** — browse/download/delete files under your roots, and drag-drop files or
   whole folders straight into a session's working directory.
 - **Remote sessions (over SSH)** — list and attach **tmux sessions on other tailnet hosts**
@@ -78,14 +86,15 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
   with a built-in fallback) so the numbers don't go stale. Covers all local Claude Code CLI
   usage on the machine (cc-deck + direct + headless), not claude.ai web/mobile.
 - **Burn pill** — if [`ccburn`](https://github.com/JuanjoFuchs/ccburn) is installed, a top-bar
-  pill shows live session (5h) and weekly plan-limit utilization with pace indicators, plus a
-  popover breakdown.
+  pill shows live session (5h) and weekly plan-limit utilization (including model-scoped weekly
+  limits) with pace indicators, plus a popover breakdown.
 
 ### Handoff, notes & context
 - **External notes** — other agents (via MCP) can `save_session_summary` to leave a note on a
   session; cc-deck badges it, and on the next open/resume it's **seeded into the session** as
   context. Notes follow a session across resume/fork (lineage-matched), and are consumed once
-  delivered. There's also an "apply to running" action to inject them immediately.
+  delivered. There's also an "apply to running" action to inject them immediately, and you can
+  edit or delete a pending note from the viewer.
 - **Context handoff** — build a markdown handoff from one *or several* prior sessions (an AI
   summary via headless `claude -p`, or the full transcript) and seed it into a **new** session
   or inject it into a **running** one.
@@ -104,19 +113,23 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
 - <a id="reboot-survival"></a>**Reboot survival** — cc-deck snapshots active sessions
   (periodically, on graceful stop, and via `npm run snapshot`) to `restore.json`, and on a fresh
   boot with no sessions already running it relaunches them with `claude --resume` (falling back
-  to a fresh session if the transcript is gone). Disable with `CCDECK_RESTORE=off`.
+  to a fresh session if the transcript is gone). The 💾 button snapshots on demand and tells you
+  whether any session is still mid-task (a safe-to-reboot check). Disable with `CCDECK_RESTORE=off`.
 - **Storage / retention hub** — inventory and selectively delete cc-deck artifacts (handoffs,
   caches) and old transcripts; transcripts of running sessions are protected.
 - **Installable PWA** — a service worker precaches the app shell for offline load and prompts to
   reload when a new build ships; add-to-home-screen on mobile.
 - **Auth** — password login with a signed cookie. Binds to loopback; exposed via Tailscale or
   Cloudflare. Safe to put on a public hostname (layer Cloudflare Access for per-identity control).
-- **Mobile-friendly** — responsive layout, iOS safe-area + dynamic-viewport handling, and an
-  on-screen key bar (Esc / Tab / Ctrl / arrows) in the terminal since phone keyboards lack them.
+- **Mobile-friendly** — responsive layout, iOS safe-area + dynamic-viewport handling, secondary
+  actions tucked into a ⋯ menu, an on-screen key bar (Esc / Tab / Shift+Tab / Ctrl / arrows / ^C)
+  in the terminal since phone keyboards lack them, and a 🎤 compose box for clean voice dictation.
+- **Built-in help** — a first-run walkthrough and a full Help page (the **?** button).
 
 ## Requirements
 
-- **Node.js ≥ 18**, **tmux**, and the **Claude CLI** (`claude`) on `PATH`.
+- **Node.js ≥ 20**, **tmux**, and the **Claude CLI** (`claude`) on `PATH` (Codex and agy are
+  optional — the CLI picker only offers the ones it finds installed).
 - A C toolchain (`gcc`/`clang`, `make`, `python3`) is needed once to build `node-pty`.
 - Linux or macOS. The optional background service uses systemd (Linux).
 - *Optional:* [`ccburn`](https://github.com/JuanjoFuchs/ccburn) (`npm i -g ccburn`) for the live
@@ -181,12 +194,13 @@ docker compose up -d
 # 3. log the CLIs in once (stored in a volume, so it persists):
 docker compose exec cc-deck claude       # then /login
 docker compose exec cc-deck codex login
+docker compose exec cc-deck agy          # then follow its sign-in prompt
 # 4. open http://127.0.0.1:8787
 ```
 
 - **Your projects**: bind-mount them at `/workspace` (that's `CCDECK_ROOTS`). Edit the `./workspace`
   line in `docker-compose.yml` to your code directory (on Windows, e.g. `C:\Users\you\code`).
-- **Persistence**: CLI auth (`~/.claude`, `~/.codex`) and cc-deck's notes/restore live in the
+- **Persistence**: CLI auth (`~/.claude`, `~/.codex`, `~/.gemini`) and cc-deck's notes/restore live in the
   `ccdeck-home` named volume, so they survive `docker compose down`/`up`. Sessions run while the
   container is up; on restart, cc-deck relaunches them from its snapshot.
 - **Exposure**: the port maps to `127.0.0.1` only. Put it behind Tailscale/Cloudflare (below) for
@@ -206,7 +220,7 @@ The container keeps its own state separate from the host — three layers:
 |---|---|---|
 | App + Node + the `claude`/`codex`/`agy` binaries | the image | **isolated** (container FS) |
 | **Projects** — `./workspace` → `/workspace` (`CCDECK_ROOTS`) | a host directory (bind mount) | **shared** — the one deliberate shared surface, so sessions edit real code |
-| **State** — CLI auth (`~/.claude`, `~/.codex`), notes, restore snapshots, caches | the `ccdeck-home` named volume | **separate** — Docker-managed, not a host path you use directly |
+| **State** — CLI auth (`~/.claude`, `~/.codex`, `~/.gemini`), notes, restore snapshots, caches | the `ccdeck-home` named volume | **separate** — Docker-managed, not a host path you use directly |
 
 - **Bounded access**: every path cc-deck touches (a session's cwd, the Files tab, uploads) is
   validated to be under `CCDECK_ROOTS` — so via the app it only sees `/workspace` and its own home
@@ -247,7 +261,7 @@ for the full annotated list.
 | `CCDECK_FRIDAY_REACH_URL` | — | Optional webhook to push a session's "needs input" transition to instantly (see [Instant push](#instant-push-optional)). Empty = standalone. |
 | `CCDECK_FRIDAY_REACH_PASSWORD` | — | App password sent as `X-App-Password` with the push. |
 | `CCDECK_TMUX_SOCKET` | `ccdeck` | Dedicated tmux `-L` socket name. |
-| `CCDECK_MCP_TOKEN` | — | Static bearer for the MCP endpoint. Empty = the bearer path is off. Enables the session-control tools (`create_session`/`send_to_session`). |
+| `CCDECK_MCP_TOKEN` | — | Static bearer for the MCP endpoint. Empty = the bearer path is off (OAuth connectors still work). Unlocks the session-control tools (create / resume / drive sessions, read their files). |
 | `CCDECK_MCP_TOKEN_READONLY` | — | Read-only MCP bearer (search + leave-note only). Used to auto-wire sessions. |
 | `CCDECK_SESSION_MCP` | off | `on` auto-wires every new session — on any CLI (Claude, Codex, agy) — with the read-only MCP so sessions can leave/receive cross-session notes. |
 | `CCDECK_PUBLIC_URL` | derived | Public origin for OAuth metadata (e.g. `https://claude.example.com`). Auto-derived from request headers if unset. |
@@ -257,6 +271,13 @@ for the full annotated list.
 | `CCDECK_PRICING_URL` | LiteLLM dataset | Token-pricing source for the Usage tab. |
 | `CCDECK_PRICING_TTL_HOURS` | `168` | How often to refetch pricing (default 7 days). |
 | `CCDECK_CACHE_DIR` | `~/.cache/cc-deck` | Where pricing + retention caches live. |
+| `CCDECK_UPDATE_CHECK` | on | `off` stops the background upstream check behind the **⬆ Update** pill (see [Updating](#updating)). |
+| `CCDECK_MCP_IDLE_MS` | `1800000` | Idle MCP client sessions are dropped after this long (30 min), so abandoned ones can't pile up. |
+| `LOG_LEVEL` | `info` | Fastify log level. |
+
+The hosted tier sets a few more at provisioning — `ACCOUNT_URL`, `CCDECK_TENANT_ID`,
+`CCDECK_SSO_VERIFY_URL`, `CCDECK_TELEMETRY_URL` / `CCDECK_TELEMETRY_TOKEN` — for the account link,
+single sign-on and fleet telemetry. Leave them unset when self-hosting; everything they gate stays off.
 
 ## MCP and remote connectors
 
@@ -267,18 +288,29 @@ clients can work with your sessions. Three auth paths, three privilege levels:
 |---|---|---|
 | **Claude.ai / desktop connector** | OAuth 2.1 (dynamic client registration + PKCE; you approve on a consent page using the cc-deck password) | Read tools + leave notes |
 | **Read-only bearer** (`CCDECK_MCP_TOKEN_READONLY`) | `Authorization: Bearer …` | Read tools + leave notes |
-| **Static bearer** (`CCDECK_MCP_TOKEN`) | `Authorization: Bearer …` | Everything, including create/drive sessions |
+| **Static bearer** (`CCDECK_MCP_TOKEN`) | `Authorization: Bearer …` | Everything, including creating, resuming and driving sessions |
 
-**Tools**
+**Tools** — sessions can be named by id or by exact title.
+
+*Read + notes (every caller):*
 
 - `search_sessions` — keyword-search past transcripts; returns matching snippets (secrets redacted).
 - `list_recent_sessions` — most-recent sessions with title/dir/date.
-- `list_sessions` — currently **active** sessions with live, structured status (`running` / `waiting_input` / `idle` / `done`, plus `needs_input`, `last_activity`) — poll and diff to detect transitions (a session finishing, waiting on you, or exiting).
-- `browser_tabs` / `browser_claim` / `browser_release` — the shared-browser lock registry (only when `CCDECK_SESSION_BROWSER=on`): see every tab and who holds it, claim the tab you're driving, release it. Lets many sessions (and Friday) share one logged-in browser without colliding.
-- `get_session_context` — read a session as an AI `summary` or a truncated `transcript`.
+- `list_sessions` — currently **active** sessions with live, structured status (`running` / `waiting_input` / `idle` / `done`, plus `needs_input`, `last_activity`, `pending_notes`) — poll and diff to detect transitions (a session finishing, waiting on you, or exiting).
+- `get_session_context` — read a session as an AI `summary` (cached per latest message) or the tail of its `transcript`.
 - `save_session_summary` — leave a handoff note on a session's lineage (surfaces on next open/resume).
-- `create_session` — launch a new session in a directory (auto-creates it under a root). **Static bearer only.**
-- `send_to_session` — type a line into a running session. **Static bearer only.**
+- `pending_notes` — the notes waiting on a session that it hasn't received yet.
+- `browser_tabs` / `browser_claim` / `browser_release` — the shared-browser lock registry (only when `CCDECK_SESSION_BROWSER=on`): see every tab and who holds it, claim the tab you're driving, release it. Lets many sessions (and Friday) share one logged-in browser without colliding.
+
+*Session control (**static bearer only**):*
+
+- `find_folders` — find an existing folder under your roots by name (so new work lands in the right repo).
+- `create_session` — launch a new session in a directory (relative paths land under a root; auto-created), optionally picking the CLI.
+- `resume_session` — reopen a past Claude session with its full conversation in its original folder, delivering its pending notes; optionally type a prompt once it's back.
+- `send_to_session` — type a line into a running session.
+- `apply_notes` — deliver a running session's pending notes now instead of on next resume.
+- `peek_session` — the live terminal screen of an active session (what it's doing right now).
+- `get_session_files` / `read_session_file` — see what a session created or changed in its directory, then read a file (confined to that directory, secrets redacted).
 
 **Connect from Claude.ai** — add a custom connector pointing at
 `https://<your-cc-deck-host>/mcp`; you'll be sent through the OAuth consent page (log in with the
@@ -477,7 +509,7 @@ well — on-VPN access is unaffected.
 src/server.js      Fastify app: static, REST API, auth gate, ws + /mcp routes
 src/auth.js        password check + HMAC-signed cookie / token
 src/oauth.js       single-user OAuth 2.1 AS for MCP connectors (DCR + PKCE, in-memory)
-src/mcp.js         MCP server + tools (search / context / notes / create / send)
+src/mcp.js         MCP server + tools (search / context / notes / create / resume / send / files)
 src/tmux.js        list/create/kill/rename/preview — wraps tmux (resume, fork, per-CLI launch)
 src/providers/     per-CLI adapters (claude.js, codex.js, agy.js) — launch/resume/fork/wire, registry
 src/pty.js         websocket ⇄ node-pty(`tmux attach`) bridge
@@ -485,7 +517,7 @@ src/agents.js      parse live Claude state (title / mode / session id) from a pa
 src/history.js     scans ~/.claude/projects for resumable past sessions
 src/notes.js       external note store — save, lineage-match, seed on open, consume
 src/handoff.js     build a context handoff (AI summary or transcript) → new/running session
-src/graph.js       git-log-style branch/thread graph of a transcript
+src/graph.js       git-log-style branch/thread graph of a transcript (parsed in a worker thread)
 src/usage.js       token usage + API-equivalent cost from transcripts (ROI), mtime-cached
 src/pricing.js     live Anthropic token pricing (LiteLLM dataset, disk-cached + fallback)
 src/burn.js        shells out to `ccburn --json` for live plan-limit utilization
@@ -493,6 +525,8 @@ src/restore.js     snapshot active sessions + restore them after a host reboot
 src/remote.js      list + attach tmux sessions on other hosts over SSH (CCDECK_REMOTE_HOSTS)
 src/browser.js     shared-browser lock registry (browser_tabs/claim/release over CDP)
 src/reach-emit.js  optional: push "needs input" transitions to a webhook (CCDECK_FRIDAY_REACH_URL)
+src/origin.js      tags sessions an agent launched over MCP, so they stay out of search/history
+src/turn-telemetry.js  hosted tier: per-turn RAM/CPU via CLI hooks (inert unless configured)
 src/sw.js          service-worker source (built to public/sw.js by esbuild)
 src/storage.js     retention hub — inventory + selective delete of artifacts/transcripts
 src/update.js      self-host update check (behind upstream? → dashboard "Update" pill)
@@ -501,6 +535,8 @@ src/client/*.js    dashboard + terminal + PWA (bundled by esbuild into public/)
 public/*.html      login / dashboard / terminal pages + manifest/icons
 systemd/           user-service unit template (filled in by setup.sh)
 scripts/           snapshot CLI + screenshot generator
+test/              node:test suites (`npm test`)
+Dockerfile, docker-compose.yml  container packaging (see Run with Docker)
 setup.sh           one-command installer
 update.sh          self-host updater (fast-forward, rebuild, restart; rolls back on failure)
 ```

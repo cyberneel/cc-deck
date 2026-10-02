@@ -16,7 +16,7 @@ npm run dev               # esbuild --watch + node --watch (rebuilds + restarts 
 `npm run build`; to run the server without watching use `npm start`. It listens on
 `127.0.0.1:8787` by default.
 
-You'll need **Node ≥ 18**, **tmux**, and the **Claude CLI** on your `PATH` (or point
+You'll need **Node ≥ 20**, **tmux**, and the **Claude CLI** on your `PATH` (or point
 `CCDECK_LAUNCH` at another command). A C toolchain is needed once to build `node-pty`.
 
 ## How it's laid out
@@ -44,14 +44,15 @@ generated, and stale bundles are the most common "my change didn't show up" gotc
 
 ## Testing / verifying a change
 
-There's no test framework; cc-deck is verified by running it. For a change, please:
+`npm test` runs the small `node:test` suites in `test/` (no framework to install). Beyond that,
+cc-deck is verified by running it. For a change, please:
 
-1. `npm run build && npm start` (or `npm run dev`) and exercise the affected feature in the
-   browser.
+1. `npm test`, then `npm run build && npm start` (or `npm run dev`) and exercise the affected
+   feature in the browser.
 2. For anything touching sessions, confirm launch / attach / resume / kill still work and that
    sessions survive a `systemctl --user restart cc-deck` (the `KillMode=process` guarantee).
 3. Note in the PR what you did to verify. If you add non-trivial logic, a small runnable check
-   is appreciated.
+   (a `test/*.test.js` next to the existing ones) is appreciated.
 
 ## Submitting a change
 
