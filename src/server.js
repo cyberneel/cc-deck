@@ -108,7 +108,7 @@ await app.register(fastifyStatic, {
 // fetches before login).
 const PUBLIC_PATHS = new Set([
   '/healthz', // unauthenticated liveness (hosted rollout health poll)
-  '/login.html', '/login.css', '/api/login', '/favicon.ico', '/sw.js',
+  '/login.html', '/login.css', '/api/login', '/api/login/sso', '/favicon.ico', '/sw.js',
   '/manifest.webmanifest', '/icon-180.png', '/icon-192.png', '/icon-512.png',
   '/mcp', // MCP endpoint does its own bearer/OAuth auth (below)
   '/api/turn-hook', // CLI turn hooks (telemetry) — shared-key auth (below)
@@ -260,6 +260,14 @@ app.post('/api/login', async (req, reply) => {
   const token = issueToken();
   reply.setCookie(config.cookieName, token, { ...cookieOpts(req), maxAge: config.cookieMaxAge });
   return { ok: true };
+});
+
+// Hosted tenants: the login page offers "Sign in with your FridayOS account".
+// Only the origin-derived SSO link goes out — ACCOUNT_URL itself carries a token.
+app.get('/api/login/sso', async () => {
+  try {
+    return { url: config.accountUrl ? `${new URL(config.accountUrl).origin}/api/tenant/sso/open?app=ccdeck` : null };
+  } catch { return { url: null }; }
 });
 
 app.post('/api/logout', async (req, reply) => {

@@ -30,3 +30,6 @@ button.primary {
 }
 button.primary:hover { background: #b85f43; }
 .error { color: #ff8d85; font-size: 13px; min-height: 16px; text-align: center; }
+.sso { color: #9b9b9b; font-size: 13px; text-align: center; text-decoration: none; border-top: 1px solid #2c2c2c; padding-top: 14px; }
+.sso:hover { color: #ededed; }
+.sso[hidden] { display: none; }

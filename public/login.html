@@ -21,10 +21,16 @@
     <input type="password" id="password" placeholder="Password" autofocus autocomplete="current-password" />
     <button type="submit" class="primary">Sign in</button>
     <div class="error" id="error"></div>
+    <a class="sso" id="sso" target="_top" hidden>Sign in with your FridayOS account</a>
   </form>
   <script>
     const form = document.getElementById('form');
     const err = document.getElementById('error');
+    fetch('/api/login/sso').then((r) => r.json()).then(({ url }) => {
+      if (!url) return;
+      const a = document.getElementById('sso');
+      a.href = url; a.hidden = false;
+    }).catch(() => {});
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       err.textContent = '';
