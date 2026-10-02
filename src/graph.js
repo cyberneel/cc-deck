@@ -1,4 +1,5 @@
 import { access, open, readdir, stat } from 'node:fs/promises';
+import { Worker, parentPort, workerData } from 'node:worker_threads';
 import { join, basename, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -130,7 +131,7 @@ function deriveTitle(entries) {
   return custom || ai || first || '(untitled session)';
 }
 
-export async function buildGraph(sessionId, cwd) {
+async function graphHere(sessionId, cwd) {
   if (!isSessionId(sessionId)) { const e = new Error('Invalid session id'); e.statusCode = 400; throw e; }
   const file = await findTranscriptFile(sessionId, cwd);
   if (!file) { const e = new Error('Transcript not found'); e.statusCode = 404; throw e; }
@@ -257,7 +258,7 @@ export async function buildGraph(sessionId, cwd) {
 
 // Full conversation (with complete message text) along the path from the root to
 // `uuid` — i.e., the thread that produced that point. For the detail panel.
-export async function buildThread(sessionId, uuid, cwd) {
+async function threadHere(sessionId, uuid, cwd) {
   if (!isSessionId(sessionId)) { const e = new Error('Invalid session id'); e.statusCode = 400; throw e; }
   const file = await findTranscriptFile(sessionId, cwd);
   if (!file) { const e = new Error('Transcript not found'); e.statusCode = 404; throw e; }
@@ -277,4 +278,48 @@ export async function buildThread(sessionId, uuid, cwd) {
   }
   path.reverse();
   return { sessionId, uuid, messages: path };
+}
+
+// Parsing runs in a worker thread: a 400MB transcript's first parse blocked the event loop
+// 5.6s (and each later graph build ~1s), freezing every terminal attach and API call while
+// Friday read session context. The worker owns the parse cache; callers get the result.
+const ROLE = 'ccdeck-graph';
+let worker = null;
+let seq = 0;
+const pending = new Map(); // id -> { resolve, reject }
+
+function inWorker(fn, args) {
+  if (!worker) {
+    const w = (worker = new Worker(new URL(import.meta.url), { workerData: ROLE }));
+    w.on('message', ({ id, result, error }) => {
+      const p = pending.get(id);
+      pending.delete(id);
+      if (!pending.size) w.unref(); // idle → don't hold the process open
+      if (error) p?.reject(Object.assign(new Error(error.message), { statusCode: error.statusCode }));
+      else p?.resolve(result);
+    });
+    w.on('error', () => {}); // surfaced via 'exit' below
+    w.on('exit', () => { // crashed (e.g. OOM): fail what's in flight, respawn on next call
+      if (worker === w) worker = null;
+      for (const p of pending.values()) p.reject(new Error('transcript parser exited'));
+      pending.clear();
+    });
+  }
+  const id = ++seq;
+  worker.ref();
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    worker.postMessage({ id, fn, args });
+  });
+}
+
+export const buildGraph = (...args) => inWorker('graph', args);
+export const buildThread = (...args) => inWorker('thread', args);
+
+if (workerData === ROLE) {
+  const fns = { graph: graphHere, thread: threadHere };
+  parentPort.on('message', async ({ id, fn, args }) => {
+    try { parentPort.postMessage({ id, result: await fns[fn](...args) }); }
+    catch (e) { parentPort.postMessage({ id, error: { message: e.message, statusCode: e.statusCode } }); }
+  });
 }

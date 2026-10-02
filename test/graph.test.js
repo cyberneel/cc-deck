@@ -37,4 +37,6 @@ test('appends parse incrementally, a half-written line waits, a rewrite starts o
   writeFileSync(file, line(user('x1', null, 'fresh', '2026-01-02T00:00:00Z')));
   g = await buildGraph(id);
   assert.deepEqual(g.nodes.map((n) => n.id), ['x1']);
+  // errors keep their HTTP status across the worker boundary (routes reply with it)
+  await assert.rejects(buildGraph('00000000-0000-4000-8000-00000000dead'), { statusCode: 404 });
 });
