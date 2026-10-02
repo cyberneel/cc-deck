@@ -41,7 +41,7 @@ import { consumeNotesSeed, consumeNotesSeedMany, pendingCounts, readPending, rea
 const lineageIds = (s) => [s?.liveSessionId, s?.resumedFrom];
 import { captureSnapshot, restoreIfBoot, loadSnapshot } from './restore.js';
 import { startReachMonitor } from './reach-emit.js';
-import { startSlots, queued, cancelQueued } from './slots.js';
+import { loadQueue, startSlots, queued, cancelQueued } from './slots.js';
 import { onHook, hookKey, startTurnTelemetry } from './turn-telemetry.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
@@ -786,6 +786,7 @@ app.register(async (instance) => {
   });
 });
 
+await loadQueue();
 const address = await app.listen({ port: config.port, host: config.bind });
 app.log.info(`cc-deck listening on ${address} (roots: ${config.roots.join(', ')})`);
 

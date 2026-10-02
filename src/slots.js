@@ -106,11 +106,17 @@ async function drain() {
   } finally { draining = false; }
 }
 
-// After restore-on-boot, so restored sessions take their slots before the queue does.
-export async function startSlots() {
+// Before the server listens: a start that queues during restore-on-boot must join the saved
+// line, not overwrite it, and Friday reads a queued start that isn't listed as cancelled.
+export async function loadQueue() {
   if (!config.maxSessions) return;
   try { queue = JSON.parse(await readFile(FILE, 'utf8')); } catch { queue = []; }
   if (!Array.isArray(queue)) queue = [];
+}
+
+// After restore-on-boot, so restored sessions take their slots before the queue does.
+export function startSlots() {
+  if (!config.maxSessions) return;
   console.log(`[cc-deck] slots: up to ${config.maxSessions} Deep Session(s) at once, ${queue.length} queued`);
   setInterval(() => drain().catch(() => {}), 15_000);
 }
