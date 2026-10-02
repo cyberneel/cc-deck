@@ -41,7 +41,7 @@ import { consumeNotesSeed, consumeNotesSeedMany, pendingCounts, readPending, rea
 const lineageIds = (s) => [s?.liveSessionId, s?.resumedFrom];
 import { captureSnapshot, restoreIfBoot, loadSnapshot } from './restore.js';
 import { startReachMonitor } from './reach-emit.js';
-import { startSlots, queued } from './slots.js';
+import { startSlots, queued, cancelQueued } from './slots.js';
 import { onHook, hookKey, startTurnTelemetry } from './turn-telemetry.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
@@ -364,6 +364,8 @@ app.patch('/api/notes/:sessionId/:id', async (req, reply) => {
 
 app.delete('/api/sessions/:name', async (req, reply) => {
   try {
+    // Still waiting for a slot → there is nothing to kill, just take it out of line.
+    if (await cancelQueued(req.params.name)) return { ok: true, cancelled: true };
     await killSession(req.params.name);
     return { ok: true };
   } catch (err) {

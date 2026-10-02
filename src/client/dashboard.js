@@ -384,12 +384,20 @@ function renderBody() {
   else { renderActive(); renderWaiting(); }
 }
 
-// ponytail: read-only line, no cancel button. Add DELETE for a queued start if people ask.
+// Friday's starts waiting for a slot, each with a cancel.
 function renderWaiting() {
   const n = waiting.queued.length;
-  if (!n) return;
-  document.getElementById('cards')?.insertAdjacentHTML('afterbegin',
-    `<p class="muted">${n} waiting for a slot: ${waiting.queued.map((q) => esc(q.title || q.dir)).join(', ')}. This deck runs ${waiting.max} Deep Session${waiting.max === 1 ? '' : 's'} at once. Close one to start the next.</p>`);
+  const cards = document.getElementById('cards');
+  if (!n || !cards) return;
+  cards.insertAdjacentHTML('afterbegin',
+    `<p class="muted" id="waiting">${n} waiting for a slot: ${waiting.queued.map((q) => {
+      const t = esc(q.title || q.dir);
+      return `${t} <button type="button" class="icon danger" data-cancel="${esc(q.name)}" aria-label="Cancel ${t}">Cancel</button>`;
+    }).join(', ')}. This deck runs ${waiting.max} Deep Session${waiting.max === 1 ? '' : 's'} at once. Close one to start the next.</p>`);
+  cards.querySelectorAll('[data-cancel]').forEach((b) => b.addEventListener('click', async () => {
+    try { await api(`/api/sessions/${b.dataset.cancel}`, { method: 'DELETE' }); } catch (err) { toast(err.message); }
+    await refresh();
+  }));
 }
 
 // ---- active sessions ----

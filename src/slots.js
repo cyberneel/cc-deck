@@ -81,6 +81,14 @@ export async function startOrQueue(args) {
 
 export const queued = () => queue.map((q) => ({ name: q.name, at: q.at, dir: q.args.dir, title: q.args.title || '', resume: q.args.resume || null }));
 
+// Drop a start that is still waiting (the dashboard's cancel). False if it isn't in line.
+export async function cancelQueued(name) {
+  if (!queue.some((q) => q.name === name)) return false;
+  queue = queue.filter((q) => q.name !== name);
+  await save();
+  return true;
+}
+
 async function drain() {
   if (draining) return;
   draining = true;
@@ -92,7 +100,7 @@ async function drain() {
         if (e.code === 'DECK_FULL') break;
         console.warn(`[cc-deck] slots: dropped queued ${q.name}: ${e.message}`); // its folder went away
       }
-      queue.shift();
+      queue = queue.filter((x) => x !== q); // not shift(): a cancel may have moved the line meanwhile
       await save();
     }
   } finally { draining = false; }
