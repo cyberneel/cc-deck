@@ -5,6 +5,7 @@ import { resolve, join } from 'node:path';
 import crypto from 'node:crypto';
 import { config } from './config.js';
 import { getProvider, providerAvailable, DEFAULT_KIND } from './providers/index.js';
+import { ensureSlot } from './slots.js'; // slots.js imports this file back; both only call each other at run time
 
 const exec = promisify(execFile);
 
@@ -216,7 +217,10 @@ export async function sendText(name, text) {
   await pasteSubmit(name, line);
 }
 
-export async function createSession({ dir, title, resume, fork, seed, browser, kind, origin }) {
+export const newSessionName = () => `${config.prefix}${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
+
+// `name`: start under a name reserved earlier (a start that waited in the slot queue).
+export async function createSession({ dir, title, resume, fork, seed, browser, kind, origin, name = newSessionName() }) {
   const abs = await resolveAllowedDir(dir);
   const provider = getProvider(kind); // claude | codex | … (defaults to claude)
   // Fail clean if the chosen CLI isn't installed here (e.g. a tenant that never
@@ -226,8 +230,7 @@ export async function createSession({ dir, title, resume, fork, seed, browser, k
     const e = new Error(`The ${provider.label} CLI isn't installed on this cc-deck instance.`);
     e.statusCode = 400; throw e;
   }
-  const id = `${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
-  const name = `${config.prefix}${id}`;
+  await ensureSlot(); // at the session cap: makes room, or throws 429 DECK_FULL
   const cleanTitle = (title || '').toString().slice(0, 120).replace(/[\r\n\t]/g, ' ').trim();
 
   // The provider builds the CLI-specific launch command: the binary + resume/fork

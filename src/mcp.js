@@ -13,7 +13,8 @@ import { buildGraph, buildThread, isSessionId, findTranscriptFile } from './grap
 import { listHistory, isExcludedProjectDir, transcriptMeta } from './history.js';
 import { summarize } from './handoff.js';
 import { addNote, pendingCounts, countNotes, readPending, readPendingMany, consumeNotesSeed, consumeNotesSeedMany } from './notes.js';
-import { createSession, sendText, listSessions, capturePane } from './tmux.js';
+import { sendText, listSessions, capturePane } from './tmux.js';
+import { startOrQueue, queued } from './slots.js';
 import { PROVIDER_KINDS, DEFAULT_KIND, getProvider, providerAvailable } from './providers/index.js';
 import { getAgents, matchAgents } from './agents.js';
 import { listTabs, claimTab, releaseTab } from './browser.js';
@@ -26,6 +27,9 @@ const exec = promisify(execFile);
 // id passes through; otherwise match a session TITLE (unique, case-insensitive:
 // exact first, else a unique substring). Ambiguous/no match returns null so the
 // caller gets one actionable error instead of looping on a hard reject.
+
+// What a caller hears when its start had to wait for a slot (src/slots.js).
+const FULL = (place) => `this deck is already running its limit of ${config.maxSessions}, so it starts by itself as soon as one closes (number ${place} in line) and reports back when it is done. Don't start it again.`;
 
 // RUNNING sessions with live status attached (best-effort).
 async function liveSessions() {
@@ -349,7 +353,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
       'Returns a JSON array; poll and diff the `status`/`needs_input` fields to notice transitions. Each item: ' +
       '{ session_id, name, title, dir, status, needs_input, waiting_for, attached, last_activity, pending_notes }. ' +
       '`pending_notes` counts saved notes (save_session_summary) not yet delivered — read them with pending_notes, deliver with apply_notes. ' +
-      "`status` is one of: running (Claude is working), waiting_input (blocked on the user — a prompt/permission/question), idle (at its prompt, not working), done (Claude exited, the shell remains). " +
+      "`status` is one of: running (Claude is working), waiting_input (blocked on the user — a prompt/permission/question), idle (at its prompt, not working), done (Claude exited, the shell remains), queued (the deck is at its session limit; it starts when a slot opens). " +
       '`name` is stable for the Deep Session\'s lifetime; `session_id` is the live Claude id (changes across resume/fork) or null if Claude isn\'t running.',
     inputSchema: {},
   }, async () => {
@@ -375,6 +379,10 @@ export function createMcpServer({ sessionControl = false } = {}) {
         pending_notes: countNotes(notes, [s.liveSessionId, s.resumedFrom]),
       };
     });
+    // Starts waiting for a slot (the deck is at CCDECK_MAX_SESSIONS).
+    for (const q of queued()) {
+      out.push({ session_id: null, name: q.name, title: redact(q.title || q.dir.split('/').pop()), dir: q.dir, status: 'queued', needs_input: false, waiting_for: null, attached: false, last_activity: new Date(q.at).toISOString(), pending_notes: 0 });
+    }
     return text(JSON.stringify(out, null, 2));
   });
 
@@ -448,7 +456,8 @@ export function createMcpServer({ sessionControl = false } = {}) {
         // Asked-for CLI not installed here → run the default rather than fail the hand-off.
         let note = '';
         if (kind && !(await providerAvailable(kind))) { note = ` (${getProvider(kind).label} isn't installed on this deck)`; kind = DEFAULT_KIND; }
-        const name = await createSession({ dir: abs, title, seed: prompt, origin: 'proactive', kind });
+        const { name, queued: place } = await startOrQueue({ dir: abs, title, seed: prompt, origin: 'proactive', kind });
+        if (place) return text(redact(`Queued Deep Session ${name} in ${abs}${note}: ${FULL(place)}`));
         return text(redact(`Started Deep Session ${name} in ${abs} running ${getProvider(kind).label}${note}. It's booting; its sessionId will appear shortly via list_recent_sessions.`));
       } catch (e) { return text(`ERROR: could not start Deep Session — ${e.message}`); }
     });
@@ -473,7 +482,9 @@ export function createMcpServer({ sessionControl = false } = {}) {
         if (!dir) return text(`ERROR: can't tell which folder Deep Session ${id} ran in.`);
         const { title } = await transcriptMeta(await findTranscriptFile(id)).catch(() => ({}));
         const seed = [await consumeNotesSeed(id), prompt].filter(Boolean).join('\n\n') || undefined;
-        const name = await createSession({ dir, title, resume: id, seed });
+        if (queued().some((q) => q.resume === id)) return text(redact(`"${title || id}" is already waiting for a slot on this deck; it resumes by itself when one opens.`));
+        const { name, queued: place } = await startOrQueue({ dir, title, resume: id, seed });
+        if (place) return text(redact(`Queued Deep Session ${name} ("${title || id}") in ${dir}: ${FULL(place)}`));
         return text(redact(`Resumed Deep Session ${name} ("${title || id}") in ${dir}${prompt ? ' and typed your prompt into it' : ''}. It has its full conversation back.`));
       } catch (e) { return text(`ERROR: could not resume — ${e.message}`); }
     });

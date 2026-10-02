@@ -266,6 +266,8 @@ for the full annotated list.
 | `CCDECK_SESSION_MCP` | off | `on` auto-wires every new session — on any CLI (Claude, Codex, agy) — with the read-only MCP so sessions can leave/receive cross-session notes. |
 | `CCDECK_PUBLIC_URL` | derived | Public origin for OAuth metadata (e.g. `https://claude.example.com`). Auto-derived from request headers if unset. |
 | `CCDECK_FRAME_ANCESTORS` | — | Extra origins allowed to iframe cc-deck (CSP `frame-ancestors`), for embedding in a parent hub. Space/comma-separated bare origins. Unset = same-origin only (blocks cross-origin clickjacking). |
+| `CCDECK_MAX_SESSIONS` | unset (no cap) | Most Deep Sessions running at once, for a small box. At the cap, an idle session Friday started is closed to make room (it stays in History); otherwise Friday's start waits in a queue (`~/.claude/cc-deck/queue.json`) and launches when a slot opens, and a start from the dashboard is refused. Restore-on-boot brings back only the most recent ones. |
+| `CCDECK_SLOT_IDLE_SECS` | `300` | How long a session Friday started must sit idle before it may be closed for a slot. |
 | `CCDECK_RESTORE` | on | `off` disables snapshot/restore across reboot. |
 | `CCDECK_RESTORE_FILE` | `~/.claude/cc-deck/restore.json` | Snapshot location. |
 | `CCDECK_PRICING_URL` | LiteLLM dataset | Token-pricing source for the Usage tab. |

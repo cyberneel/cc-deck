@@ -49,6 +49,12 @@ export const config = {
   // Self-host update check (fetch the upstream branch every few hours → "update"
   // pill). Never on hosted tenants: their cc-deck is rolled by image, not git.
   updateCheck: !(process.env.CCDECK_TENANT_ID || '').trim() && process.env.CCDECK_UPDATE_CHECK !== 'off',
+  // Most Deep Sessions this deck runs at once. Unset/0 = no cap (self-host). A hosted
+  // tenant's VM is small, so its init sets one from the VM's RAM. At the cap, src/slots.js
+  // closes an idle session Friday started, or queues Friday's start until a slot opens.
+  maxSessions: Math.max(0, parseInt(process.env.CCDECK_MAX_SESSIONS || '', 10) || 0),
+  // How long a session Friday started must sit idle before it may be closed for a slot.
+  slotIdleMs: (Number(process.env.CCDECK_SLOT_IDLE_SECS) || 300) * 1000,
   // tmux session name prefix for sessions this app manages.
   prefix: 'ccdeck-',
   // Dedicated tmux socket so cc-deck's sessions live on their own server,

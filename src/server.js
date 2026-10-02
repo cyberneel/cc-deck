@@ -41,6 +41,7 @@ import { consumeNotesSeed, consumeNotesSeedMany, pendingCounts, readPending, rea
 const lineageIds = (s) => [s?.liveSessionId, s?.resumedFrom];
 import { captureSnapshot, restoreIfBoot, loadSnapshot } from './restore.js';
 import { startReachMonitor } from './reach-emit.js';
+import { startSlots, queued } from './slots.js';
 import { onHook, hookKey, startTurnTelemetry } from './turn-telemetry.js';
 
 // Active sessions enriched with each one's live Claude status (busy/idle/waiting),
@@ -277,7 +278,8 @@ app.post('/api/logout', async (req, reply) => {
 
 // ---- Session API ----
 app.get('/api/sessions', async () => {
-  return { sessions: await enrichedSessions() };
+  // queued: Friday's starts waiting for a slot; max: the session cap (0 = none).
+  return { sessions: await enrichedSessions(), queued: queued(), max: config.maxSessions };
 });
 
 // tmux sessions on other tailnet hosts (CCDECK_REMOTE_HOSTS), listed over SSH.
@@ -807,7 +809,7 @@ restoreIfBoot()
     else if (r?.reason) app.log.info(`session restore skipped: ${r.reason}`);
   })
   .catch((e) => app.log.warn(`session restore failed: ${e.message}`))
-  .finally(() => { setInterval(() => captureSnapshot().catch(() => {}), 120_000); });
+  .finally(() => { setInterval(() => captureSnapshot().catch(() => {}), 120_000); startSlots(); });
 
 // Snapshot on graceful stop (systemctl stop / reboot) so nothing is lost.
 let ccdeckStopping = false;

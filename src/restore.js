@@ -8,6 +8,7 @@ import { homedir } from 'node:os';
 import { listSessions, createSession } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
 import { markProactive } from './origin.js';
+import { config } from './config.js';
 
 const DIR = join(homedir(), '.claude', 'cc-deck');
 const FILE = process.env.CCDECK_RESTORE_FILE || join(DIR, 'restore.json');
@@ -52,7 +53,9 @@ export async function restoreIfBoot() {
   if (!snap || !Array.isArray(snap.sessions) || !snap.sessions.length) return { skipped: true, reason: 'no snapshot' };
 
   let restored = 0;
-  for (const e of snap.sessions) {
+  // At a session cap only the most recently active come back (the snapshot is newest
+  // first); the rest stay in History.
+  for (const e of snap.sessions.slice(0, config.maxSessions || undefined)) {
     try {
       await createSession({ dir: e.dir, title: e.title, resume: e.resume || undefined, kind: e.kind, origin: e.origin });
       restored += 1;

@@ -19,6 +19,7 @@ let view = localStorage.getItem('ccdeck.view') || 'grid'; // grid | list | group
 let tab = localStorage.getItem('ccdeck.tab') || 'active'; // active | history | usage
 let query = '';
 let sessions = [];
+let waiting = { queued: [], max: 0 }; // Friday's starts waiting for a slot (session cap)
 let history = [];
 let historyTotal = 0;
 let historyLoaded = false;
@@ -380,7 +381,15 @@ function renderBody() {
   if (tab === 'files') return renderFiles(document.getElementById('cards'));
   renderStats();
   if (tab === 'history') renderHistory();
-  else renderActive();
+  else { renderActive(); renderWaiting(); }
+}
+
+// ponytail: read-only line, no cancel button. Add DELETE for a queued start if people ask.
+function renderWaiting() {
+  const n = waiting.queued.length;
+  if (!n) return;
+  document.getElementById('cards')?.insertAdjacentHTML('afterbegin',
+    `<p class="muted">${n} waiting for a slot: ${waiting.queued.map((q) => esc(q.title || q.dir)).join(', ')}. This deck runs ${waiting.max} Deep Session${waiting.max === 1 ? '' : 's'} at once. Close one to start the next.</p>`);
 }
 
 // ---- active sessions ----
@@ -487,8 +496,9 @@ function loadPreviews(list) {
 
 async function refresh() {
   try {
-    const { sessions: list } = await api('/api/sessions');
+    const { sessions: list, queued = [], max = 0 } = await api('/api/sessions');
     sessions = list;
+    waiting = { queued, max };
   } catch (e) {
     /* transient */
   }
