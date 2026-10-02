@@ -12,7 +12,7 @@ import { config } from './config.js';
 import { buildGraph, buildThread, isSessionId, findTranscriptFile } from './graph.js';
 import { listHistory, isExcludedProjectDir, transcriptMeta } from './history.js';
 import { summarize } from './handoff.js';
-import { addNote, pendingCounts, countNotes, readPending, readPendingMany, consumeNotesSeedMany } from './notes.js';
+import { addNote, pendingCounts, countNotes, readPending, readPendingMany, consumeNotesSeed, consumeNotesSeedMany } from './notes.js';
 import { createSession, sendText, listSessions, capturePane } from './tmux.js';
 import { PROVIDER_KINDS, DEFAULT_KIND, getProvider, providerAvailable } from './providers/index.js';
 import { getAgents, matchAgents } from './agents.js';
@@ -451,6 +451,31 @@ export function createMcpServer({ sessionControl = false } = {}) {
         const name = await createSession({ dir: abs, title, seed: prompt, origin: 'proactive', kind });
         return text(redact(`Started Deep Session ${name} in ${abs} running ${getProvider(kind).label}${note}. It's booting; its sessionId will appear shortly via list_recent_sessions.`));
       } catch (e) { return text(`ERROR: could not start Deep Session — ${e.message}`); }
+    });
+
+    // The dashboard's Resume (POST /api/sessions with resume) for callers: reopen a PAST
+    // Claude Deep Session, full conversation intact, in the folder it ran in.
+    server.registerTool('resume_session', {
+      title: 'Resume a past Deep Session',
+      description: "Reopen a past (not running) Claude Code Deep Session with its FULL conversation, in its original folder — the dashboard's Resume. Its pending notes are delivered as it resumes. If it is already running, says so (use send_to_session to talk to it). Optionally types a prompt into it once it's back.",
+      inputSchema: {
+        session_id: z.string().describe('A sessionId (from search_sessions / list_recent_sessions) or the Deep Session title.'),
+        prompt: z.string().optional().describe('Optional instruction to type into it once it has resumed.'),
+      },
+    }, async ({ session_id, prompt }) => {
+      try {
+        const id = await resolveTranscriptId(session_id);
+        if (!id) return text(`ERROR: no Deep Session matches "${session_id}". Pass a sessionId from search_sessions / list_recent_sessions, or an exact title.`);
+        const running = (await liveSessions()).find((s) => s.liveSessionId === id || s.resumedFrom === id || s.parked?.main === id);
+        if (running?.parked?.main === id) return text(redact(`"${running.title || running.name}" (${running.name}) holds it, parked in a background job — the user can switch it back with "↩ main" on the dashboard.`));
+        if (running) return text(redact(`"${running.title || running.name}" is already running (${running.name}) — use send_to_session to talk to it.`));
+        const dir = await resolveSessionCwd(id);
+        if (!dir) return text(`ERROR: can't tell which folder Deep Session ${id} ran in.`);
+        const { title } = await transcriptMeta(await findTranscriptFile(id)).catch(() => ({}));
+        const seed = [await consumeNotesSeed(id), prompt].filter(Boolean).join('\n\n') || undefined;
+        const name = await createSession({ dir, title, resume: id, seed });
+        return text(redact(`Resumed Deep Session ${name} ("${title || id}") in ${dir}${prompt ? ' and typed your prompt into it' : ''}. It has its full conversation back.`));
+      } catch (e) { return text(`ERROR: could not resume — ${e.message}`); }
     });
 
     // "Start it in my sds folder" — the caller (Friday) runs elsewhere (a microVM on hosted),
