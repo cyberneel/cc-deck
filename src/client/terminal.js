@@ -187,9 +187,24 @@ function connectPaneWs(pane) {
     if (pane.manual) { pane.manual = false; return; }
     if (pane.name === currentSession) setStatus('disconnected — reconnecting…', 'closed');
     clearTimeout(pane.rc);
-    pane.rc = setTimeout(() => connectPaneWs(pane), 1500);
+    pane.rc = setTimeout(() => reconnectWhenUp(pane), 1500);
   };
   ws.onerror = () => { if (pane.name === currentSession) setStatus('connection error', 'closed'); };
+}
+
+// Firefox (Zen) delays every websocket to a host after each failed handshake. The delay
+// grows x1.5 up to a minute and survives reloads. Blind retries during an outage (restart,
+// sleep, network change) left panes on "connecting…" long after the server came back. A
+// fetch doesn't count toward that delay, so probe with one and open the socket only once
+// the server answers.
+function reconnectWhenUp(pane) {
+  fetch('/api/version', { cache: 'no-store' })
+    .then((r) => {
+      if (r.status >= 500) throw r;
+      // Another path (tab refocus, scroll toggle) may have reconnected meanwhile.
+      if (!pane.dispose && pane.ws?.readyState === WebSocket.CLOSED) connectPaneWs(pane);
+    })
+    .catch(() => { if (!pane.dispose) pane.rc = setTimeout(() => reconnectWhenUp(pane), 1500); });
 }
 
 function sendPaneResize(pane) {
@@ -868,7 +883,13 @@ async function checkVersion() {
   } catch { /* */ }
 }
 registerServiceWorker((w) => showUpdateToast(w));
-document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  checkVersion();
+  // A pane that dropped while the tab was hidden waits on a reconnect timer the browser
+  // throttled. Reconnect it now so coming back never shows "connecting…".
+  for (const p of panes.values()) if (p.ws?.readyState === WebSocket.CLOSED) { clearTimeout(p.rc); reconnectWhenUp(p); }
+});
 
 // ---- boot ----
 if (!currentSession) {

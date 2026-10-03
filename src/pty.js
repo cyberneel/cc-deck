@@ -143,7 +143,21 @@ export function attachHandler(socket, req) {
     pty.write(msg);
   });
 
+  // Heartbeat. An idle pane sends nothing, and the Cloudflare hop drops a silent
+  // websocket. The browser only reconnects on its next timer, which a background tab
+  // throttles to about a minute, so a pane came back as "connecting…". A ping keeps the
+  // hop busy. A missed pong means the peer is gone (sleep, network change), so terminate
+  // the socket and the tmux client goes with it.
+  let alive = true;
+  socket.on('pong', () => { alive = true; });
+  const hb = setInterval(() => {
+    if (!alive) { socket.terminate(); return; }
+    alive = false;
+    try { socket.ping(); } catch { /* closing */ }
+  }, 30_000);
+
   const cleanup = () => {
+    clearInterval(hb);
     if (sessionOwner.get(session) === socket) sessionOwner.delete(session);
     try {
       pty.kill(); // Detaches the tmux client; the session keeps running.
