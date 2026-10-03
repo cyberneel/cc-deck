@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
+import { swr } from './swr.js';
 
 const exec = promisify(execFile);
 const CCBURN_DB = join(homedir(), '.ccburn', 'history.db');
@@ -51,13 +52,10 @@ async function readScopedWeekly() {
 const NODE_BIN_DIR = dirname(process.execPath);
 const PATH = `${NODE_BIN_DIR}:${process.env.PATH || ''}`;
 
-let cache = { at: 0, data: null };
-const TTL_MS = 15_000;
-
 // Shell out to `ccburn --json --once` for live plan-limit utilization.
 // Returns { available, ...ccburnJson } or { available:false, error }.
-export async function getBurn() {
-  if (cache.data && Date.now() - cache.at < TTL_MS) return cache.data;
+// ~4.5s per run, so it's behind swr: the pill reads the last result instantly.
+export const getBurn = swr(async () => {
   let data;
   try {
     const { stdout } = await exec('ccburn', ['--json', '--once'], {
@@ -75,6 +73,5 @@ export async function getBurn() {
         : (err.stderr || err.message || 'ccburn failed').toString().slice(0, 300),
     };
   }
-  cache = { at: Date.now(), data };
   return data;
-}
+}, 15_000, 5 * 60_000);

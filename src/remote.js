@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { config } from './config.js';
+import { swr } from './swr.js';
 
 const exec = promisify(execFile);
 
@@ -19,9 +20,6 @@ export function resolveRemote(label) {
 // A remote tmux session name is embedded in an SSH shell command, so keep it to
 // safe characters (tmux's own names are; this also blocks command injection).
 export const isRemoteSessionName = (n) => typeof n === 'string' && /^[A-Za-z0-9_.-]{1,80}$/.test(n);
-
-let cache = { at: 0, data: [] };
-const TTL_MS = 5000;
 
 // Only surface remote tmux sessions actually running a CLI/claude, so a session
 // that drops back to a bare shell when you quit claude disappears (instead of
@@ -48,12 +46,10 @@ async function listHost(h) {
   }
 }
 
-// List tmux sessions across all configured remote hosts (cached briefly — each is
-// an SSH round-trip). Entries are either sessions or a per-host {error} marker.
+// List tmux sessions across all configured remote hosts. Entries are either sessions
+// or a per-host {error} marker. Behind swr: each host is an SSH round-trip and an
+// offline one costs the full ConnectTimeout, which must never sit on the request.
+const listAll = swr(async () => (await Promise.all(config.remoteHosts.map(listHost))).flat(), 5000, 5 * 60_000);
 export async function listRemoteSessions() {
-  if (!config.remoteHosts.length) return [];
-  if (Date.now() - cache.at < TTL_MS) return cache.data;
-  const data = (await Promise.all(config.remoteHosts.map(listHost))).flat();
-  cache = { at: Date.now(), data };
-  return data;
+  return config.remoteHosts.length ? listAll() : [];
 }

@@ -475,7 +475,7 @@ function cardHtml(s) {
   return `<div class="card" data-name="${esc(s.name)}">
     <div class="card-head"><div class="card-title" title="${esc(s.title)}">${s.kind && s.kind !== 'claude' ? `<span class="card-cli" title="${esc(s.kind)} CLI">${esc(s.kind)}</span>` : ''}${esc(s.title)}</div></div>
     <div class="card-dir" title="${esc(s.dir)}">${esc(shortDir(s.dir))}</div>
-    <pre class="preview" data-preview="${esc(s.name)}">…</pre>
+    <pre class="preview" data-preview="${esc(s.name)}">${esc(previews.get(s.name)?.text ?? '…')}</pre>
     <div class="card-foot">
       <span class="badge ${st.cls}"><span class="pulse"></span>${st.text}</span>
       ${modeChip(s)}
@@ -490,15 +490,26 @@ function cardHtml(s) {
   </div>`;
 }
 
+// Last preview per session. The 4s refresh rebuilds every card, so without this each one
+// blanked to "…" and ALL panes were re-captured at once (~30 tmux execs, ~0.65s each under
+// that contention). Now a card keeps its text and only refetches once its pane has printed.
+// ponytail: entries for killed sessions linger until reload; prune if that ever matters.
+const previews = new Map(); // name -> { at: outputAt when fetched, text }
+
 function loadPreviews(list) {
   if (view === 'list') return;
   for (const s of list) {
+    const prev = previews.get(s.name);
+    if (prev && prev.at === s.outputAt) continue;
+    previews.set(s.name, { at: s.outputAt, text: prev?.text }); // claim it: no refetch while in flight
     api(`/api/sessions/${s.name}/preview`)
       .then(({ text }) => {
+        const t = (text || '').replace(/\s+$/, '') || '(empty)';
+        previews.set(s.name, { at: s.outputAt, text: t });
         const el = document.querySelector(`[data-preview="${CSS.escape(s.name)}"]`);
-        if (el) el.textContent = (text || '').replace(/\s+$/, '') || '(empty)';
+        if (el) el.textContent = t;
       })
-      .catch(() => {});
+      .catch(() => previews.delete(s.name)); // retry on the next refresh
   }
 }
 

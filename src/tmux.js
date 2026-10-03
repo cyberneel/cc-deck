@@ -109,6 +109,7 @@ const FIELDS = [
   '#{@ccdeck_kind}',
   '#{@ccdeck_origin}',
   '#{pane_title}',
+  '#{window_activity}', // last pane OUTPUT (session_activity only moves on client input)
 ].join('\t');
 
 export async function listSessions() {
@@ -116,7 +117,7 @@ export async function listSessions() {
   const sessions = [];
   for (const line of out.split('\n')) {
     if (!line.trim()) continue;
-    const [name, attached, activity, created, title, dir, paneCmd, resume, panePid, kind, origin, paneTitle] = line.split('\t');
+    const [name, attached, activity, created, title, dir, paneCmd, resume, panePid, kind, origin, paneTitle, outAct] = line.split('\t');
     if (!isManagedName(name)) continue;
     sessions.push({
       name,
@@ -132,6 +133,7 @@ export async function listSessions() {
       kind: kind || DEFAULT_KIND, // which CLI (claude|codex); older sessions default to claude
       origin: origin || 'user',   // 'proactive' = Friday-created; older sessions default to user
       paneTitle: paneTitle || '', // Claude sets it to "<status glyph> <session name>"
+      outputAt: Number(outAct) * 1000 || null, // the dashboard refetches a preview only when this moves
     });
   }
   sessions.sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0));

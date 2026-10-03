@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { dirname, join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { swr } from './swr.js';
 
 const exec = promisify(execFile);
 
@@ -31,26 +32,20 @@ export function shownName(title) {
 // claude lives alongside node (nvm bin); ensure it's found under a minimal PATH.
 const PATH = `${dirname(process.execPath)}:${process.env.PATH || ''}`;
 
-let cache = { at: 0, data: [] };
-const TTL_MS = 2500;
-
 // Live interactive Claude sessions with their status, via `claude agents --json`.
 // Each: { pid, cwd, kind, startedAt, sessionId, status, waitingFor? }.
-export async function getAgents() {
-  if (Date.now() - cache.at < TTL_MS) return cache.data;
-  let data = [];
+// The exec takes ~0.7s, longer than the dashboard/terminal polls are apart, so it
+// runs behind swr: polls get the last result instantly (≤10s old), one exec at a time.
+export const getAgents = swr(async () => {
   try {
     const { stdout } = await exec('claude', ['agents', '--json'], {
       timeout: 12_000, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, PATH },
     });
     const parsed = JSON.parse(stdout);
-    if (Array.isArray(parsed)) data = parsed; // background jobs kept: a parked pane maps to its job
-  } catch {
-    data = []; // claude unavailable / older version — degrade gracefully
-  }
-  cache = { at: Date.now(), data };
-  return data;
-}
+    if (Array.isArray(parsed)) return parsed; // background jobs kept: a parked pane maps to its job
+  } catch { /* claude unavailable / older version — degrade gracefully */ }
+  return [];
+}, 2500, 10_000);
 
 // Attach each cc-deck session's live Claude status by matching it to an agent.
 // Two passes so a directory-shared guess never overrides a confident match:
