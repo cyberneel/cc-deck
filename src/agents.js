@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dirname, join } from 'node:path';
-import { readFileSync } from 'node:fs';
+import { readFileSync, openSync, readSync, fstatSync, closeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { swr } from './swr.js';
 
@@ -29,6 +29,40 @@ function registry(pid) {
 export function shownName(title) {
   return (title || '').replace(/^[^\p{L}\p{N}]+/u, '').trim();
 }
+// The CLI reports "busy" while a background subagent/workflow runs, even after the turn that
+// started it ended (and posted, say, a status update). The transcript knows: its last turn
+// entry is system/turn_duration once the turn is over. Other system notes and non-turn lines
+// (attachments, queue ops) are skipped; a user/assistant line means the turn is still live.
+export function turnEnded(lines) {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let d;
+    try { d = JSON.parse(lines[i]); } catch { continue; }
+    if (d.type === 'user' || d.type === 'assistant') return false;
+    if (d.type === 'system' && d.subtype === 'turn_duration') return true;
+  }
+  return false;
+}
+// ponytail: reads the last 32KB per busy session per poll; cache on mtime if that ever shows up.
+function busyInBackground(a) {
+  if (a?.status !== 'busy' || !a.cwd || !a.sessionId) return false;
+  const file = join(homedir(), '.claude', 'projects', a.cwd.replace(/[^a-zA-Z0-9]/g, '-'), `${a.sessionId}.jsonl`);
+  let fd;
+  try {
+    fd = openSync(file, 'r');
+    const size = fstatSync(fd).size, len = Math.min(size, 32 * 1024), buf = Buffer.alloc(len);
+    readSync(fd, buf, 0, len, size - len);
+    return turnEnded(buf.toString('utf8').split('\n'));
+  } catch { return false; } finally { if (fd !== undefined) closeSync(fd); }
+}
+// The deck status Friday sees (list_sessions, reach-emit).
+export function deckStatus(s) {
+  const claudeAlive = s.paneCommand === 'claude' || !!s.liveSessionId;
+  return !claudeAlive ? 'done'
+    : s.claudeStatus === 'busy' && !s.background ? 'running'
+    : s.waitingFor ? 'waiting_input'
+    : 'idle';
+}
+
 // claude lives alongside node (nvm bin); ensure it's found under a minimal PATH.
 const PATH = `${dirname(process.execPath)}:${process.env.PATH || ''}`;
 
@@ -61,7 +95,9 @@ export function matchAgents(sessions, all) {
   const jobsById = new Map(all.filter((a) => a.kind === 'background' && a.id).map((a) => [a.id, a]));
   const used = new Set();
   const take = (pred) => { const a = agents.find((x) => !used.has(x) && pred(x)); if (a) used.add(a); return a; };
-  const assign = (s, a) => { s.liveSessionId = a?.sessionId || null; s.claudeStatus = a?.status || null; s.waitingFor = a?.waitingFor || null; };
+  // `background`: busy only with delegated work (see busyInBackground). claudeStatus stays
+  // "busy" so slots never close it.
+  const assign = (s, a) => { s.liveSessionId = a?.sessionId || null; s.claudeStatus = a?.status || null; s.waitingFor = a?.waitingFor || null; s.background = busyInBackground(a); };
   const pending = [];
   for (const s of sessions) {
     const kids = s.panePid ? childPids(s.panePid) : [];

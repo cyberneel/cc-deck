@@ -13,10 +13,10 @@ import { buildGraph, buildThread, isSessionId, findTranscriptFile } from './grap
 import { listHistory, isExcludedProjectDir, transcriptMeta } from './history.js';
 import { summarize } from './handoff.js';
 import { addNote, pendingCounts, countNotes, readPending, readPendingMany, consumeNotesSeed, consumeNotesSeedMany } from './notes.js';
-import { sendText, listSessions, capturePane } from './tmux.js';
+import { sendText, listSessions, capturePane, answerPrompt } from './tmux.js';
 import { startOrQueue, queued } from './slots.js';
 import { PROVIDER_KINDS, DEFAULT_KIND, getProvider, providerAvailable } from './providers/index.js';
-import { getAgents, matchAgents } from './agents.js';
+import { getAgents, matchAgents, deckStatus } from './agents.js';
 import { listTabs, claimTab, releaseTab } from './browser.js';
 import { proactiveSet } from './origin.js';
 
@@ -361,11 +361,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
     try { matchAgents(sessions, await getAgents()); } catch { /* claude agents unavailable → status degrades to idle/done */ }
     const notes = await pendingCounts().catch(() => new Map());
     const out = sessions.map((s) => {
-      const claudeAlive = s.paneCommand === 'claude' || !!s.liveSessionId;
-      const status = !claudeAlive ? 'done'
-        : s.claudeStatus === 'busy' ? 'running'
-        : s.waitingFor ? 'waiting_input'
-        : 'idle';
+      const status = deckStatus(s);
       return {
         session_id: s.liveSessionId || s.resumedFrom || null,
         name: s.name,
@@ -534,6 +530,30 @@ export function createMcpServer({ sessionControl = false } = {}) {
       // Only the instruction was delivered — callers narrated "Sent to X" as the task being done.
       try { await sendText(s.name, line); return text(redact(`Delivered to "${s.title || s.name}". It's working on it now; the result isn't known until it replies.`)); }
       catch (e) { return text(`ERROR: could not send — ${e.message}`); }
+    });
+
+    // Friday calls this only with the user's own answer (its pip / an answer thread) and keeps
+    // it from its model, so a menu press is the user's choice, never an agent's.
+    server.registerTool('answer_prompt', {
+      title: "Answer a Deep Session's prompt for the user",
+      description: "Pass the user's own answer to a live Deep Session. If it's showing a choice (permission dialog, question picker), presses the matching option: a number, \"esc\", or the start of an option's label (\"yes\", \"no\"); other text goes to its \"Type something\" row. Otherwise types the answer and submits it. Never presses Enter on a menu blindly.",
+      inputSchema: {
+        session_id: z.string().describe("A Claude session id, the Deep Session's name (from list_sessions), or its title — must be live."),
+        answer: z.string().min(1).describe("The user's answer, verbatim."),
+      },
+    }, async ({ session_id, answer }) => {
+      const sessions = await liveSessions();
+      const val = String(session_id || '').trim();
+      const s = sessions.find((x) => x.name === val || x.liveSessionId === val || x.resumedFrom === val)
+        || (isSessionId(val) ? null : pickByTitle(sessions, (x) => x.title, val));
+      if (!s) return text(`ERROR: no live Deep Session matches "${session_id}". Live now: ${liveHint(sessions)}.`);
+      const who = `"${s.title || s.name}"`;
+      try {
+        const r = await answerPrompt(s.name, answer, !!s.waitingFor);
+        if (r.opts) return text(redact(`ERROR: ${who} is showing a choice, so nothing was sent. Answer with one of: ${r.opts.map((o) => `${o.n}. ${o.label}`).join(' · ')}, or esc.`));
+        if (r.typed) return text(redact(`Typed the answer into ${who}.`));
+        return text(redact(r.key === 'Escape' ? `Pressed Esc in ${who}.` : `Chose ${r.key}. ${r.label} in ${who}${r.type ? ' and typed the answer' : ''}.`));
+      } catch (e) { return text(`ERROR: could not answer — ${e.message}`); }
     });
 
     // Same as the dashboard's "apply notes" button (POST /api/sessions/:name/apply-notes).

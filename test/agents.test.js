@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { shownName, matchAgents } from '../src/agents.js';
+import { shownName, matchAgents, deckStatus } from '../src/agents.js';
 
 test('shownName strips Claude status glyphs from the pane title', () => {
   assert.equal(shownName('✳ Friday (ctx)'), 'Friday (ctx)');
@@ -36,4 +36,46 @@ test('a parked pane maps to its job and is flagged with its main conversation', 
   reg({ sessionId: 'main-1' }); // not parked → no flag
   [s] = matchAgents([pane()], jobs);
   assert.equal(s.parked, undefined);
+});
+
+test('busy with only background work left reads idle once the turn ended', (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'ccdeck-agents-'));
+  const prevHome = process.env.HOME;
+  process.env.HOME = home;
+  t.after(() => { process.env.HOME = prevHome; });
+  const dir = join(home, '.claude', 'projects', '-w-my-app');
+  mkdirSync(dir, { recursive: true });
+  const write = (...rows) => writeFileSync(join(dir, 'sid-1.jsonl'), rows.map((r) => JSON.stringify(r)).join('\n') + '\n');
+  const agent = [{ kind: 'interactive', pid: 1, cwd: '/w/my.app', sessionId: 'sid-1', status: 'busy' }];
+  const status = () => deckStatus(matchAgents([{ name: 'ccdeck-x', dir: '/w/my.app', paneCommand: 'claude' }], agent)[0]);
+
+  write({ type: 'user' }, { type: 'assistant' }); // mid-turn
+  assert.equal(status(), 'running');
+  write({ type: 'assistant' }, { type: 'system', subtype: 'stop_hook_summary' }, { type: 'system', subtype: 'turn_duration' }, { type: 'system', subtype: 'away_summary' }, { type: 'attachment' });
+  assert.equal(status(), 'idle'); // turn over, a background agent still running
+  write({ type: 'system', subtype: 'turn_duration' }, { type: 'user' }); // its notification started a new turn
+  assert.equal(status(), 'running');
+});
+
+test('a prompt is answered by its option key, never a blind Enter', async () => {
+  const { menuOptions, pickOption } = await import('../src/tmux.js');
+  const screen = [
+    'Plan: 1. migrate  2. deploy',
+    '1. old list item',
+    ' Do you want to proceed?',
+    ' ❯ 1. Yes',
+    "   2. Yes, and don't ask again for rm commands",
+    '   3. No, and tell Claude what to do differently (esc)',
+  ].join('\n');
+  const opts = menuOptions(screen);
+  assert.deepEqual(opts.map((o) => o.n), ['1', '2', '3']); // the last menu, not the list above
+  assert.equal(pickOption(opts, 'yes').key, '1');
+  assert.equal(pickOption(opts, ' No ').key, '3');
+  assert.equal(pickOption(opts, '2').key, '2');
+  assert.equal(pickOption(opts, 'esc').key, 'Escape');
+  assert.equal(pickOption(opts, 'y'), null); // not a whole word of any label
+  assert.equal(pickOption(opts, 'ship it'), null);
+  const picker = menuOptions('❯ 1. Postgres\n     fast\n  2. SQLite\n  3. Type something.\n  4. Chat about this');
+  assert.deepEqual(pickOption(picker, 'sqlite'), { key: '2', label: 'SQLite' });
+  assert.equal(pickOption(picker, 'use duckdb instead').type, true);
 });

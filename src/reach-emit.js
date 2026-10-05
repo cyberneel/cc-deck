@@ -5,19 +5,10 @@
 
 import { config } from './config.js';
 import { listSessions } from './tmux.js';
-import { getAgents, matchAgents } from './agents.js';
+import { getAgents, matchAgents, deckStatus } from './agents.js';
 
 const last = new Map(); // session name -> last status
 let primed = false; // first pass only records the baseline (no startup burst)
-
-// Same mapping the list_sessions MCP tool uses.
-function statusOf(s) {
-  const claudeAlive = s.paneCommand === 'claude' || !!s.liveSessionId;
-  return !claudeAlive ? 'done'
-    : s.claudeStatus === 'busy' ? 'running'
-    : s.waitingFor ? 'waiting_input'
-    : 'idle';
-}
 
 // What a transition (from -> to) should tell Friday, or null to stay quiet.
 // Push ONLY "needs your input" — the time-sensitive case where instant beats Friday's 60s
@@ -80,7 +71,7 @@ async function tick() {
   const seen = new Set();
   for (const s of sessions) {
     seen.add(s.name);
-    const to = statusOf(s);
+    const to = deckStatus(s);
     const from = last.get(s.name);
     last.set(s.name, to);
     // Skip the first observation of a session (from===undefined) and no-change ticks;

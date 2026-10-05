@@ -219,6 +219,47 @@ export async function sendText(name, text) {
   await pasteSubmit(name, line);
 }
 
+// The numbered choices of the prompt on screen (permission dialog, question picker):
+// the run that starts at the LAST "1." line, so a numbered list higher up in the
+// conversation doesn't count. [{ n: '1', label: 'Yes' }, ...]
+export function menuOptions(screen) {
+  const rows = String(screen || '').split('\n')
+    .map((l) => l.match(/^\s*(?:[❯›>]\s*)?(\d)\.\s+(.+?)\s*$/)).filter(Boolean);
+  const start = rows.map((m) => m[1]).lastIndexOf('1');
+  if (start < 0) return [];
+  const out = [];
+  for (const m of rows.slice(start)) if (m[1] === String(out.length + 1)) out.push({ n: m[1], label: m[2] });
+  return out;
+}
+
+// Which key answers a menu: a number, "esc", or the start of an option's label
+// ("yes" → "1. Yes", "no" → "3. No, and tell Claude…"). Any other text goes to the
+// picker's "Type something" row if it has one. Null = no safe key (never just press
+// Enter: that picks whatever is highlighted).
+export function pickOption(opts, answer) {
+  const a = String(answer || '').trim().toLowerCase();
+  if (/^(esc|escape|cancel)$/.test(a)) return { key: 'Escape' };
+  const hit = opts.find((o) => o.n === a)
+    || opts.find((o) => o.label.toLowerCase() === a)
+    || (a && opts.find((o) => o.label.toLowerCase().startsWith(a) && /^\W|^$/.test(o.label.slice(a.length))));
+  if (hit) return { key: hit.n, label: hit.label };
+  const other = opts.find((o) => /^type something/i.test(o.label));
+  return other ? { key: other.n, label: other.label, type: true } : null;
+}
+
+// Answer a managed session's prompt with the user's own words: a key press when a
+// menu is up (`waiting`), else typed in and submitted like sendText.
+export async function answerPrompt(name, answer, waiting) {
+  assertManaged(name);
+  const opts = waiting ? menuOptions(await capturePane(name, 0)) : [];
+  if (!opts.length) { await sendText(name, answer); return { typed: true }; }
+  const pick = pickOption(opts, answer);
+  if (!pick) return { opts };
+  await tmux(['send-keys', '-t', name, pick.key]);
+  if (pick.type) { await sleep(400); await sendText(name, answer); }
+  return pick;
+}
+
 export const newSessionName = () => `${config.prefix}${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
 
 // `name`: start under a name reserved earlier (a start that waited in the slot queue).
