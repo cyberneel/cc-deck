@@ -1,4 +1,4 @@
-// "External notes": summaries pushed back into a cc-deck session from an outside
+// "External notes": summaries pushed back into a Polymux session from an outside
 // chat (via the MCP save_session_summary tool). They surface when the user next
 // opens/resumes that session, so the session becomes aware of what happened
 // elsewhere. Provider-agnostic: keyed by the session's CLI id — a Claude/Codex
@@ -24,7 +24,7 @@ const SESSION_ID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]
 const NOTE_TOKEN_RE = /^[A-Za-z0-9]{1,32}$/;
 
 const noteBody = (summary, source) =>
-  `# External update from ${source}\n\n_Saved via cc-deck MCP. This summarizes work that happened outside this session._\n\n${summary}\n`;
+  `# External update from ${source}\n\n_Saved via Polymux MCP. This summarizes work that happened outside this session._\n\n${summary}\n`;
 
 // A buggy caller sometimes passes a TRUNCATED id (a UUID's first segment, e.g.
 // "0417a662"). Rather than orphan it (invisible) or hard-reject it (lost), expand
@@ -110,7 +110,7 @@ export async function readPending(sessionId) {
   return out;
 }
 
-// A cc-deck session's Claude id can change (resume/fork/reboot recreate it);
+// A Polymux session's Claude id can change (resume/fork/reboot recreate it);
 // resumedFrom (the @ccdeck_resume tmux option) is the stable anchor. Match notes
 // across the whole lineage so they don't get orphaned when the live id changes.
 const uniq = (ids) => [...new Set(ids.filter(Boolean))];

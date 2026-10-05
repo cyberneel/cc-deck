@@ -9,7 +9,7 @@ import { ensureSlot } from './slots.js'; // slots.js imports this file back; bot
 
 const exec = promisify(execFile);
 
-// All tmux commands target cc-deck's dedicated socket (`-L <socket>`), so its
+// All tmux commands target Polymux's dedicated socket (`-L <socket>`), so its
 // sessions live on their own server — isolated from your personal tmux, and
 // safe from "server exits when the last session closes" wiping everything.
 export const TMUX_ARGS = ['-L', config.tmuxSocket];
@@ -44,7 +44,7 @@ export async function initServer() {
   await tmux(['set-option', '-g', 'set-clipboard', 'on']).catch(() => {});
 }
 
-// cc-deck color palette (kept in sync with src/client/styles.css).
+// Polymux color palette (kept in sync with src/client/styles.css).
 const C = {
   barBg: '#171717', dim: '#9b9b9b', faint: '#6a6a6a', text: '#ededed',
   accent: '#d97757', accentInk: '#1a0f0a', border: '#2c2c2c', borderHi: '#3f3f3f',
@@ -160,7 +160,7 @@ async function pasteSubmit(name, text) {
 // prompt (e.g. a context handoff). But first we must clear the CLI's "trust this
 // folder?" gate — its menu also renders a ❯, so typing rename/seed there would land
 // on "No" and the session would exit. Poll the VISIBLE pane (so dismissed trust text
-// in scrollback isn't misread); auto-accept trust (the dir is under CCDECK_ROOTS);
+// in scrollback isn't misread); auto-accept trust (the dir is under POLYMUX_ROOTS);
 // then, on the real prompt, type rename/seed. Fire-and-forget.
 async function scheduleBoot(name, { rename, seed, provider }) {
   const trust = provider && provider.trust;
@@ -199,7 +199,7 @@ async function scheduleBoot(name, { rename, seed, provider }) {
         // HTTP request. On failure, drop a note instead of leaving the session silent.
         let seedText;
         try { seedText = seed && typeof seed.then === 'function' ? await seed : seed; }
-        catch (e) { seedText = `cc-deck could not build the context handoff: ${e && e.message ? e.message : e}`; }
+        catch (e) { seedText = `Polymux could not build the context handoff: ${e && e.message ? e.message : e}`; }
         if (seedText) {
           await pasteSubmit(name, seedText);
         }
@@ -289,7 +289,7 @@ export async function createSession({ dir, title, resume, fork, seed, browser, k
   // installed agy) — otherwise the shell just prints "command not found" and the
   // pane sits as an empty shell.
   if (!(await providerAvailable(provider.kind))) {
-    const e = new Error(`The ${provider.label} CLI isn't installed on this cc-deck instance.`);
+    const e = new Error(`The ${provider.label} CLI isn't installed on this Polymux instance.`);
     e.statusCode = 400; throw e;
   }
   await ensureSlot(); // at the session cap: makes room, or throws 429 DECK_FULL
@@ -314,12 +314,12 @@ export async function createSession({ dir, title, resume, fork, seed, browser, k
   await styleSession(name);
   // Launch the CLI inside the login shell so the session survives if it exits.
   // Prefix COLORTERM=truecolor so it emits 24-bit color (diffs, highlights).
-  launch += await provider.wireFlags({ browser }); // cc-deck MCP + shared browser
-  // Export the read-only MCP bearer so Codex's `-c bearer_token_env_var=CCDECK_RO`
+  launch += await provider.wireFlags({ browser }); // Polymux MCP + shared browser
+  // Export the read-only MCP bearer so Codex's `-c bearer_token_env_var=POLYMUX_RO`
   // can read it (Codex's HTTP MCP only takes an env-var bearer). Harmless for the
   // other CLIs, which don't reference it. Single-quote-escaped for the shell.
   const roEnv = config.sessionMcp && config.mcpTokenReadonly
-    ? `CCDECK_RO='${config.mcpTokenReadonly.replace(/'/g, "'\\''")}' ` : '';
+    ? `POLYMUX_RO='${config.mcpTokenReadonly.replace(/'/g, "'\\''")}' ` : '';
   await tmux(['send-keys', '-t', name, `${roEnv}COLORTERM=truecolor ${launch}`, 'Enter']);
   // Once Claude has booted: name a fresh titled session (so the name shows in
   // Claude and `claude --resume`) and/or type a seed prompt. Background.
@@ -340,7 +340,7 @@ export async function setMouse(name, on) {
   await tmux(['set-option', '-t', name, 'mouse', on ? 'on' : 'off']).catch(() => {});
   await tmux(['set-option', '-t', name, 'history-limit', '50000']).catch(() => {});
   // window-size manual: tmux never auto-sizes the window from attached clients.
-  // cc-deck drives the size explicitly (resizeWindow) to match whichever device
+  // Polymux drives the size explicitly (resizeWindow) to match whichever device
   // last interacted — so background preloads on another device can't reshape it.
   await tmux(['set-option', '-w', '-t', name, 'window-size', 'manual']).catch(() => {});
 }
@@ -363,7 +363,7 @@ export async function killSession(name) {
 export async function renameSession(name, title) {
   assertManaged(name);
   const cleanTitle = (title || '').toString().slice(0, 120).replace(/[\r\n\t]/g, ' ').trim();
-  // cc-deck's own display label (works for every CLI — this is what the UI shows).
+  // Polymux's own display label (works for every CLI — this is what the UI shows).
   await tmux(['set-option', '-t', name, '@ccdeck_title', cleanTitle]);
   // Also rename the underlying session via its `/rename` slash command so the new
   // name shows in the CLI itself and in `--resume` — but ONLY for providers that

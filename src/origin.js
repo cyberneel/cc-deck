@@ -8,8 +8,9 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
+import './config.js'; // loads .env and the old CCDECK_* names before the env reads below
 
-const FILE = process.env.CCDECK_ORIGIN_FILE
+const FILE = process.env.POLYMUX_ORIGIN_FILE
   || join(homedir(), '.claude', 'cc-deck', 'proactive-sessions.json');
 
 export async function proactiveSet() {

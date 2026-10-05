@@ -152,7 +152,7 @@ async function allTranscripts() {
   let dirs;
   try { dirs = await readdir(PROJECTS_DIR, { withFileTypes: true }); } catch { return out; }
   for (const d of dirs) {
-    if (!d.isDirectory() || isExcludedProjectDir(d.name)) continue; // same CCDECK_EXCLUDE_DIRS as History
+    if (!d.isDirectory() || isExcludedProjectDir(d.name)) continue; // same POLYMUX_EXCLUDE_DIRS as History
     let names; try { names = await readdir(join(PROJECTS_DIR, d.name)); } catch { continue; }
     for (const n of names) {
       if (!n.endsWith('.jsonl')) continue;
@@ -217,7 +217,7 @@ async function searchSessions(query, limit) {
 }
 
 // `${sessionId}:${headId}` → summary text (see getContext). Loaded once at startup.
-const SUMMARY_FILE = process.env.CCDECK_SUMMARY_FILE || join(homedir(), '.claude', 'cc-deck', 'summaries.json');
+const SUMMARY_FILE = process.env.POLYMUX_SUMMARY_FILE || join(homedir(), '.claude', 'cc-deck', 'summaries.json');
 const savedSummaries = readFile(SUMMARY_FILE, 'utf8').then(JSON.parse).catch(() => ({})); // missing/corrupt → cold
 const inflightSummaries = new Map(); // same key → Promise, so concurrent asks share one claude -p
 
@@ -235,7 +235,7 @@ async function getContext(sessionId, format, maxChars, allowStale = false) {
     // Memoized per (session, latest message): the claude -p summary takes ~40s, which a voice
     // call spent in dead air. Friday's episode indexer fetches this once a session settles, so
     // by the time the user asks about it the answer is warm. New activity → new head.id → fresh.
-    // Persisted so a cc-deck restart doesn't put the next ask back at 40s.
+    // Persisted so a Polymux restart doesn't put the next ask back at 40s.
     const key = `${sessionId}:${head.id}`;
     const saved = await savedSummaries;
     if (saved[key]) return header + saved[key];
@@ -279,7 +279,7 @@ async function getContext(sessionId, format, maxChars, allowStale = false) {
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
 
 export function createMcpServer({ sessionControl = false } = {}) {
-  const server = new McpServer({ name: 'cc-deck', version: '1.0.0' });
+  const server = new McpServer({ name: 'polymux', version: '1.0.0' });
 
   server.registerTool('search_sessions', {
     title: 'Search past Deep Sessions',
@@ -375,7 +375,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
         pending_notes: countNotes(notes, [s.liveSessionId, s.resumedFrom]),
       };
     });
-    // Starts waiting for a slot (the deck is at CCDECK_MAX_SESSIONS).
+    // Starts waiting for a slot (the deck is at POLYMUX_MAX_SESSIONS).
     for (const q of queued()) {
       out.push({ session_id: null, name: q.name, title: redact(q.title || q.dir.split('/').pop()), dir: q.dir, status: 'queued', needs_input: false, waiting_for: null, attached: false, last_activity: new Date(q.at).toISOString(), pending_notes: 0 });
     }
@@ -490,7 +490,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
     // allowed roots; spaces/case/punctuation ignored so "SDS 324E" matches sds324e.
     server.registerTool('find_folders', {
       title: 'Find a folder on this machine',
-      description: "Find existing folders on this cc-deck's machine by name (the user's repos, class folders, projects), under its allowed roots. Call this BEFORE create_session to start work in the user's existing folder instead of inventing one. Returns absolute paths on this machine.",
+      description: "Find existing folders on this Polymux's machine by name (the user's repos, class folders, projects), under its allowed roots. Call this BEFORE create_session to start work in the user's existing folder instead of inventing one. Returns absolute paths on this machine.",
       inputSchema: {
         query: z.string().min(1).describe('Folder name or part of it, e.g. "sds 324e" or "friday". Case, spaces, and punctuation are ignored.'),
       },

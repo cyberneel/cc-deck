@@ -18,7 +18,7 @@ What you expected instead.
 3.
 
 **Environment**
-- cc-deck version / commit:
+- Polymux version / commit:
 - OS + version:
 - Node version (`node -v`):
 - tmux version (`tmux -V`):
@@ -26,5 +26,5 @@ What you expected instead.
 - Browser (if a UI issue):
 
 **Logs**
-Relevant output from `journalctl --user -u cc-deck` or the terminal. **Redact any tokens,
+Relevant output from `journalctl --user -u polymux` or the terminal. **Redact any tokens,
 passwords, or session content.**

@@ -1,15 +1,16 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import './config.js'; // loads .env and the old CCDECK_* names before the env reads below
 
 // Live Anthropic token pricing, pulled from the community-maintained LiteLLM
 // dataset (structured JSON with per-model input/output/cache rates). Cached to
 // disk with a TTL; falls back to built-in defaults if the fetch ever fails.
 const PRICING_URL =
-  process.env.CCDECK_PRICING_URL ||
+  process.env.POLYMUX_PRICING_URL ||
   'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
-const TTL_MS = (Number(process.env.CCDECK_PRICING_TTL_HOURS) || 168) * 3600_000; // default 7 days
-const CACHE_DIR = process.env.CCDECK_CACHE_DIR || join(homedir(), '.cache', 'cc-deck');
+const TTL_MS = (Number(process.env.POLYMUX_PRICING_TTL_HOURS) || 168) * 3600_000; // default 7 days
+const CACHE_DIR = process.env.POLYMUX_CACHE_DIR || join(homedir(), '.cache', 'cc-deck');
 const CACHE_FILE = join(CACHE_DIR, 'pricing.json');
 
 // Per-million-token USD fallback (current Anthropic list prices, Opus 4.5+ tier).

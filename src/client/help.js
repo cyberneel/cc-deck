@@ -72,8 +72,8 @@ const SECTIONS = [
   ['Multiple CLIs (Claude, Codex &amp; agy)', `
     <p>Pick the CLI per Deep Session in the New Deep Session dialog; Deep Sessions are badged by CLI. All get the
     core surface (terminal, attach, kill, rename, snapshot, remote) <b>and</b> cross-Deep-Session notes —
-    with <code>CCDECK_SESSION_MCP=on</code>, every Deep Session (Claude, Codex, agy) is wired with the
-    read-only cc-deck MCP, so any of them can search siblings and leave a note on another Deep Session
+    with <code>POLYMUX_SESSION_MCP=on</code>, every Deep Session (Claude, Codex, agy) is wired with the
+    read-only Polymux MCP, so any of them can search siblings and leave a note on another Deep Session
     (any CLI) that surfaces when it next opens. Still Claude-only for now: live status dots,
     History-tab resume, usage/ROI, and the shared-browser auto-wire (the other CLIs don't expose the
     needed APIs yet).</p>`],
@@ -82,7 +82,7 @@ const SECTIONS = [
     <p>Deep Sessions can list and attach tmux sessions running a CLI on <b>other hosts</b> (a laptop, another
     box) over SSH — shown in the sidebar's <b>Remote</b> group, tagged by host. Attach-only for now.
     Requires key-based SSH to the host and the Deep Session running inside tmux. Configured via
-    <code>CCDECK_REMOTE_HOSTS</code>.</p>`],
+    <code>POLYMUX_REMOTE_HOSTS</code>.</p>`],
 
   ['Usage &amp; limits', `
     <p>The <b>Usage</b> tab shows token spend and the API-equivalent dollar value of your usage vs your
@@ -114,7 +114,7 @@ const SECTIONS = [
     <p>Deep Sessions can share one already-logged-in Chrome (over CDP), coordinated by a <b>lock registry</b>
     (<code>browser_tabs</code> / <code>browser_claim</code> / <code>browser_release</code>): each agent
     works in its own tab so they don't collide. Enable per Deep Session (New Deep Session → Browser access) or for
-    all Deep Sessions (<code>CCDECK_SESSION_BROWSER</code>).</p>`],
+    all Deep Sessions (<code>POLYMUX_SESSION_BROWSER</code>).</p>`],
 
   ['Keyboard shortcuts', `
     <table class="help-kbd">

@@ -1,4 +1,4 @@
-// CLI provider registry. cc-deck is CLI-agnostic: each session records its `kind`
+// CLI provider registry. Polymux is CLI-agnostic: each session records its `kind`
 // (claude | codex | …) and the matching provider owns everything CLI-specific
 // (launch/resume/fork args, auto-wire, and — later — live status + history). Add a
 // new CLI by dropping in one provider file and registering it here.
@@ -17,7 +17,7 @@ export function getProvider(kind) { return PROVIDERS[kind] || PROVIDERS[DEFAULT_
 export function providerList() { return PROVIDER_KINDS.map((k) => ({ kind: k, label: PROVIDERS[k].label })); }
 
 // Is a provider's launch binary actually installed? An absolute/relative path is
-// checked directly; a bare name is looked up on PATH. Used so cc-deck only OFFERS
+// checked directly; a bare name is looked up on PATH. Used so Polymux only OFFERS
 // CLIs that exist here (a tenant that never installed agy shouldn't see it in the
 // picker and crash on "command not found"), and so createSession fails cleanly.
 export async function providerAvailable(kind) {

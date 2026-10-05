@@ -1,4 +1,4 @@
-// cc-deck service worker — instant loads, an offline app shell, and reliable
+// Polymux service worker — instant loads, an offline app shell, and reliable
 // updates (esp. for iOS home-screen apps that otherwise pin a stale bundle).
 //
 // BUILD is stamped by esbuild on every `npm run build`, so each deploy ships a

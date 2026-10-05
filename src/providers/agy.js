@@ -1,7 +1,7 @@
 // Antigravity (agy) CLI provider — Gemini-backed, Claude-Code-style. Resume is
 // `--conversation <id>`; its "permission mode" is `--mode accept-edits|plan`; and
 // it has no fork-by-id, so a fork request just resumes the conversation. MCP is
-// managed via `agy mcp` (persistent config, no per-launch flag), so the cc-deck
+// managed via `agy mcp` (persistent config, no per-launch flag), so the Polymux
 // handoff MCP is registered once at startup (registerAgyMcp), giving agy sessions
 // the same handoff-aware toolset as Claude/Codex plus the CLI-agnostic surface.
 import { execFile } from 'node:child_process';
@@ -42,7 +42,7 @@ export const agy = {
   async wireFlags() { return ''; },
 };
 
-// Register (idempotently) the read-only cc-deck MCP with agy, so every agy session
+// Register (idempotently) the read-only Polymux MCP with agy, so every agy session
 // gets the handoff-aware toolset. agy has no per-launch MCP flag, so this persists
 // to agy's own config; the static bearer goes in an Authorization header. Called
 // once at startup when session-MCP wiring is enabled. Best-effort: agy may be
@@ -51,9 +51,11 @@ export async function registerAgyMcp() {
   if (!config.sessionMcp || !config.mcpTokenReadonly) return;
   const url = `http://127.0.0.1:${config.port}/mcp`;
   const bin = config.agyCommand.split(/\s+/); // e.g. "agy" or a full path
+  // Drop the entry registered under the old cc-deck name, or agy would load the tools twice.
+  await pexec(bin[0], [...bin.slice(1), 'mcp', 'remove', 'cc-deck']).catch(() => {});
   try {
     await pexec(bin[0], [...bin.slice(1), 'mcp', 'add', '--type', 'http',
-      '--header', `Authorization: Bearer ${config.mcpTokenReadonly}`, 'cc-deck', url]);
+      '--header', `Authorization: Bearer ${config.mcpTokenReadonly}`, 'polymux', url]);
   } catch { /* agy not installed / add failed — agy sessions just launch without the MCP */ }
 }
 

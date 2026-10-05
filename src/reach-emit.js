@@ -1,6 +1,6 @@
-// Push cc-deck session-state transitions to Friday's Reach Manager (POST /api/reach) the
-// INSTANT they happen — so Friday reacts immediately instead of polling cc-deck every 60s.
-// Opt-in: only runs when CCDECK_FRIDAY_REACH_URL is set; standalone cc-deck is unaffected.
+// Push Polymux session-state transitions to Friday's Reach Manager (POST /api/reach) the
+// INSTANT they happen — so Friday reacts immediately instead of polling Polymux every 60s.
+// Opt-in: only runs when POLYMUX_FRIDAY_REACH_URL is set; standalone Polymux is unaffected.
 // Best-effort: if Friday is unreachable we drop the event (Friday's poll is the backstop).
 
 import { config } from './config.js';
@@ -22,7 +22,7 @@ function eventFor(s, from, to) {
     return {
       key: `ccdeck:${s.name}:waiting`,
       urgency: 'high',
-      title: 'cc-deck',
+      title: 'Polymux',
       body: `“${t}” needs your input.`,
       // Make it answerable in Friday: the session to relay the user's reply to + the prompt.
       sessionId: s.liveSessionId || s.resumedFrom || undefined,
@@ -41,7 +41,7 @@ function eventFor(s, from, to) {
     return {
       key: `ccdeck:${s.name}:finish-cb`,
       urgency: 'high',
-      title: 'cc-deck',
+      title: 'Polymux',
       body: `“${t}” finished.`,
       requireMatch: true,
     };
@@ -88,6 +88,6 @@ async function tick() {
 // Start the transition monitor (no-op unless a Friday reach url is configured).
 export function startReachMonitor() {
   if (!config.fridayReach.url) return;
-  console.log('[cc-deck] Friday reach: pushing session transitions to', config.fridayReach.url);
+  console.log('[polymux] Friday reach: pushing session transitions to', config.fridayReach.url);
   setInterval(() => { tick().catch(() => {}); }, 7000);
 }

@@ -81,7 +81,7 @@ function showUpdateHowTo() {
   const cmd = `cd ${/\s/.test(upstream.dir) ? JSON.stringify(upstream.dir) : upstream.dir} && ./update.sh`;
   const t = document.createElement('div');
   t.id = 'update-howto'; t.className = 'toast';
-  t.innerHTML = `cc-deck is ${upstream.behind} commit${upstream.behind === 1 ? '' : 's'} behind. Run this in any terminal — sessions keep running:<br>
+  t.innerHTML = `Polymux is ${upstream.behind} commit${upstream.behind === 1 ? '' : 's'} behind. Run this in any terminal — sessions keep running:<br>
     <code>${esc(cmd)}</code> <button data-a="copy">Copy</button> <button data-a="close">✕</button>`;
   t.addEventListener('click', async (e) => {
     const a = e.target.dataset?.a;
@@ -568,7 +568,7 @@ function renderHistory() {
   wireHistoryCards(container);
 }
 
-// Map each running session's Claude id -> the active cc-deck session showing it.
+// Map each running session's Claude id -> the active Polymux session showing it.
 let liveClaudeMap = new Map();
 function rebuildLiveMap() {
   liveClaudeMap = new Map();

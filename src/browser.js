@@ -1,6 +1,6 @@
 import { config } from './config.js';
 
-// Shared-browser coordination. cc-deck is the single always-on hub every session's
+// Shared-browser coordination. Polymux is the single always-on hub every session's
 // MCP hits, so it holds ONE in-memory registry of which browser tab is claimed by
 // whom. The lock is advisory + visible (agents cooperate by each working in their
 // own tab), not a hard mutex — that's enough because CDP is multi-tab: collisions

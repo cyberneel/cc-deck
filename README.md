@@ -1,14 +1,18 @@
-# cc-deck
+# Polymux
 
 A self-hosted web dashboard for your **coding-CLI** sessions (Claude Code, Codex, and agy). See every
 running session in a grid/list/grouped view, launch a new `claude` in any directory, resume or fork
 past conversations, and click into a fast, smooth in-browser terminal — the real CLI, no wrapper.
 In the app, sessions are called **Deep Sessions**.
-Sessions can hand context to each other through notes, and cc-deck exposes an **MCP endpoint**
+Sessions can hand context to each other through notes, and Polymux exposes an **MCP endpoint**
 so Claude.ai, Claude Code, or your own agents can search past work and drive sessions remotely.
 
+> Polymux used to be called **cc-deck**. Old installs keep working as they are: `CCDECK_*`
+> settings are still read (a `POLYMUX_*` value wins when both are set), and an existing
+> `cc-deck` systemd unit is still the one `npm run update` restarts.
+
 Each session is a **tmux** session running `claude`, so sessions persist through tab-closes,
-no connected client, and restarts of the cc-deck app/tunnel. cc-deck runs them on its **own
+no connected client, and restarts of the Polymux app/tunnel. Polymux runs them on its **own
 dedicated tmux server** (`tmux -L ccdeck`, kept alive with `exit-empty off`) — isolated from
 your personal `tmux`, and immune to the "server exits when the last session closes" trap.
 Attach from a shell with `tmux -L ccdeck attach`. It also **snapshots active sessions and
@@ -38,7 +42,7 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
 
 ### Sessions & terminal
 - **Launch anywhere under your roots** — a folder picker (create-folder inline) starts a new
-  `claude` in any directory under `CCDECK_ROOTS`. Give it a title and an optional seed prompt.
+  `claude` in any directory under `POLYMUX_ROOTS`. Give it a title and an optional seed prompt.
 - **Resume & fork** — "▶ Resume" runs `claude --resume <id>` in the original directory as a
   fresh live session; **fork** (`--fork-session`) branches into a new independent session that
   copies the prior history and leaves the original untouched.
@@ -67,7 +71,7 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
 - **Three views** — grid (with live pane previews), compact list, or **grouped by directory**
   (collapsible; starts collapsed so you can scan many directories fast).
 - **History tab** — past Claude sessions from `~/.claude/projects` with directory, branch, time,
-  and opening prompt (hides currently-running ones and any dir in `CCDECK_EXCLUDE_DIRS`).
+  and opening prompt (hides currently-running ones and any dir in `POLYMUX_EXCLUDE_DIRS`).
 - **Session graph** — a git-log-style branch/thread viewer for a transcript, so forked and
   resumed lineages are readable. Transcripts are parsed off the main thread, so even a
   multi-hundred-MB session doesn't stall the dashboard.
@@ -84,14 +88,14 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
   breakdown. Token prices are pulled **live** from the
   [LiteLLM pricing dataset](https://github.com/BerriAI/litellm) (disk-cached, ~7-day refresh,
   with a built-in fallback) so the numbers don't go stale. Covers all local Claude Code CLI
-  usage on the machine (cc-deck + direct + headless), not claude.ai web/mobile.
+  usage on the machine (Polymux + direct + headless), not claude.ai web/mobile.
 - **Burn pill** — if [`ccburn`](https://github.com/JuanjoFuchs/ccburn) is installed, a top-bar
   pill shows live session (5h) and weekly plan-limit utilization (including model-scoped weekly
   limits) with pace indicators, plus a popover breakdown.
 
 ### Handoff, notes & context
 - **External notes** — other agents (via MCP) can `save_session_summary` to leave a note on a
-  session; cc-deck badges it, and on the next open/resume it's **seeded into the session** as
+  session; Polymux badges it, and on the next open/resume it's **seeded into the session** as
   context. Notes follow a session across resume/fork (lineage-matched), and are consumed once
   delivered. There's also an "apply to running" action to inject them immediately, and you can
   edit or delete a pending note from the viewer.
@@ -105,17 +109,17 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
   notes, and (with the right token) create and drive sessions**.
 - **Handoff-aware sessions** — optionally auto-wire every new session with the read-only MCP + a
   short system-prompt nudge, so a session can discover related work elsewhere and hand off
-  instead of duplicating (`CCDECK_SESSION_MCP=on`).
+  instead of duplicating (`POLYMUX_SESSION_MCP=on`).
 - **Browser access** — opt a session into driving a logged-in Chrome (via `chrome-devtools-mcp`
   over CDP) straight from the New Session dialog.
 
 ### Reliability & access
-- <a id="reboot-survival"></a>**Reboot survival** — cc-deck snapshots active sessions
+- <a id="reboot-survival"></a>**Reboot survival** — Polymux snapshots active sessions
   (periodically, on graceful stop, and via `npm run snapshot`) to `restore.json`, and on a fresh
   boot with no sessions already running it relaunches them with `claude --resume` (falling back
   to a fresh session if the transcript is gone). The 💾 button snapshots on demand and tells you
-  whether any session is still mid-task (a safe-to-reboot check). Disable with `CCDECK_RESTORE=off`.
-- **Storage / retention hub** — inventory and selectively delete cc-deck artifacts (handoffs,
+  whether any session is still mid-task (a safe-to-reboot check). Disable with `POLYMUX_RESTORE=off`.
+- **Storage / retention hub** — inventory and selectively delete Polymux artifacts (handoffs,
   caches) and old transcripts; transcripts of running sessions are protected.
 - **Installable PWA** — a service worker precaches the app shell for offline load and prompts to
   reload when a new build ships; add-to-home-screen on mobile.
@@ -138,7 +142,7 @@ browser (xterm.js)  ──ws──▶  Node/Fastify  ──node-pty──▶  tm
 ## Quick start
 
 ```bash
-git clone https://github.com/cyberneel/cc-deck && cd cc-deck
+git clone https://github.com/cyberneel/polymux && cd polymux
 ./setup.sh            # checks deps, installs, builds, creates .env, optional service
 npm start             # if you didn't install the service — listens on 127.0.0.1:8787
 ```
@@ -151,7 +155,7 @@ Manual setup instead of the script:
 
 ```bash
 npm install && npm run build
-cp .env.example .env      # then set CCDECK_PASSWORD and a random CCDECK_SECRET:
+cp .env.example .env      # then set POLYMUX_PASSWORD and a random POLYMUX_SECRET:
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 npm start
 ```
@@ -172,37 +176,37 @@ It refuses to run with local changes to tracked files or diverged history, reins
 dependencies only when `package-lock.json` changed, and restarts the systemd user service if it
 runs this checkout (otherwise it tells you to restart `npm start`). Your sessions keep running
 across the restart (see `KillMode=process` below). If the install or build fails, it rolls
-back to the previous commit and leaves the running server alone. You can run it from a cc-deck
+back to the previous commit and leaves the running server alone. You can run it from a Polymux
 terminal: the page drops for a moment during the restart, then offers a reload.
 
-Set `CCDECK_UPDATE_CHECK=off` to disable the background check (it's a `git fetch` of your
-upstream). Docker: `git pull && docker compose up -d --build`. Hosted cc-deck is updated for
+Set `POLYMUX_UPDATE_CHECK=off` to disable the background check (it's a `git fetch` of your
+upstream). Docker: `git pull && docker compose up -d --build`. Hosted Polymux is updated for
 you, so it never shows the pill.
 
 ## Run with Docker (Windows, macOS, Linux)
 
-cc-deck needs Linux + tmux + `node-pty`, which is awkward on Windows/macOS — so the container
+Polymux needs Linux + tmux + `node-pty`, which is awkward on Windows/macOS — so the container
 does it for you (Docker Desktop runs the Linux VM). The image **bundles the Claude Code, Codex, and
 agy (Google Antigravity) CLIs** (agy is installed at build from Google's official installer), so
 sessions launch inside the container against a folder you mount.
 
 ```bash
 # 1. create a .env next to docker-compose.yml
-printf 'CCDECK_PASSWORD=%s\nCCDECK_SECRET=%s\n' 'choose-a-password' "$(openssl rand -hex 32)" > .env
+printf 'POLYMUX_PASSWORD=%s\nPOLYMUX_SECRET=%s\n' 'choose-a-password' "$(openssl rand -hex 32)" > .env
 # 2. point the workspace at your code (edit ./workspace in docker-compose.yml), then:
 docker compose up -d
 # 3. log the CLIs in once (stored in a volume, so it persists):
-docker compose exec cc-deck claude       # then /login
-docker compose exec cc-deck codex login
-docker compose exec cc-deck agy          # then follow its sign-in prompt
+docker compose exec polymux claude       # then /login
+docker compose exec polymux codex login
+docker compose exec polymux agy          # then follow its sign-in prompt
 # 4. open http://127.0.0.1:8787
 ```
 
-- **Your projects**: bind-mount them at `/workspace` (that's `CCDECK_ROOTS`). Edit the `./workspace`
+- **Your projects**: bind-mount them at `/workspace` (that's `POLYMUX_ROOTS`). Edit the `./workspace`
   line in `docker-compose.yml` to your code directory (on Windows, e.g. `C:\Users\you\code`).
-- **Persistence**: CLI auth (`~/.claude`, `~/.codex`, `~/.gemini`) and cc-deck's notes/restore live in the
+- **Persistence**: CLI auth (`~/.claude`, `~/.codex`, `~/.gemini`) and Polymux's notes/restore live in the
   `ccdeck-home` named volume, so they survive `docker compose down`/`up`. Sessions run while the
-  container is up; on restart, cc-deck relaunches them from its snapshot.
+  container is up; on restart, Polymux relaunches them from its snapshot.
 - **Exposure**: the port maps to `127.0.0.1` only. Put it behind Tailscale/Cloudflare (below) for
   remote access — don't drop the `127.0.0.1` prefix without an auth layer.
 - **Host-specific features off by default**: the [shared browser](#multiple-clis)
@@ -210,7 +214,7 @@ docker compose exec cc-deck agy          # then follow its sign-in prompt
   need extra wiring in a container — the core (managing Claude/Codex sessions on your mounted code)
   works out of the box.
 
-To build the image yourself instead of via compose: `docker build -t cc-deck .`
+To build the image yourself instead of via compose: `docker build -t polymux .`
 
 ### Filesystem & isolation
 
@@ -219,11 +223,11 @@ The container keeps its own state separate from the host — three layers:
 | Layer | Lives in | Host relationship |
 |---|---|---|
 | App + Node + the `claude`/`codex`/`agy` binaries | the image | **isolated** (container FS) |
-| **Projects** — `./workspace` → `/workspace` (`CCDECK_ROOTS`) | a host directory (bind mount) | **shared** — the one deliberate shared surface, so sessions edit real code |
+| **Projects** — `./workspace` → `/workspace` (`POLYMUX_ROOTS`) | a host directory (bind mount) | **shared** — the one deliberate shared surface, so sessions edit real code |
 | **State** — CLI auth (`~/.claude`, `~/.codex`, `~/.gemini`), notes, restore snapshots, caches | the `ccdeck-home` named volume | **separate** — Docker-managed, not a host path you use directly |
 
-- **Bounded access**: every path cc-deck touches (a session's cwd, the Files tab, uploads) is
-  validated to be under `CCDECK_ROOTS` — so via the app it only sees `/workspace` and its own home
+- **Bounded access**: every path Polymux touches (a session's cwd, the Files tab, uploads) is
+  validated to be under `POLYMUX_ROOTS` — so via the app it only sees `/workspace` and its own home
   volume, never the wider container or host filesystem.
 - **Multiple instances**: each container has its own image FS, its own `ccdeck-home` volume, and its
   own tmux server + sessions — run several with distinct volumes/roots/ports and they don't collide
@@ -231,7 +235,7 @@ The container keeps its own state separate from the host — three layers:
 - **Disk is the host's** (no separate quota): a container shares the host's disk, so a runaway
   session can fill it. For hard isolation, put the volume on its own disk or set a Docker
   volume/storage size limit.
-- **Permissions (Linux hosts)**: cc-deck runs as the non-root `node` user (uid 1000), so
+- **Permissions (Linux hosts)**: Polymux runs as the non-root `node` user (uid 1000), so
   bind-mounted files must be read/writable by uid 1000. Docker Desktop (macOS/Windows) maps this
   for you; on a Linux host you may need to `chown` the mounted dir to match.
 
@@ -242,55 +246,55 @@ for the full annotated list.
 
 | Var | Default | Meaning |
 |-----|---------|---------|
-| `CCDECK_PASSWORD` | — | Login password (**required**). |
-| `CCDECK_SECRET` | insecure default | Random string used to sign cookies + OAuth tokens. Set this. |
+| `POLYMUX_PASSWORD` | — | Login password (**required**). |
+| `POLYMUX_SECRET` | insecure default | Random string used to sign cookies + OAuth tokens. Set this. |
 | `PORT` | `8787` | Listen port. |
-| `CCDECK_BIND` | `127.0.0.1` | Bind address — keep loopback so the raw port isn't exposed. |
-| `CCDECK_ROOTS` | `$HOME` | Colon-separated dirs sessions may launch/browse under. |
-| `CCDECK_EXCLUDE_DIRS` | — | Colon-separated dirs to hide from the History tab (e.g. where another app runs `claude -p` headlessly). |
-| `CCDECK_LAUNCH` | `claude` | Command for the **Claude** CLI provider. |
-| `CCDECK_CODEX_LAUNCH` | `codex` | Command for the **Codex** CLI provider (cc-deck is multi-CLI; see [Multiple CLIs](#multiple-clis)). |
-| `CCDECK_CODEX_APPROVAL` | — | Default Codex approval policy new Codex sessions start in (its "permission mode"). Empty = Codex default. |
-| `CCDECK_AGY_LAUNCH` | `agy` | Command for the **agy** (Antigravity) CLI provider. |
-| `CCDECK_AGY_MODE` | — | agy execution mode new agy sessions start in (`accept-edits` / `plan`). Empty = agy default. |
-| `CCDECK_AUTO_TRUST` | on | Auto-accept a CLI's "trust this folder?" prompt on launch (the dir is under `CCDECK_ROOTS`). `off` to answer it yourself. |
-| `CCDECK_PERMISSION_MODE` | — | Permission mode new sessions start in (`acceptEdits`/`auto`/`plan`/…). Empty = Claude's default. |
-| `CCDECK_REMOTE_HOSTS` | — | Hosts whose tmux sessions to list+attach over SSH (see [Remote sessions](#remote-sessions-on-other-hosts)). |
-| `CCDECK_SESSION_BROWSER` | off | `on` auto-wires every session with the shared logged-in browser + a coordination nudge (lock registry). |
-| `CCDECK_BROWSER_CDP` | `http://127.0.0.1:9222` | CDP endpoint of that shared browser. |
-| `CCDECK_FRIDAY_REACH_URL` | — | Optional webhook to push a session's "needs input" transition to instantly (see [Instant push](#instant-push-optional)). Empty = standalone. |
-| `CCDECK_FRIDAY_REACH_PASSWORD` | — | App password sent as `X-App-Password` with the push. |
-| `CCDECK_TMUX_SOCKET` | `ccdeck` | Dedicated tmux `-L` socket name. |
-| `CCDECK_MCP_TOKEN` | — | Static bearer for the MCP endpoint. Empty = the bearer path is off (OAuth connectors still work). Unlocks the session-control tools (create / resume / drive sessions, read their files). |
-| `CCDECK_MCP_TOKEN_READONLY` | — | Read-only MCP bearer (search + leave-note only). Used to auto-wire sessions. |
-| `CCDECK_SESSION_MCP` | off | `on` auto-wires every new session — on any CLI (Claude, Codex, agy) — with the read-only MCP so sessions can leave/receive cross-session notes. |
-| `CCDECK_PUBLIC_URL` | derived | Public origin for OAuth metadata (e.g. `https://claude.example.com`). Auto-derived from request headers if unset. |
-| `CCDECK_FRAME_ANCESTORS` | — | Extra origins allowed to iframe cc-deck (CSP `frame-ancestors`), for embedding in a parent hub. Space/comma-separated bare origins. Unset = same-origin only (blocks cross-origin clickjacking). |
-| `CCDECK_MAX_SESSIONS` | unset (no cap) | Most Deep Sessions running at once, for a small box. At the cap, an idle session Friday started is closed to make room (it stays in History); otherwise Friday's start waits in a queue (`~/.claude/cc-deck/queue.json`) and launches when a slot opens (cancel it from the dashboard), and a start from the dashboard is refused. Restore-on-boot brings back only the most recent ones. |
-| `CCDECK_SLOT_IDLE_SECS` | `300` | How long a session Friday started must sit idle before it may be closed for a slot. |
-| `CCDECK_RESTORE` | on | `off` disables snapshot/restore across reboot. |
-| `CCDECK_RESTORE_FILE` | `~/.claude/cc-deck/restore.json` | Snapshot location. |
-| `CCDECK_PRICING_URL` | LiteLLM dataset | Token-pricing source for the Usage tab. |
-| `CCDECK_PRICING_TTL_HOURS` | `168` | How often to refetch pricing (default 7 days). |
-| `CCDECK_CACHE_DIR` | `~/.cache/cc-deck` | Where pricing + retention caches live. |
-| `CCDECK_UPDATE_CHECK` | on | `off` stops the background upstream check behind the **⬆ Update** pill (see [Updating](#updating)). |
-| `CCDECK_MCP_IDLE_MS` | `1800000` | Idle MCP client sessions are dropped after this long (30 min), so abandoned ones can't pile up. |
+| `POLYMUX_BIND` | `127.0.0.1` | Bind address — keep loopback so the raw port isn't exposed. |
+| `POLYMUX_ROOTS` | `$HOME` | Colon-separated dirs sessions may launch/browse under. |
+| `POLYMUX_EXCLUDE_DIRS` | — | Colon-separated dirs to hide from the History tab (e.g. where another app runs `claude -p` headlessly). |
+| `POLYMUX_LAUNCH` | `claude` | Command for the **Claude** CLI provider. |
+| `POLYMUX_CODEX_LAUNCH` | `codex` | Command for the **Codex** CLI provider (Polymux is multi-CLI; see [Multiple CLIs](#multiple-clis)). |
+| `POLYMUX_CODEX_APPROVAL` | — | Default Codex approval policy new Codex sessions start in (its "permission mode"). Empty = Codex default. |
+| `POLYMUX_AGY_LAUNCH` | `agy` | Command for the **agy** (Antigravity) CLI provider. |
+| `POLYMUX_AGY_MODE` | — | agy execution mode new agy sessions start in (`accept-edits` / `plan`). Empty = agy default. |
+| `POLYMUX_AUTO_TRUST` | on | Auto-accept a CLI's "trust this folder?" prompt on launch (the dir is under `POLYMUX_ROOTS`). `off` to answer it yourself. |
+| `POLYMUX_PERMISSION_MODE` | — | Permission mode new sessions start in (`acceptEdits`/`auto`/`plan`/…). Empty = Claude's default. |
+| `POLYMUX_REMOTE_HOSTS` | — | Hosts whose tmux sessions to list+attach over SSH (see [Remote sessions](#remote-sessions-on-other-hosts)). |
+| `POLYMUX_SESSION_BROWSER` | off | `on` auto-wires every session with the shared logged-in browser + a coordination nudge (lock registry). |
+| `POLYMUX_BROWSER_CDP` | `http://127.0.0.1:9222` | CDP endpoint of that shared browser. |
+| `POLYMUX_FRIDAY_REACH_URL` | — | Optional webhook to push a session's "needs input" transition to instantly (see [Instant push](#instant-push-optional)). Empty = standalone. |
+| `POLYMUX_FRIDAY_REACH_PASSWORD` | — | App password sent as `X-App-Password` with the push. |
+| `POLYMUX_TMUX_SOCKET` | `ccdeck` | Dedicated tmux `-L` socket name. |
+| `POLYMUX_MCP_TOKEN` | — | Static bearer for the MCP endpoint. Empty = the bearer path is off (OAuth connectors still work). Unlocks the session-control tools (create / resume / drive sessions, read their files). |
+| `POLYMUX_MCP_TOKEN_READONLY` | — | Read-only MCP bearer (search + leave-note only). Used to auto-wire sessions. |
+| `POLYMUX_SESSION_MCP` | off | `on` auto-wires every new session — on any CLI (Claude, Codex, agy) — with the read-only MCP so sessions can leave/receive cross-session notes. |
+| `POLYMUX_PUBLIC_URL` | derived | Public origin for OAuth metadata (e.g. `https://claude.example.com`). Auto-derived from request headers if unset. |
+| `POLYMUX_FRAME_ANCESTORS` | — | Extra origins allowed to iframe Polymux (CSP `frame-ancestors`), for embedding in a parent hub. Space/comma-separated bare origins. Unset = same-origin only (blocks cross-origin clickjacking). |
+| `POLYMUX_MAX_SESSIONS` | unset (no cap) | Most Deep Sessions running at once, for a small box. At the cap, an idle session Friday started is closed to make room (it stays in History); otherwise Friday's start waits in a queue (`~/.claude/cc-deck/queue.json`) and launches when a slot opens (cancel it from the dashboard), and a start from the dashboard is refused. Restore-on-boot brings back only the most recent ones. |
+| `POLYMUX_SLOT_IDLE_SECS` | `300` | How long a session Friday started must sit idle before it may be closed for a slot. |
+| `POLYMUX_RESTORE` | on | `off` disables snapshot/restore across reboot. |
+| `POLYMUX_RESTORE_FILE` | `~/.claude/cc-deck/restore.json` | Snapshot location. |
+| `POLYMUX_PRICING_URL` | LiteLLM dataset | Token-pricing source for the Usage tab. |
+| `POLYMUX_PRICING_TTL_HOURS` | `168` | How often to refetch pricing (default 7 days). |
+| `POLYMUX_CACHE_DIR` | `~/.cache/cc-deck` | Where pricing + retention caches live. |
+| `POLYMUX_UPDATE_CHECK` | on | `off` stops the background upstream check behind the **⬆ Update** pill (see [Updating](#updating)). |
+| `POLYMUX_MCP_IDLE_MS` | `1800000` | Idle MCP client sessions are dropped after this long (30 min), so abandoned ones can't pile up. |
 | `LOG_LEVEL` | `info` | Fastify log level. |
 
-The hosted tier sets a few more at provisioning — `ACCOUNT_URL`, `CCDECK_TENANT_ID`,
-`CCDECK_SSO_VERIFY_URL`, `CCDECK_TELEMETRY_URL` / `CCDECK_TELEMETRY_TOKEN` — for the account link,
+The hosted tier sets a few more at provisioning — `ACCOUNT_URL`, `POLYMUX_TENANT_ID`,
+`POLYMUX_SSO_VERIFY_URL`, `POLYMUX_TELEMETRY_URL` / `POLYMUX_TELEMETRY_TOKEN` — for the account link,
 single sign-on and fleet telemetry. Leave them unset when self-hosting; everything they gate stays off.
 
 ## MCP and remote connectors
 
-cc-deck speaks **MCP** (Model Context Protocol) over Streamable HTTP at `POST /mcp`, so remote
+Polymux speaks **MCP** (Model Context Protocol) over Streamable HTTP at `POST /mcp`, so remote
 clients can work with your sessions. Three auth paths, three privilege levels:
 
 | Caller | How it authenticates | What it can do |
 |---|---|---|
-| **Claude.ai / desktop connector** | OAuth 2.1 (dynamic client registration + PKCE; you approve on a consent page using the cc-deck password) | Read tools + leave notes |
-| **Read-only bearer** (`CCDECK_MCP_TOKEN_READONLY`) | `Authorization: Bearer …` | Read tools + leave notes |
-| **Static bearer** (`CCDECK_MCP_TOKEN`) | `Authorization: Bearer …` | Everything, including creating, resuming and driving sessions |
+| **Claude.ai / desktop connector** | OAuth 2.1 (dynamic client registration + PKCE; you approve on a consent page using the Polymux password) | Read tools + leave notes |
+| **Read-only bearer** (`POLYMUX_MCP_TOKEN_READONLY`) | `Authorization: Bearer …` | Read tools + leave notes |
+| **Static bearer** (`POLYMUX_MCP_TOKEN`) | `Authorization: Bearer …` | Everything, including creating, resuming and driving sessions |
 
 **Tools** — sessions can be named by id or by exact title.
 
@@ -302,7 +306,7 @@ clients can work with your sessions. Three auth paths, three privilege levels:
 - `get_session_context` — read a session as an AI `summary` (cached per latest message) or the tail of its `transcript`.
 - `save_session_summary` — leave a handoff note on a session's lineage (surfaces on next open/resume).
 - `pending_notes` — the notes waiting on a session that it hasn't received yet.
-- `browser_tabs` / `browser_claim` / `browser_release` — the shared-browser lock registry (only when `CCDECK_SESSION_BROWSER=on`): see every tab and who holds it, claim the tab you're driving, release it. Lets many sessions (and Friday) share one logged-in browser without colliding.
+- `browser_tabs` / `browser_claim` / `browser_release` — the shared-browser lock registry (only when `POLYMUX_SESSION_BROWSER=on`): see every tab and who holds it, claim the tab you're driving, release it. Lets many sessions (and Friday) share one logged-in browser without colliding.
 
 *Session control (**static bearer only**):*
 
@@ -315,110 +319,110 @@ clients can work with your sessions. Three auth paths, three privilege levels:
 - `get_session_files` / `read_session_file` — see what a session created or changed in its directory, then read a file (confined to that directory, secrets redacted).
 
 **Connect from Claude.ai** — add a custom connector pointing at
-`https://<your-cc-deck-host>/mcp`; you'll be sent through the OAuth consent page (log in with the
-cc-deck password) and the connector gets the read + note tools. Set `CCDECK_PUBLIC_URL` if the
+`https://<your-polymux-host>/mcp`; you'll be sent through the OAuth consent page (log in with the
+Polymux password) and the connector gets the read + note tools. Set `POLYMUX_PUBLIC_URL` if the
 host can't be derived from request headers.
 
 **Connect from Claude Code / your own agent** — point an MCP client at `/mcp` with a bearer token.
 Use the static token if the agent should be able to create and drive sessions; use the read-only
 token if it should only search and leave notes.
 
-**Handoff-aware sessions** (`CCDECK_SESSION_MCP=on`) — every new session, on **any** CLI (Claude,
+**Handoff-aware sessions** (`POLYMUX_SESSION_MCP=on`) — every new session, on **any** CLI (Claude,
 Codex, agy), is launched with the read-only MCP pre-wired (loopback URL, read-only bearer; Claude
 also gets a one-line system-prompt nudge), so sessions can discover related work and hand off
 through notes instead of duplicating it — across CLIs. They **cannot** start or drive other
 sessions — that stays operator-only via the static bearer.
 
-**Shared browser + lock registry** — cc-deck can attach sessions to a **single, already-logged-in
+**Shared browser + lock registry** — Polymux can attach sessions to a **single, already-logged-in
 Chrome** (over CDP) so they can read/act on authenticated pages — and coordinate so they don't
 fight over it. Two ways in:
 
 - *Per session:* the New Session dialog's *Browser access* dropdown launches just that session with
   [`chrome-devtools-mcp`](https://github.com/ChromeDevTools/chrome-devtools-mcp).
-- *Every session:* `CCDECK_SESSION_BROWSER=on` auto-wires the shared browser + a coordination nudge
+- *Every session:* `POLYMUX_SESSION_BROWSER=on` auto-wires the shared browser + a coordination nudge
   into all new sessions.
 
 Because CDP is multi-tab, collisions only happen when two drivers act on the **same** tab. So
-cc-deck runs a **visible lock registry** (one in-memory registry in the always-on server, exposed
+Polymux runs a **visible lock registry** (one in-memory registry in the always-on server, exposed
 via the `browser_tabs` / `browser_claim` / `browser_release` MCP tools). The nudge tells each
 session to: check `browser_tabs` → open its **own** tab (`new_page`) → `browser_claim` it → work
 only there → never touch tabs it didn't open (those hold other agents' logins) → `browser_release`
-when done. Friday can call the same tools to see/avoid session tabs. Point cc-deck at the browser
-with `CCDECK_BROWSER_CDP` (default `http://127.0.0.1:9222`); launch that Chrome with
+when done. Friday can call the same tools to see/avoid session tabs. Point Polymux at the browser
+with `POLYMUX_BROWSER_CDP` (default `http://127.0.0.1:9222`); launch that Chrome with
 `--remote-debugging-port=9222`.
 
 ### Instant push (optional)
 
 `list_sessions` lets an agent *poll* for state changes. If you'd rather have your assistant react
-the **instant** a session needs you, set `CCDECK_FRIDAY_REACH_URL` (+ `CCDECK_FRIDAY_REACH_PASSWORD`):
-cc-deck watches session transitions and `POST`s a small JSON event to that webhook the moment a
+the **instant** a session needs you, set `POLYMUX_FRIDAY_REACH_URL` (+ `POLYMUX_FRIDAY_REACH_PASSWORD`):
+Polymux watches session transitions and `POST`s a small JSON event to that webhook the moment a
 session flips to **waiting-for-input** — the time-sensitive case where instant beats a 60s poll —
 with an `X-App-Password` header. Only that one transition is pushed (everything else stays with
 polling), and it's best-effort: if the webhook is down the event is dropped and the poll is the
 backstop. Built for [Friday](https://github.com/cyberneel/friday)'s Reach Manager, but it's just a
-webhook — empty url = disabled (cc-deck runs fully standalone).
+webhook — empty url = disabled (Polymux runs fully standalone).
 
 <a id="multiple-clis"></a>
 ## Multiple CLIs (Claude, Codex, agy)
 
-cc-deck is **CLI-agnostic**: each session records which CLI it runs, and a small provider
+Polymux is **CLI-agnostic**: each session records which CLI it runs, and a small provider
 (`src/providers/`) owns everything tool-specific. The New Session dialog has a **CLI** picker
 (shown when more than one provider is available); sessions are badged by CLI in the sidebar and
 grid. Adding another CLI is one provider file, and the CLI's "trust this folder?" prompt is
-auto-accepted on launch (see [CCDECK_AUTO_TRUST](#configuration-env)).
+auto-accepted on launch (see [POLYMUX_AUTO_TRUST](#configuration-env)).
 
 - **Claude** (`claude`) — the default. Full feature set: live status dots, History-tab resume/fork,
   usage/ROI, notes/handoff + the shared-browser auto-wire.
-- **Codex** (`codex`) — resume/fork are subcommands, approval via `-a`. The cc-deck MCP is wired
+- **Codex** (`codex`) — resume/fork are subcommands, approval via `-a`. The Polymux MCP is wired
   per-launch via `-c mcp_servers.*` (scoped, so your global `~/.codex/config.toml` is untouched).
 - **agy** (Antigravity, Gemini-backed) — resume via `--conversation <id>`, mode via `--mode
-  accept-edits|plan`. The cc-deck MCP is registered once at startup via `agy mcp add` (agy has no
+  accept-edits|plan`. The Polymux MCP is registered once at startup via `agy mcp add` (agy has no
   per-launch MCP flag).
 
 Codex and agy launch clean and get the **CLI-agnostic** surface: the in-browser terminal, attach,
-kill, rename (cc-deck label), snapshot/restore, and remote — everything you'd drive by hand.
+kill, rename (Polymux label), snapshot/restore, and remote — everything you'd drive by hand.
 
-**Cross-CLI notes work** (`CCDECK_SESSION_MCP=on`): every session — Claude, Codex, *and* agy — is
-wired with the read-only cc-deck MCP, so any session can `search_sessions`, `list_sessions`, read a
+**Cross-CLI notes work** (`POLYMUX_SESSION_MCP=on`): every session — Claude, Codex, *and* agy — is
+wired with the read-only Polymux MCP, so any session can `search_sessions`, `list_sessions`, read a
 sibling's context, and `save_session_summary` to leave a note on another session (any CLI) that
 surfaces the next time it opens/resumes — even if that session is offline. Notes are keyed by the
 session's CLI id, so a note left for a Codex or agy session lands the same way it does for Claude.
 
-What's **Claude-only** for now (gaps in what the other CLIs expose, not cc-deck limits you can flip):
+What's **Claude-only** for now (gaps in what the other CLIs expose, not Polymux limits you can flip):
 the live busy/idle/waiting **status dot** (Codex/agy have no machine-readable status feed — those
 sessions show live/idle from the process), **History-tab resume** (they keep sessions in stores with
 no scriptable listing — resume with `codex resume` / `agy --continue` in a terminal), **usage/ROI**
-(Claude-plan specific), and the **shared-browser auto-wire** (Codex/agy get the cc-deck MCP but not
-the browser MCP). Note delivery to a Codex/agy session needs an id cc-deck knows — while it's live
+(Claude-plan specific), and the **shared-browser auto-wire** (Codex/agy get the Polymux MCP but not
+the browser MCP). Note delivery to a Codex/agy session needs an id Polymux knows — while it's live
 (message it by title), or its conversation id — since their transcript stores aren't indexed for
 search the way `~/.claude/projects` is.
 
 ## Remote sessions on other hosts
 
-cc-deck can also list and attach **tmux sessions running on other machines** (a laptop that
+Polymux can also list and attach **tmux sessions running on other machines** (a laptop that
 stayed on, another box) — reached over SSH, ideally across your tailnet. They appear in the
 terminal sidebar tagged by host, and clicking one attaches through the browser like a local
 session. It's **attach-only** for now (no rename/kill/notes).
 
 ```bash
 # in .env — comma/space-separated; "sshTarget" or "label=sshTarget"
-CCDECK_REMOTE_HOSTS=laptop=cyber@laptop.tailnet.ts.net dell-box
+POLYMUX_REMOTE_HOSTS=laptop=cyber@laptop.tailnet.ts.net dell-box
 ```
 
 Two prerequisites, because a session is only remotely attachable if its terminal is shareable:
 
-1. **Key-based SSH** from the cc-deck host to each remote host (cc-deck uses `BatchMode=yes`, so
+1. **Key-based SSH** from the Polymux host to each remote host (Polymux uses `BatchMode=yes`, so
    it never hangs on a password/host-key prompt — set up keys first).
 2. **The remote session must run inside tmux.** A bare `claude` in a plain terminal has a PTY
    owned by that terminal — nothing else can attach to it. So start remote work like:
 
    ```bash
-   tmux new -s work claude       # then it shows up in cc-deck as "work" on that host
+   tmux new -s work claude       # then it shows up in Polymux as "work" on that host
    ```
 
-cc-deck lists the remote's tmux sessions with `ssh <host> tmux list-sessions` and attaches with
+Polymux lists the remote's tmux sessions with `ssh <host> tmux list-sessions` and attaches with
 `ssh -t <host> tmux attach`; resize propagates over SSH. Empty by default — set
-`CCDECK_REMOTE_HOSTS` to enable.
+`POLYMUX_REMOTE_HOSTS` to enable.
 
 ## Serve it on your tailnet (TLS, no open ports)
 
@@ -440,20 +444,20 @@ Reachable from any device on your tailnet. (If it says "Access denied", run
 ```bash
 # the unit in systemd/ uses placeholders; fill them for your machine:
 mkdir -p ~/.config/systemd/user
-sed -e "s|__CCDECK_DIR__|$PWD|g" -e "s|__NODE__|$(command -v node)|g" \
+sed -e "s|__POLYMUX_DIR__|$PWD|g" -e "s|__NODE__|$(command -v node)|g" \
     -e "s|__PATH__|$(dirname $(command -v node)):/usr/local/bin:/usr/bin:/bin|g" \
-    systemd/cc-deck.service > ~/.config/systemd/user/cc-deck.service
-systemctl --user daemon-reload && systemctl --user enable --now cc-deck
+    systemd/polymux.service > ~/.config/systemd/user/polymux.service
+systemctl --user daemon-reload && systemctl --user enable --now polymux
 sudo loginctl enable-linger "$USER"     # keep running while logged out
-journalctl --user -u cc-deck -f         # logs
+journalctl --user -u polymux -f         # logs
 ```
 
-The unit sets **`KillMode=process`** on purpose: cc-deck's dedicated tmux server runs in the
+The unit sets **`KillMode=process`** on purpose: Polymux's dedicated tmux server runs in the
 service's cgroup, so the default `control-group` kill would destroy every session on each restart.
 `KillMode=process` stops only the node process and leaves tmux (and your sessions) running across
 restarts.
 
-**Remember:** changes to `.env` need `systemctl --user restart cc-deck`; changes to `src/client/*`
+**Remember:** changes to `.env` need `systemctl --user restart polymux`; changes to `src/client/*`
 need `npm run build` first. With `KillMode=process`, restarts no longer disturb running sessions.
 To pull a new version, run `./update.sh` (see [Updating](#updating)): it rebuilds and restarts
 this service for you.
@@ -467,10 +471,10 @@ gates it at the edge so it's never publicly exposed:
 # 1. install cloudflared, then authenticate + pick your domain (opens a browser)
 cloudflared tunnel login
 # 2. create the tunnel and route a hostname to it
-cloudflared tunnel create cc-deck
-cloudflared tunnel route dns cc-deck claude.example.com
+cloudflared tunnel create Polymux
+cloudflared tunnel route dns Polymux claude.example.com
 # 3. config pointing at the local app (use a dedicated file if you have other tunnels)
-cat > ~/.cloudflared/cc-deck.config.yml <<YAML
+cat > ~/.cloudflared/polymux.config.yml <<YAML
 tunnel: <TUNNEL_ID>
 credentials-file: $HOME/.cloudflared/<TUNNEL_ID>.json
 ingress:
@@ -478,14 +482,14 @@ ingress:
     service: http://127.0.0.1:8787
   - service: http_status:404
 YAML
-# 4. run it (a systemd user service like cc-deck's keeps it up; enable-linger to persist)
-cloudflared tunnel --config ~/.cloudflared/cc-deck.config.yml run
+# 4. run it (a systemd user service like Polymux's keeps it up; enable-linger to persist)
+cloudflared tunnel --config ~/.cloudflared/polymux.config.yml run
 ```
 
 Then, in **Zero Trust → Access → Applications**, add a **self-hosted** app for
 `claude.example.com` with an **Allow** policy limited to your email (the built-in **One-time PIN**
 method emails you a code — no IdP setup needed). Now reaching the hostname requires a Cloudflare
-login *before* the app is touched, and the app password is a second layer. cc-deck sets `secure`
+login *before* the app is touched, and the app password is a second layer. Polymux sets `secure`
 cookies when it sees `x-forwarded-proto: https`, and WebSockets (the terminal) pass through Access
 using the browser's Access cookie, so it all works behind the tunnel. Keep your Tailscale route as
 well — on-VPN access is unaffected.
@@ -499,11 +503,11 @@ well — on-VPN access is unaffected.
 
 - All tmux/pty calls use `execFile`/`spawn` with argument arrays — no shell, no injection.
 - Session names are validated (`^ccdeck-[A-Za-z0-9]+$`), resume IDs must be UUIDs, and launch/
-  upload directories must resolve under `CCDECK_ROOTS`.
+  upload directories must resolve under `POLYMUX_ROOTS`.
 - The MCP `search_sessions` output redacts `sk-ant-…` keys before returning transcript snippets.
 - Single shared password (no multi-user accounts) — layer Cloudflare Access for per-identity control.
-- Keep `CCDECK_BIND=127.0.0.1` so the unauthenticated raw port is never on the network. Treat
-  `CCDECK_MCP_TOKEN` like a password — it can create and drive sessions.
+- Keep `POLYMUX_BIND=127.0.0.1` so the unauthenticated raw port is never on the network. Treat
+  `POLYMUX_MCP_TOKEN` like a password — it can create and drive sessions.
 
 ## Project layout
 
@@ -524,9 +528,9 @@ src/usage.js       token usage + API-equivalent cost from transcripts (ROI), mti
 src/pricing.js     live Anthropic token pricing (LiteLLM dataset, disk-cached + fallback)
 src/burn.js        shells out to `ccburn --json` for live plan-limit utilization
 src/restore.js     snapshot active sessions + restore them after a host reboot
-src/remote.js      list + attach tmux sessions on other hosts over SSH (CCDECK_REMOTE_HOSTS)
+src/remote.js      list + attach tmux sessions on other hosts over SSH (POLYMUX_REMOTE_HOSTS)
 src/browser.js     shared-browser lock registry (browser_tabs/claim/release over CDP)
-src/reach-emit.js  optional: push "needs input" transitions to a webhook (CCDECK_FRIDAY_REACH_URL)
+src/reach-emit.js  optional: push "needs input" transitions to a webhook (POLYMUX_FRIDAY_REACH_URL)
 src/origin.js      tags sessions an agent launched over MCP, so they stay out of search/history
 src/turn-telemetry.js  hosted tier: per-turn RAM/CPU via CLI hooks (inert unless configured)
 src/sw.js          service-worker source (built to public/sw.js by esbuild)
@@ -545,7 +549,7 @@ update.sh          self-host updater (fast-forward, rebuild, restart; rolls back
 
 ## Contributing
 
-Issues and PRs welcome — cc-deck aims to stay small and dependency-light. See
+Issues and PRs welcome — Polymux aims to stay small and dependency-light. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup and conventions, and the
 [Code of Conduct](CODE_OF_CONDUCT.md). Please report security issues privately per
 [SECURITY.md](SECURITY.md), not as a public issue.

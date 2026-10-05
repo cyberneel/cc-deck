@@ -1,5 +1,5 @@
 {
-  "name": "cc-deck",
+  "name": "polymux",
   "version": "0.1.0",
   "type": "module",
   "description": "Self-hosted web dashboard to view, launch, resume, and attach to coding-CLI sessions (Claude Code, Codex, agy) — tmux-backed, in the browser.",

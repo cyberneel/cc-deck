@@ -86,7 +86,7 @@ export function attachHandler(socket, req) {
       env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
     });
   } catch (err) {
-    socket.send(`\r\n[cc-deck] failed to attach: ${err.message}\r\n`);
+    socket.send(`\r\n[polymux] failed to attach: ${err.message}\r\n`);
     socket.close(1011, 'attach failed');
     return;
   }

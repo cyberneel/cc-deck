@@ -1,4 +1,4 @@
-// Session snapshot + restore. cc-deck's tmux sessions live in RAM, so a host
+// Session snapshot + restore. Polymux's tmux sessions live in RAM, so a host
 // reboot loses them (only the Claude transcripts survive on disk). This captures
 // each active session's directory/title + the Claude session id to resume, so on
 // the next startup we can relaunch them with `claude --resume <id>`.
@@ -11,7 +11,7 @@ import { markProactive } from './origin.js';
 import { config } from './config.js';
 
 const DIR = join(homedir(), '.claude', 'cc-deck');
-const FILE = process.env.CCDECK_RESTORE_FILE || join(DIR, 'restore.json');
+const FILE = process.env.POLYMUX_RESTORE_FILE || join(DIR, 'restore.json');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Write a snapshot of the currently-active sessions (atomic). Returns the count.
@@ -46,7 +46,7 @@ export async function loadSnapshot() {
 // so a normal `systemctl restart` (where KillMode=process keeps tmux alive) never
 // duplicates sessions. Returns { restored, total } or a skip reason.
 export async function restoreIfBoot() {
-  if (process.env.CCDECK_RESTORE === 'off') return { skipped: true, reason: 'disabled (CCDECK_RESTORE=off)' };
+  if (process.env.POLYMUX_RESTORE === 'off') return { skipped: true, reason: 'disabled (POLYMUX_RESTORE=off)' };
   const running = await listSessions();
   if (running.length) return { skipped: true, reason: `${running.length} session(s) already running` };
   const snap = await loadSnapshot();

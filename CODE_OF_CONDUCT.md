@@ -50,7 +50,7 @@ officially representing the community in public spaces.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the
 project maintainer privately through GitHub — via a
-[private security advisory](https://github.com/cyberneel/cc-deck/security/advisories/new) or by
+[private security advisory](https://github.com/cyberneel/polymux/security/advisories/new) or by
 contacting [@cyberneel](https://github.com/cyberneel). All complaints will be reviewed and
 investigated promptly and fairly.
 

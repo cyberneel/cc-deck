@@ -1,14 +1,14 @@
-# Contributing to cc-deck
+# Contributing to Polymux
 
-Thanks for your interest! cc-deck is a small, self-hosted app — contributions that keep it
+Thanks for your interest! Polymux is a small, self-hosted app — contributions that keep it
 lean and dependency-light are the most welcome.
 
 ## Getting set up
 
 ```bash
-git clone https://github.com/cyberneel/cc-deck && cd cc-deck
+git clone https://github.com/cyberneel/polymux && cd polymux
 npm install
-cp .env.example .env      # set CCDECK_PASSWORD and a random CCDECK_SECRET
+cp .env.example .env      # set POLYMUX_PASSWORD and a random POLYMUX_SECRET
 npm run dev               # esbuild --watch + node --watch (rebuilds + restarts on change)
 ```
 
@@ -17,7 +17,7 @@ npm run dev               # esbuild --watch + node --watch (rebuilds + restarts 
 `127.0.0.1:8787` by default.
 
 You'll need **Node ≥ 20**, **tmux**, and the **Claude CLI** on your `PATH` (or point
-`CCDECK_LAUNCH` at another command). A C toolchain is needed once to build `node-pty`.
+`POLYMUX_LAUNCH` at another command). A C toolchain is needed once to build `node-pty`.
 
 ## How it's laid out
 
@@ -37,7 +37,7 @@ generated, and stale bundles are the most common "my change didn't show up" gotc
   with an argument array — never string interpolation into a shell. Keep it that way.
 - **Validate at trust boundaries.** Session names, resume IDs, and any path must be checked
   (names match `^ccdeck-[A-Za-z0-9]+$`, resume IDs are UUIDs, paths must resolve under
-  `CCDECK_ROOTS`). Don't loosen these.
+  `POLYMUX_ROOTS`). Don't loosen these.
 - **Lean on the standard library and already-installed deps.** Please don't add a dependency
   for something a few lines can do; new runtime deps need a good reason.
 - Keep diffs focused — one concern per PR, and avoid unrelated reformatting.
@@ -45,12 +45,12 @@ generated, and stale bundles are the most common "my change didn't show up" gotc
 ## Testing / verifying a change
 
 `npm test` runs the small `node:test` suites in `test/` (no framework to install). Beyond that,
-cc-deck is verified by running it. For a change, please:
+Polymux is verified by running it. For a change, please:
 
 1. `npm test`, then `npm run build && npm start` (or `npm run dev`) and exercise the affected
    feature in the browser.
 2. For anything touching sessions, confirm launch / attach / resume / kill still work and that
-   sessions survive a `systemctl --user restart cc-deck` (the `KillMode=process` guarantee).
+   sessions survive a `systemctl --user restart polymux` (the `KillMode=process` guarantee).
 3. Note in the PR what you did to verify. If you add non-trivial logic, a small runnable check
    (a `test/*.test.js` next to the existing ones) is appreciated.
 

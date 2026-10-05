@@ -1,17 +1,17 @@
 [Unit]
-Description=cc-deck — Claude CLI session dashboard
+Description=Polymux — Claude CLI session dashboard
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-# __CCDECK_DIR__ and __NODE__ are filled in by setup.sh (user services have a minimal PATH,
+# __POLYMUX_DIR__ and __NODE__ are filled in by setup.sh (user services have a minimal PATH,
 # so we bake in the absolute node path and the repo's PATH for `claude`/`tmux`).
-WorkingDirectory=__CCDECK_DIR__
+WorkingDirectory=__POLYMUX_DIR__
 ExecStart=__NODE__ src/server.js
 Restart=always
 RestartSec=2
-# Kill only the node process on stop/restart, NOT the whole cgroup — cc-deck's
+# Kill only the node process on stop/restart, NOT the whole cgroup — Polymux's
 # dedicated tmux server lives in this cgroup, and a control-group kill would
 # destroy every session on each restart. This keeps tmux (and sessions) alive.
 KillMode=process

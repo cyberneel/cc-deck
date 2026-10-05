@@ -5,10 +5,10 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// A private tmux server, so nothing lands on the real cc-deck socket.
-process.env.CCDECK_TMUX_SOCKET = `ccdeck-test-${process.pid}`;
+// A private tmux server, so nothing lands on the real Polymux socket.
+process.env.POLYMUX_TMUX_SOCKET = `ccdeck-test-${process.pid}`;
 const { relayText } = await import('../src/tmux.js');
-const tmux = (...a) => execFileSync('tmux', ['-L', process.env.CCDECK_TMUX_SOCKET, ...a], { stdio: 'pipe' });
+const tmux = (...a) => execFileSync('tmux', ['-L', process.env.POLYMUX_TMUX_SOCKET, ...a], { stdio: 'pipe' });
 const dir = mkdtempSync(join(tmpdir(), 'ccdeck-relay-'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

@@ -24,7 +24,7 @@ export const isRemoteSessionName = (n) => typeof n === 'string' && /^[A-Za-z0-9_
 // Only surface remote tmux sessions actually running a CLI/claude, so a session
 // that drops back to a bare shell when you quit claude disappears (instead of
 // lingering as a "normal shell without claude"). claude reports its pane command
-// as `claude` or `node` (it's a node CLI), same heuristic cc-deck uses locally.
+// as `claude` or `node` (it's a node CLI), same heuristic Polymux uses locally.
 const isCliCommand = (c) => /^(claude|node)$/i.test((c || '').trim());
 
 async function listHost(h) {

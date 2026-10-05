@@ -1,4 +1,4 @@
-# cc-deck in a container. The whole point: cc-deck needs Linux + tmux + node-pty,
+# Polymux in a container. The whole point: Polymux needs Linux + tmux + node-pty,
 # which is awkward on Windows/macOS — but Docker Desktop runs a Linux VM, so this
 # image runs the same everywhere. It bundles the Claude Code, Codex, and agy
 # (Google Antigravity) CLIs so a session launches inside the container against
@@ -19,10 +19,10 @@ RUN npm run build
 # (friday dist/hosted/Dockerfile.ccdeck) builds on it via `--target runtime-base`.
 FROM node:24-bookworm-slim AS runtime-base
 # tmux runs the sessions; git for branch detection; ripgrep prefilters MCP
-# search_sessions (else it scans every transcript in JS); the CLIs cc-deck manages.
+# search_sessions (else it scans every transcript in JS); the CLIs Polymux manages.
 RUN apt-get update && apt-get install -y --no-install-recommends tmux git ripgrep ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
-    # chrome-devtools-mcp is pre-installed at the SAME pinned version cc-deck wires
+    # chrome-devtools-mcp is pre-installed at the SAME pinned version Polymux wires
     # (src/providers/claude.js CHROME_MCP) so the shared-browser MCP resolves from
     # disk instantly instead of an @latest npx re-resolve that can blow the connect
     # timeout. Keep the version in sync with claude.js when bumping.
@@ -42,13 +42,13 @@ WORKDIR /app
 # (e.g. `-p 127.0.0.1:8787:8787`). Roots default to the mounted /workspace.
 ENV HOME=/home/node \
     NODE_ENV=production \
-    CCDECK_BIND=0.0.0.0 \
-    CCDECK_ROOTS=/workspace
+    POLYMUX_BIND=0.0.0.0 \
+    POLYMUX_ROOTS=/workspace
 
 # ---- runtime: base + the app (last, so a code change rebuilds only these layers) ----
 FROM runtime-base
 # Run as the image's built-in non-root `node` user (uid 1000, home /home/node).
-# cc-deck writes ~/.claude (transcripts, notes, restore) and the CLIs write their
+# Polymux writes ~/.claude (transcripts, notes, restore) and the CLIs write their
 # auth there, so keep /home/node on a volume.
 COPY --from=build --chown=node:node /app /app
 COPY --chown=node:node docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

@@ -8,7 +8,7 @@
 // fabricated data, so the screenshots contain NO personal session content.
 // Set REAL=1 to screenshot your actual data instead (not recommended for a public repo).
 //
-// TOKEN must be a valid cc-deck cookie value (the page HTML/JS is still auth-gated;
+// TOKEN must be a valid Polymux cookie value (the page HTML/JS is still auth-gated;
 // only the /api/** data is mocked).
 import { chromium } from 'playwright';
 import { mkdir } from 'node:fs/promises';

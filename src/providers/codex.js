@@ -1,9 +1,9 @@
 // Codex CLI provider. Codex differs from Claude in the launch surface: resume/fork
 // are SUBCOMMANDS (`codex resume <id>` / `codex fork <id>`, not flags), and its
-// "permission mode" is the approval policy (`-a`). The cc-deck handoff MCP is
+// "permission mode" is the approval policy (`-a`). The Polymux handoff MCP is
 // wired per-launch via Codex's `-c mcp_servers.*` config overrides (scoped to
 // this session, so the user's global ~/.codex/config.toml isn't touched); the
-// read-only bearer is passed through the CCDECK_RO env var (Codex only supports
+// read-only bearer is passed through the POLYMUX_RO env var (Codex only supports
 // an env-var bearer for HTTP MCP), which createSession exports on the launch line.
 import { spawn } from 'node:child_process';
 import { config } from '../config.js';
@@ -31,15 +31,15 @@ export const codex = {
     return args;
   },
 
-  // Wire the read-only cc-deck MCP as a streamable-HTTP server via `-c` config
-  // overrides (scoped to this launch). Bearer comes from CCDECK_RO in the env.
+  // Wire the read-only Polymux MCP as a streamable-HTTP server via `-c` config
+  // overrides (scoped to this launch). Bearer comes from POLYMUX_RO in the env.
   // Same handoff-aware toolset the Claude sessions get: search / get_context /
   // list_sessions / save_session_summary (leave a note) / browser_*.
   async wireFlags() {
     let flags = '';
     if (config.sessionMcp && config.mcpTokenReadonly) {
       const url = `http://127.0.0.1:${config.port}/mcp`;
-      flags += ` -c 'mcp_servers.cc-deck.url="${url}"' -c 'mcp_servers.cc-deck.bearer_token_env_var="CCDECK_RO"'`;
+      flags += ` -c 'mcp_servers.polymux.url="${url}"' -c 'mcp_servers.polymux.bearer_token_env_var="POLYMUX_RO"'`;
     }
     // Only once trusted: an untrusted hook stops the TUI on a "Hooks need review" modal.
     if (turnTelemetry() && await (hooksTrusted ??= trustCodexHooks().catch(() => false))) flags += hookOverrides().map((o) => ` -c '${o}'`).join('');
@@ -73,7 +73,7 @@ async function trustCodexHooks() {
   const rpc = (method, params) => new Promise((res) => { pending.set(++n, res); p.stdin.write(JSON.stringify({ id: n, method, params }) + '\n'); });
   const kill = setTimeout(() => p.kill(), 30_000);
   try {
-    await rpc('initialize', { clientInfo: { name: 'cc-deck', version: '1' } });
+    await rpc('initialize', { clientInfo: { name: 'polymux', version: '1' } });
     p.stdin.write('{"method":"initialized"}\n');
     const ours = hookCurl('codex');
     const hooks = (await rpc('hooks/list', {})).result?.data?.flatMap((d) => d.hooks) ?? [];

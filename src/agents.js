@@ -81,7 +81,7 @@ export const getAgents = swr(async () => {
   return [];
 }, 2500, 10_000);
 
-// Attach each cc-deck session's live Claude status by matching it to an agent.
+// Attach each Polymux session's live Claude status by matching it to an agent.
 // Two passes so a directory-shared guess never overrides a confident match:
 //   1. by claude PID (the pane's child), the resumed id, or the job a parked pane
 //      handed off to — unambiguous.
@@ -89,7 +89,7 @@ export const getAgents = swr(async () => {
 // Guessing among several sessions that share a cwd mislabels them — e.g. a big/idle
 // session that `claude agents` doesn't report would otherwise steal a sibling's
 // agent (and its title). When we can't match confidently, we leave the session
-// unmatched and its cc-deck label (@ccdeck_title) stands.
+// unmatched and its Polymux label (@ccdeck_title) stands.
 export function matchAgents(sessions, all) {
   const agents = all.filter((a) => a.kind === 'interactive' || !a.kind);
   const jobsById = new Map(all.filter((a) => a.kind === 'background' && a.id).map((a) => [a.id, a]));
@@ -119,7 +119,7 @@ export function matchAgents(sessions, all) {
   for (const s of pending) {
     const cands = agents.filter((x) => !used.has(x) && x.cwd === s.dir);
     if (cands.length === 1) { used.add(cands[0]); assign(s, cands[0]); }
-    else assign(s, null); // ambiguous or none → don't guess; keep the cc-deck label
+    else assign(s, null); // ambiguous or none → don't guess; keep the Polymux label
   }
   return sessions;
 }

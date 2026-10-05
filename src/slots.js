@@ -1,4 +1,4 @@
-// Session cap + slot queue (CCDECK_MAX_SESSIONS; unset = no cap, nothing here runs).
+// Session cap + slot queue (POLYMUX_MAX_SESSIONS; unset = no cap, nothing here runs).
 // A small tenant VM fits only a few CLIs. At the cap, a session Friday started that has sat
 // idle is closed to make room: its conversation stays in History and resumes in full. If
 // none can go, Friday's start waits in a queue under a reserved name and launches when a
@@ -10,7 +10,7 @@ import { config } from './config.js';
 import { listSessions, killSession, createSession, newSessionName } from './tmux.js';
 import { getAgents, matchAgents } from './agents.js';
 
-const FILE = process.env.CCDECK_QUEUE_FILE || join(homedir(), '.claude', 'cc-deck', 'queue.json');
+const FILE = process.env.POLYMUX_QUEUE_FILE || join(homedir(), '.claude', 'cc-deck', 'queue.json');
 const MAX_QUEUE = 10;
 const idleSince = new Map(); // session name -> when we first saw it idle
 let queue = []; // [{ name, at, args }], oldest first
@@ -55,7 +55,7 @@ export async function ensureSlot() {
       e.statusCode = 429; e.code = 'DECK_FULL'; throw e;
     }
     await killSession(s.name);
-    console.log(`[cc-deck] slots: closed idle "${s.title}" (${s.name}) to make room; it stays in History`);
+    console.log(`[polymux] slots: closed idle "${s.title}" (${s.name}) to make room; it stays in History`);
     sessions.splice(sessions.indexOf(s), 1);
     idleSince.delete(s.name);
   }
@@ -98,7 +98,7 @@ async function drain() {
       const q = queue[0];
       try { await createSession({ ...q.args, name: q.name }); } catch (e) {
         if (e.code === 'DECK_FULL') break;
-        console.warn(`[cc-deck] slots: dropped queued ${q.name}: ${e.message}`); // its folder went away
+        console.warn(`[polymux] slots: dropped queued ${q.name}: ${e.message}`); // its folder went away
       }
       queue = queue.filter((x) => x !== q); // not shift(): a cancel may have moved the line meanwhile
       await save();
@@ -117,6 +117,6 @@ export async function loadQueue() {
 // After restore-on-boot, so restored sessions take their slots before the queue does.
 export function startSlots() {
   if (!config.maxSessions) return;
-  console.log(`[cc-deck] slots: up to ${config.maxSessions} Deep Session(s) at once, ${queue.length} queued`);
+  console.log(`[polymux] slots: up to ${config.maxSessions} Deep Session(s) at once, ${queue.length} queued`);
   setInterval(() => drain().catch(() => {}), 15_000);
 }

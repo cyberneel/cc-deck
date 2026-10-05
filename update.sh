@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cc-deck updater for a git-clone install: fast-forwards to the upstream branch,
+# Polymux updater for a git-clone install: fast-forwards to the upstream branch,
 # reinstalls deps only if the lockfile changed, rebuilds, and restarts the systemd
 # user service. Sessions keep running (the unit uses KillMode=process, and restore
 # only relaunches on a fresh boot). If the install or build fails, it rolls back to
@@ -7,14 +7,14 @@
 set -Eeuo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
-CCDECK_DIR="$(pwd)"
+POLYMUX_DIR="$(pwd)"
 
 bold() { printf '\033[1m%s\033[0m\n' "$1"; }
 warn() { printf '\033[33m%s\033[0m\n' "$1"; }
 ok()   { printf '\033[32m%s\033[0m\n' "$1"; }
 die()  { warn "$1"; exit 1; }
 
-[ -z "${CCDECK_TENANT_ID:-}" ] || die "Hosted cc-deck is updated by image roll, not this script."
+[ -z "${POLYMUX_TENANT_ID:-}${CCDECK_TENANT_ID:-}" ] || die "Hosted Polymux is updated by image roll, not this script."
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "Not a git checkout — reinstall from git (or pull a newer Docker image)."
 git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1 || die "This branch has no upstream to update from (git branch -u origin/main)."
 git diff --quiet HEAD || die "You have local changes to tracked files — commit or stash them first."
@@ -34,7 +34,7 @@ rollback() {
   git reset --hard --quiet "$OLD" # safe: the tree was clean before the fast-forward
   if ! git diff --quiet "$OLD" "$NEW" -- package-lock.json; then npm ci; fi
   npm run build
-  die "Rolled back; the running cc-deck was not restarted."
+  die "Rolled back; the running Polymux was not restarted."
 }
 NEW="$(git rev-parse HEAD)"
 trap rollback ERR
@@ -46,11 +46,17 @@ bold "Building frontend…"
 npm run build
 trap - ERR
 
-# Restart only if the installed user service runs THIS checkout.
-if command -v systemctl >/dev/null 2>&1 \
-  && [ "$(systemctl --user show cc-deck -p WorkingDirectory --value 2>/dev/null)" = "$CCDECK_DIR" ]; then
-  systemctl --user restart cc-deck
-  ok "Updated ${OLD:0:7} → ${NEW:0:7} and restarted cc-deck. Reload the page."
+# Restart only if the installed user service runs THIS checkout. Installs from before
+# the rename have the unit named cc-deck.
+UNIT=
+if command -v systemctl >/dev/null 2>&1; then
+  for u in polymux cc-deck; do
+    [ "$(systemctl --user show "$u" -p WorkingDirectory --value 2>/dev/null)" = "$POLYMUX_DIR" ] && { UNIT=$u; break; }
+  done
+fi
+if [ -n "$UNIT" ]; then
+  systemctl --user restart "$UNIT"
+  ok "Updated ${OLD:0:7} → ${NEW:0:7} and restarted Polymux. Reload the page."
 else
-  ok "Updated ${OLD:0:7} → ${NEW:0:7}. Restart cc-deck (stop and re-run npm start) to finish."
+  ok "Updated ${OLD:0:7} → ${NEW:0:7}. Restart Polymux (stop and re-run npm start) to finish."
 fi

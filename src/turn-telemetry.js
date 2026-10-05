@@ -9,7 +9,7 @@ import { createHmac } from 'node:crypto';
 import { config } from './config.js';
 
 export const enabled = () => !!(config.telemetry.url && config.telemetry.token && config.tenantId);
-// The hook's shared key: derived from the app secret so it survives a cc-deck restart
+// The hook's shared key: derived from the app secret so it survives a Polymux restart
 // (KillMode=process keeps sessions — and the key baked into their hook settings — alive).
 export const hookKey = () => createHmac('sha256', config.secret).update('turn-hook').digest('hex').slice(0, 32);
 // The hook command, shared by all three CLIs. Quote-free on purpose: it's spliced into a
@@ -93,6 +93,6 @@ async function flush() {
 
 export function startTurnTelemetry() {
   if (!enabled()) return;
-  console.log('[cc-deck] turn telemetry →', config.telemetry.url);
+  console.log('[polymux] turn telemetry →', config.telemetry.url);
   setInterval(() => { flush().catch(() => {}); }, 60_000);
 }

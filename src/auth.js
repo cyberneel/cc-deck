@@ -45,7 +45,7 @@ export function verifyToken(token) {
   }
 }
 
-// Redeem a unified-hub SSO token. cc-deck holds NO signing secret by design: the
+// Redeem a unified-hub SSO token. Polymux holds NO signing secret by design: the
 // token is opaque and gets validated server-to-server by POSTing it to systems'
 // verify endpoint. Returns true iff systems says ok AND it's for THIS app + tenant.
 // Never throws (any failure → false → caller falls through to normal login).

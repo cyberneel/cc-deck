@@ -1,7 +1,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
-Object.assign(process.env, { CCDECK_TELEMETRY_URL: 'http://t/ingest', CCDECK_TELEMETRY_TOKEN: 'x', CCDECK_TENANT_ID: 't', CCDECK_SECRET: 's' });
+Object.assign(process.env, { POLYMUX_TELEMETRY_URL: 'http://t/ingest', POLYMUX_TELEMETRY_TOKEN: 'x', POLYMUX_TENANT_ID: 't', POLYMUX_SECRET: 's' });
 const { onHook, startTurnTelemetry } = await import('../src/turn-telemetry.js');
 
 test('turns per engine: claude/codex by hook_event_name, agy by header + first PreInvocation', async () => {

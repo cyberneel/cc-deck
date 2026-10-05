@@ -1,11 +1,12 @@
 import { readdir, stat, unlink, statfs } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
+import './config.js'; // loads .env and the old CCDECK_* names before the env reads below
 import { findTranscriptFile, isSessionId } from './graph.js';
 
 // App-owned artifact locations.
 const HANDOFF_DIR = join(homedir(), '.claude', 'cc-deck', 'handoffs');
-const CACHE_DIR = process.env.CCDECK_CACHE_DIR || join(homedir(), '.cache', 'cc-deck');
+const CACHE_DIR = process.env.POLYMUX_CACHE_DIR || join(homedir(), '.cache', 'cc-deck');
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 const SESSION_ID_RE = /^[0-9a-fA-F-]{36}$/;
 
@@ -23,7 +24,7 @@ async function listFiles(dir) {
 }
 
 // All Claude transcripts on disk, grouped by project directory — including ones
-// the History tab hides (e.g. CCDECK_EXCLUDE_DIRS), so the hub can purge junk
+// the History tab hides (e.g. POLYMUX_EXCLUDE_DIRS), so the hub can purge junk
 // like headless /tmp runs. cwd label is a best-effort decode of the dir name
 // (lossy for names containing '-'), but deletion keys off the exact sessionId.
 async function listTranscripts() {
@@ -57,7 +58,7 @@ async function listTranscripts() {
   return groups;
 }
 
-// Everything the hub manages: cc-deck's own artifacts (handoffs, caches) plus all
+// Everything the hub manages: Polymux's own artifacts (handoffs, caches) plus all
 // Claude transcripts grouped by directory.
 export async function listArtifacts() {
   const [handoffs, caches, transcripts, fsu] = await Promise.all([

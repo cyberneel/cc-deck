@@ -114,7 +114,7 @@ const PUBLIC_PATHS = new Set([
   '/mcp', // MCP endpoint does its own bearer/OAuth auth (below)
   '/api/turn-hook', // CLI turn hooks (telemetry) — shared-key auth (below)
   '/api/creds/import', '/api/creds/sync', // AI-cred sync with the tenant's Friday — MCP-token bearer auth (below)
-  // OAuth endpoints for claude.ai connectors — reachable without a cc-deck cookie.
+  // OAuth endpoints for claude.ai connectors — reachable without a Polymux cookie.
   '/.well-known/oauth-protected-resource', '/.well-known/oauth-authorization-server',
   '/.well-known/oauth-protected-resource/mcp',
   '/oauth/register', '/oauth/authorize', '/oauth/token',
@@ -126,7 +126,7 @@ function isAuthed(req) {
 }
 
 // Clickjacking protection: only same-origin (plus any operator-allowlisted origins,
-// e.g. the systems /account hub via CCDECK_FRAME_ANCESTORS) may iframe cc-deck. A
+// e.g. the systems /account hub via POLYMUX_FRAME_ANCESTORS) may iframe Polymux. A
 // CSP with just frame-ancestors restricts framing only — it doesn't touch scripts
 // or styles, so nothing in the app breaks. Set on every response.
 const FRAME_ANCESTORS = `frame-ancestors 'self' ${config.frameAncestors.join(' ')}`.trim();
@@ -151,7 +151,7 @@ app.addHook('onRequest', async (req, reply) => {
   if (PUBLIC_PATHS.has(path)) return;
   if (isAuthed(req)) return;
 
-  // Unified-hub SSO: the hub frames cc-deck as <url>?sso=<token>. Redeem it
+  // Unified-hub SSO: the hub frames Polymux as <url>?sso=<token>. Redeem it
   // server-side (systems verifies — no CORS, no local secret), set our session
   // cookie, and 302 to the URL with the token stripped. Only on document GETs; any
   // failure (bad/expired token, wrong app/tenant) falls through to normal login —
@@ -282,7 +282,7 @@ app.get('/api/sessions', async () => {
   return { sessions: await enrichedSessions(), queued: queued(), max: config.maxSessions };
 });
 
-// tmux sessions on other tailnet hosts (CCDECK_REMOTE_HOSTS), listed over SSH.
+// tmux sessions on other tailnet hosts (POLYMUX_REMOTE_HOSTS), listed over SSH.
 // Attach via /ws/attach?session=remote:<host>:<name>. Read-only listing; the
 // heavy session actions (kill/rename/notes) stay local-only for now.
 app.get('/api/remote/sessions', async () => {
@@ -612,13 +612,13 @@ app.post('/api/storage/delete', async (req, reply) => {
 
 // ---- MCP endpoint (remote Model Context Protocol, Streamable HTTP) ----
 // Lets another Claude (claude.ai, Claude Code, …) search + pull context from your
-// past sessions. Bearer-gated; disabled unless CCDECK_MCP_TOKEN is set. Stateful:
+// past sessions. Bearer-gated; disabled unless POLYMUX_MCP_TOKEN is set. Stateful:
 // initialize creates a session (server+transport) keyed by Mcp-Session-Id.
 const mcpSessions = new Map(); // sessionId -> { server, transport, seen, streams }
 // Clients that never DELETE (Friday opens a session per tool call) would pile sessions up
 // until node OOMs — that took down a 1 GB hosted VM in ~15h. Drop sessions idle this long
 // unless a GET stream is open; an expired id gets 404, which tells spec clients to re-init.
-const MCP_IDLE_MS = Number(process.env.CCDECK_MCP_IDLE_MS) || 30 * 60_000;
+const MCP_IDLE_MS = Number(process.env.POLYMUX_MCP_IDLE_MS) || 30 * 60_000;
 setInterval(() => {
   const cutoff = Date.now() - MCP_IDLE_MS;
   for (const [id, e] of mcpSessions) {
@@ -788,18 +788,18 @@ app.register(async (instance) => {
 
 await loadQueue();
 const address = await app.listen({ port: config.port, host: config.bind });
-app.log.info(`cc-deck listening on ${address} (roots: ${config.roots.join(', ')})`);
+app.log.info(`Polymux listening on ${address} (roots: ${config.roots.join(', ')})`);
 
-// Keep cc-deck's dedicated tmux server alive even when it has no sessions.
+// Keep Polymux's dedicated tmux server alive even when it has no sessions.
 await initServer().catch(() => {});
 
-// Register the read-only cc-deck MCP with agy (persistent, idempotent) so agy
+// Register the read-only Polymux MCP with agy (persistent, idempotent) so agy
 // sessions get the same handoff-aware toolset as Claude/Codex. Best-effort.
 registerAgyMcp().catch(() => {});
 registerAgyHooks().catch(() => {}); // + turn-telemetry hooks (hosted only)
 
 // Push session-state transitions to Friday the instant they happen (opt-in; no-op unless
-// CCDECK_FRIDAY_REACH_URL is set) — so Friday reacts without polling.
+// POLYMUX_FRIDAY_REACH_URL is set) — so Friday reacts without polling.
 startReachMonitor();
 startTurnTelemetry(); // per-turn RAM/CPU → systems (hosted only; inert otherwise)
 startUpdateChecks(); // self-host "update" pill (off on hosted tenants)

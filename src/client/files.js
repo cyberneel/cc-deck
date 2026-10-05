@@ -1,6 +1,6 @@
 // Dashboard file explorer: browse the allowed roots, create folders, upload
 // (with overwrite confirmation), download files, delete, and launch a session
-// in any folder. Confined server-side to CCDECK_ROOTS.
+// in any folder. Confined server-side to POLYMUX_ROOTS.
 import { pickFiles, sendFiles, toast } from './upload.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

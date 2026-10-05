@@ -1,5 +1,5 @@
 // Storage & cleanup hub: a controlled, selective-delete view over everything
-// cc-deck keeps on disk — context handoffs, caches, and Claude transcripts
+// Polymux keeps on disk — context handoffs, caches, and Claude transcripts
 // (grouped by directory, including ones hidden from the History tab). Nothing is
 // deleted unless explicitly checked and confirmed.
 
