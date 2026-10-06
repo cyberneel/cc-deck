@@ -260,6 +260,25 @@ export async function answerPrompt(name, answer, waiting) {
   return pick;
 }
 
+// A relayed message (send_to_session) into a session that may be showing a menu. Enter on a
+// question picker picks its highlighted option and the text is lost, so a picker (it has a
+// "Type something" row) is dismissed with Esc first — the CLI then waits for the user, and
+// the text arrives as their reply. Any other menu (a permission dialog) is the user's to
+// answer: nothing is sent and its options come back.
+const isPicker = (opts) => opts.some((o) => /^type something/i.test(o.label));
+export async function relayText(name, text, waiting) {
+  assertManaged(name);
+  const opts = waiting ? menuOptions(await capturePane(name, 0)) : [];
+  if (opts.length && !isPicker(opts)) return { opts };
+  if (opts.length) {
+    await tmux(['send-keys', '-t', name, 'Escape']);
+    await sleep(500);
+    if (isPicker(menuOptions(await capturePane(name, 0)))) return { opts, stuck: true };
+  }
+  await sendText(name, text);
+  return { dismissed: opts.length > 0 };
+}
+
 export const newSessionName = () => `${config.prefix}${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
 
 // `name`: start under a name reserved earlier (a start that waited in the slot queue).

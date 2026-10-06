@@ -13,7 +13,7 @@ import { buildGraph, buildThread, isSessionId, findTranscriptFile } from './grap
 import { listHistory, isExcludedProjectDir, transcriptMeta } from './history.js';
 import { summarize } from './handoff.js';
 import { addNote, pendingCounts, countNotes, readPending, readPendingMany, consumeNotesSeed, consumeNotesSeedMany } from './notes.js';
-import { sendText, listSessions, capturePane, answerPrompt } from './tmux.js';
+import { sendText, listSessions, capturePane, answerPrompt, relayText } from './tmux.js';
 import { startOrQueue, queued } from './slots.js';
 import { PROVIDER_KINDS, DEFAULT_KIND, getProvider, providerAvailable } from './providers/index.js';
 import { getAgents, matchAgents, deckStatus } from './agents.js';
@@ -515,7 +515,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
 
     server.registerTool('send_to_session', {
       title: 'Send input to a running Deep Session',
-      description: 'Type a line into an already-running Deep Session (a live nudge, submitted with Enter). The Deep Session must be active — resume it in Deep Sessions first if not.',
+      description: "Type a line into an already-running Deep Session (a live nudge, submitted with Enter). The Deep Session must be active — resume it in Deep Sessions first if not. If it's showing a question picker, the picker is closed and the text is delivered as the answer, so put every answer in the text. A permission dialog is never answered: nothing is sent and its options come back.",
       inputSchema: {
         session_id: z.string().describe("A Claude session id OR the Deep Session's title (as shown in Deep Sessions) — the Deep Session must be live."),
         text: z.string().min(1).describe('The text to send; it is submitted with Enter.'),
@@ -528,8 +528,14 @@ export function createMcpServer({ sessionControl = false } = {}) {
         : pickByTitle(sessions, (x) => x.title, val);
       if (!s) return text(`ERROR: no live Deep Session matches "${session_id}". Live now: ${liveHint(sessions)}. Pass one of those ids or an exact title (resume a past Deep Session in Deep Sessions first if it isn't listed).`);
       // Only the instruction was delivered — callers narrated "Sent to X" as the task being done.
-      try { await sendText(s.name, line); return text(redact(`Delivered to "${s.title || s.name}". It's working on it now; the result isn't known until it replies.`)); }
-      catch (e) { return text(`ERROR: could not send — ${e.message}`); }
+      const who = `"${s.title || s.name}"`;
+      try {
+        const r = await relayText(s.name, line, !!s.waitingFor);
+        const list = () => r.opts.map((o) => `${o.n}. ${o.label}`).join(' · ');
+        if (r.stuck) return text(redact(`ERROR: ${who} is showing a question picker that didn't close, so nothing was sent. Options: ${list()}. The user needs to answer it in Deep Sessions.`));
+        if (r.opts) return text(redact(`ERROR: ${who} is waiting on a choice only the user can make, so nothing was sent: ${list()}. Ask the user to answer it in Deep Sessions.`));
+        return text(redact(`${r.dismissed ? `Closed the question picker in ${who} and delivered the message as the answer` : `Delivered to ${who}`}. It's working on it now; the result isn't known until it replies.`));
+      } catch (e) { return text(`ERROR: could not send — ${e.message}`); }
     });
 
     // Friday calls this only with the user's own answer (its pip / an answer thread) and keeps
