@@ -7,7 +7,7 @@ import { join } from 'node:path';
 
 // A private tmux server, so nothing lands on the real Polymux socket.
 process.env.POLYMUX_TMUX_SOCKET = `ccdeck-test-${process.pid}`;
-const { relayText, openMenu } = await import('../src/tmux.js');
+const { relayText, answerPrompt, openMenu } = await import('../src/tmux.js');
 const tmux = (...a) => execFileSync('tmux', ['-L', process.env.POLYMUX_TMUX_SOCKET, ...a], { stdio: 'pipe' });
 const dir = mkdtempSync(join(tmpdir(), 'ccdeck-relay-'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -112,5 +112,19 @@ test('handoff into a running session waits out a menu, then types', async (t) =>
   await sleep(300);
   assert.equal(p.log(), 'line:read the handoff\n');
 });
+
+// A pane left scrolled up is in tmux copy-mode, where send-keys is read as scroll commands.
+for (const keys of ['emacs', 'vi']) {
+  test(`a scrolled-up pane still gets the text and the menu key (${keys} copy-mode)`, async (t) => {
+    const p = await pane(t, [claudePicker]), m = await pane(t, [claudePerm]);
+    tmux('set', '-gw', 'mode-keys', keys);
+    tmux('copy-mode', '-t', p.name); tmux('copy-mode', '-t', m.name);
+    assert.deepEqual(await relayText(p.name, 'please requeue the job', true), { dismissed: true });
+    assert.equal((await answerPrompt(m.name, 'yes', true)).key, '1');
+    await sleep(300);
+    assert.equal(p.log(), 'line:please requeue the job\n');
+    assert.equal(m.log(), 'menu-key\n');
+  });
+}
 
 test.after(() => { try { tmux('kill-server'); } catch {} });

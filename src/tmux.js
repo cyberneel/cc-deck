@@ -142,6 +142,10 @@ export async function listSessions() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// A pane left scrolled up is in tmux copy-mode, where send-keys is read as scroll commands
+// and never reaches the CLI. Leave the mode before typing (tmux errors when not in one).
+const leaveCopyMode = (name) => tmux(['send-keys', '-t', name, '-X', 'cancel']).catch(() => {});
+
 // Paste literal text into a managed pane and SUBMIT it. The settle delay is load-bearing:
 // the CLI coalesces a fast multi-char burst into a "[Pasted text]" block, and an Enter that
 // arrives inside that same burst is swallowed into the paste (becomes a trailing newline)
@@ -150,8 +154,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // ponytail: fixed 500ms > the CLI's ~100ms paste window; bump if a very large paste still
 // lands unsubmitted.
 async function pasteSubmit(name, text) {
+  await leaveCopyMode(name);
   await tmux(['send-keys', '-l', '-t', name, String(text)]).catch(() => {});
   await sleep(500);
+  await leaveCopyMode(name); // scrolled during the wait: the Enter must still reach the CLI
   await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
 }
 
@@ -274,6 +280,7 @@ export function pickOption(opts, answer) {
 // menu is up (`waiting`), else typed in and submitted like sendText.
 export async function answerPrompt(name, answer, waiting) {
   assertManaged(name);
+  await leaveCopyMode(name);
   const opts = await openMenu(name, waiting);
   if (!opts.length) { await sendText(name, answer); return { typed: true }; }
   const pick = pickOption(opts, answer);
@@ -302,6 +309,7 @@ async function closePicker(name) {
 }
 export async function relayText(name, text, waiting) {
   assertManaged(name);
+  await leaveCopyMode(name);
   const opts = await openMenu(name, waiting);
   if (opts.length && !isPicker(opts)) return { opts };
   if (opts.length && !(await closePicker(name))) return { opts, stuck: true };
