@@ -542,7 +542,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
     // it from its model, so a menu press is the user's choice, never an agent's.
     server.registerTool('answer_prompt', {
       title: "Answer a Deep Session's prompt for the user",
-      description: "Pass the user's own answer to a live Deep Session. If it's showing a choice (permission dialog, question picker), presses the matching option: a number, \"esc\", or the start of an option's label (\"yes\", \"no\"); other text goes to its \"Type something\" row. Otherwise types the answer and submits it. Never presses Enter on a menu blindly.",
+      description: "Pass the user's own answer to a live Deep Session. If it's showing a choice (permission dialog, question picker), presses the matching option: a number, \"esc\", or the start of an option's label (\"yes\", \"no\"); other text goes to its free-text row (Claude \"Type something\", agy \"Write-in...\", Codex \"None of the above\" notes). Otherwise types the answer and submits it. Never presses Enter on a menu blindly.",
       inputSchema: {
         session_id: z.string().describe("A Claude session id, the Deep Session's name (from list_sessions), or its title — must be live."),
         answer: z.string().min(1).describe("The user's answer, verbatim."),

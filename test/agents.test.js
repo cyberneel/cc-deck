@@ -78,4 +78,11 @@ test('a prompt is answered by its option key, never a blind Enter', async () => 
   const picker = menuOptions('❯ 1. Postgres\n     fast\n  2. SQLite\n  3. Type something.\n  4. Chat about this');
   assert.deepEqual(pickOption(picker, 'sqlite'), { key: '2', label: 'SQLite' });
   assert.equal(pickOption(picker, 'use duckdb instead').type, true);
+  // agy: the Write-in number opens a text field. Codex: its number submits "None of the above"
+  // bare, so the highlight is moved there and Tab opens notes (both verified live 2026-10-07).
+  const agy = menuOptions('> 1. Red\n  2. Blue\n  3. Write-in...');
+  assert.deepEqual(pickOption(agy, 'teal'), { key: '3', label: 'Write-in...', type: true });
+  const codex = menuOptions('    1. Red                Choose red.\n  › 2. Blue               Choose blue.\n    3. None of the above  Optionally, add details in notes (tab).');
+  assert.equal(pickOption(codex, 'red').key, '1');
+  assert.deepEqual(pickOption(codex, 'teal').keys, ['Down', 'Tab']);
 });

@@ -245,9 +245,12 @@ export async function openMenu(name, waiting) {
   return waiting || opts.some((o) => o.sel) ? opts : [];
 }
 
+// A question picker's free-text row: Claude "Type something", agy "Write-in...", Codex "None of the above".
+const FREE_ROW = /^(type something|write-in|none of the above)/i;
+
 // Which key answers a menu: a number, "esc", or the start of an option's label
 // ("yes" → "1. Yes", "no" → "3. No, and tell Claude…"). Any other text goes to the
-// picker's "Type something" row if it has one. Null = no safe key (never just press
+// picker's free-text row if it has one. Null = no safe key (never just press
 // Enter: that picks whatever is highlighted).
 export function pickOption(opts, answer) {
   const a = String(answer || '').trim().toLowerCase();
@@ -256,8 +259,15 @@ export function pickOption(opts, answer) {
     || opts.find((o) => o.label.toLowerCase() === a)
     || (a && opts.find((o) => o.label.toLowerCase().startsWith(a) && /^\W|^$/.test(o.label.slice(a.length))));
   if (hit) return { key: hit.n, label: hit.label };
-  const other = opts.find((o) => /^type something/i.test(o.label));
-  return other ? { key: other.n, label: other.label, type: true } : null;
+  const other = opts.find((o) => FREE_ROW.test(o.label));
+  if (!other) return null;
+  // Codex submits "None of the above" on its number key; the text goes in as notes (Tab) once
+  // the highlight is on that row. Claude's and agy's number keys open a text field.
+  if (/^none/i.test(other.label)) {
+    const d = opts.indexOf(other) - Math.max(0, opts.findIndex((o) => o.sel));
+    return { key: other.n, keys: [...Array(Math.abs(d)).fill(d < 0 ? 'Up' : 'Down'), 'Tab'], label: other.label, type: true };
+  }
+  return { key: other.n, label: other.label, type: true };
 }
 
 // Answer a managed session's prompt with the user's own words: a key press when a
@@ -268,17 +278,16 @@ export async function answerPrompt(name, answer, waiting) {
   if (!opts.length) { await sendText(name, answer); return { typed: true }; }
   const pick = pickOption(opts, answer);
   if (!pick) return { opts };
-  await tmux(['send-keys', '-t', name, pick.key]);
+  await tmux(['send-keys', '-t', name, ...(pick.keys || [pick.key])]);
   if (pick.type) { await sleep(400); await sendText(name, answer); }
   return pick;
 }
 
 // A relayed message (send_to_session) into a session that may be showing a menu. Enter on a
 // question picker picks its highlighted option and the text is lost, so a picker (it has a
-// free-text row: Claude "Type something", agy "Write-in...", Codex "None of the above") is
-// dismissed with Esc first, and the text arrives as the user's reply. Any other menu (a
-// permission dialog) is the user's to answer: nothing is sent and its options come back.
-const isPicker = (opts) => opts.some((o) => /^(type something|write-in|none of the above)/i.test(o.label));
+// free-text row) is dismissed with Esc first, and the text arrives as the user's reply. Any
+// other menu (a permission dialog) is the user's to answer: nothing is sent and its options come back.
+const isPicker = (opts) => opts.some((o) => FREE_ROW.test(o.label));
 // Claude and Codex close the whole picker on one Esc; agy skips one question per Esc.
 async function closePicker(name) {
   for (let i = 0, last; i < 8; i++) {
