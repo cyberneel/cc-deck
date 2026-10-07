@@ -13,7 +13,7 @@ import { buildGraph, buildThread, isSessionId, findTranscriptFile } from './grap
 import { listHistory, isExcludedProjectDir, transcriptMeta } from './history.js';
 import { summarize } from './handoff.js';
 import { addNote, pendingCounts, countNotes, readPending, readPendingMany, consumeNotesSeed, consumeNotesSeedMany } from './notes.js';
-import { sendText, listSessions, capturePane, answerPrompt, relayText } from './tmux.js';
+import { sendText, listSessions, capturePane, answerPrompt, relayText, openMenu, waitState } from './tmux.js';
 import { startOrQueue, queued } from './slots.js';
 import { PROVIDER_KINDS, DEFAULT_KIND, getProvider, providerAvailable } from './providers/index.js';
 import { getAgents, matchAgents, deckStatus } from './agents.js';
@@ -530,7 +530,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
       // Only the instruction was delivered — callers narrated "Sent to X" as the task being done.
       const who = `"${s.title || s.name}"`;
       try {
-        const r = await relayText(s.name, line, !!s.waitingFor);
+        const r = await relayText(s.name, line, waitState(s));
         const list = () => r.opts.map((o) => `${o.n}. ${o.label}`).join(' · ');
         if (r.stuck) return text(redact(`ERROR: ${who} is showing a question picker that didn't close, so nothing was sent. Options: ${list()}. The user needs to answer it in Deep Sessions.`));
         if (r.opts) return text(redact(`ERROR: ${who} is waiting on a choice only the user can make, so nothing was sent: ${list()}. Ask the user to answer it in Deep Sessions.`));
@@ -555,7 +555,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
       if (!s) return text(`ERROR: no live Deep Session matches "${session_id}". Live now: ${liveHint(sessions)}.`);
       const who = `"${s.title || s.name}"`;
       try {
-        const r = await answerPrompt(s.name, answer, !!s.waitingFor);
+        const r = await answerPrompt(s.name, answer, waitState(s));
         if (r.opts) return text(redact(`ERROR: ${who} is showing a choice, so nothing was sent. Answer with one of: ${r.opts.map((o) => `${o.n}. ${o.label}`).join(' · ')}, or esc.`));
         if (r.typed) return text(redact(`Typed the answer into ${who}.`));
         return text(redact(r.key === 'Escape' ? `Pressed Esc in ${who}.` : `Chose ${r.key}. ${r.label} in ${who}${r.type ? ' and typed the answer' : ''}.`));
@@ -577,6 +577,9 @@ export function createMcpServer({ sessionControl = false } = {}) {
       if (!s) return text(`ERROR: no live Deep Session matches "${session_id}". Live now: ${liveHint(sessions)}.`);
       if (!s.liveSessionId) return text(`ERROR: "${s.title || s.name}" has no running Claude to deliver to — resume it first (notes are delivered on resume anyway).`);
       try {
+        // Checked before the notes are consumed: a note isn't an answer, so a prompt keeps them pending.
+        const menu = await openMenu(s.name, waitState(s));
+        if (menu.length) return text(redact(`ERROR: "${s.title || s.name}" is showing a prompt (${menu.map((o) => `${o.n}. ${o.label}`).join(' · ')}), so the notes were kept for later. Ask the user to answer it in Deep Sessions first.`));
         const seed = await consumeNotesSeedMany([s.liveSessionId, s.resumedFrom]);
         if (!seed) return text(redact(`"${s.title || s.name}" has no pending notes.`));
         await sendText(s.name, seed);

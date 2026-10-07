@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { buildGraph, buildThread, isSessionId } from './graph.js';
-import { createSession, sendText, isManagedName, sessionExists } from './tmux.js';
+import { createSession, sendText, isManagedName, sessionExists, openMenu } from './tmux.js';
 
 const HANDOFF_DIR = join(homedir(), '.claude', 'cc-deck', 'handoffs');
 // claude lives alongside node (nvm bin); make sure a minimal systemd PATH finds it.
@@ -93,6 +93,18 @@ function seedNote(file) {
   return `I'm starting with context from one or more related sessions. Read this handoff file and use it to ground your work: ${file} — then confirm the goal and current state in one line.`;
 }
 
+// Typing into a menu would answer it (Enter picks the highlighted option), so a handoff for a
+// session showing one waits until the user has answered it.
+// ponytail: polls every 3s and drops the handoff after 30 min of the same menu; the file stays on disk.
+export async function sendWhenNoMenu(name, text, { every = 3000, ms = 30 * 60_000 } = {}) {
+  for (const end = Date.now() + ms; (await openMenu(name, null)).length;) {
+    if (Date.now() > end) return false;
+    await new Promise((r) => setTimeout(r, every));
+  }
+  await sendText(name, text);
+  return true;
+}
+
 // Build the handoff and deliver it to a destination.
 //  dest: 'new'      -> launch a new session (in targetDir, default source cwd) seeded with the context
 //        'running'  -> inject into an existing Polymux session (targetSession)
@@ -110,9 +122,9 @@ export async function runHandoff(opts) {
     const target = opts.targetSession;
     if (!isManagedName(target) || !(await sessionExists(target))) throw err(400, 'target session not found');
     buildHandoffFile(opts).then(
-      (built) => sendText(target, seedNote(built.file)),
-      (e) => sendText(target, `Polymux could not build the context handoff: ${e.message}`).catch(() => {}),
-    );
+      (built) => seedNote(built.file),
+      (e) => `Polymux could not build the context handoff: ${e.message}`,
+    ).then((t) => sendWhenNoMenu(target, t)).catch(() => {}); // the session closed meanwhile
     return { dest: 'running', name: target, pending: true };
   }
   // default: new session — create it now, seed it once the background build resolves.

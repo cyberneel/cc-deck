@@ -221,15 +221,28 @@ export async function sendText(name, text) {
 
 // The numbered choices of the prompt on screen (permission dialog, question picker):
 // the run that starts at the LAST "1." line, so a numbered list higher up in the
-// conversation doesn't count. [{ n: '1', label: 'Yes' }, ...]
+// conversation doesn't count. [{ n: '1', label: 'Yes', sel: true }, ...] — `sel` is the
+// highlighted row (❯ Claude, › Codex, > agy).
 export function menuOptions(screen) {
   const rows = String(screen || '').split('\n')
-    .map((l) => l.match(/^\s*(?:[❯›>]\s*)?(\d)\.\s+(.+?)\s*$/)).filter(Boolean);
-  const start = rows.map((m) => m[1]).lastIndexOf('1');
+    .map((l) => l.match(/^\s*([❯›>]\s*)?(\d)\.\s+(.+?)\s*$/)).filter(Boolean);
+  const start = rows.map((m) => m[2]).lastIndexOf('1');
   if (start < 0) return [];
   const out = [];
-  for (const m of rows.slice(start)) if (m[1] === String(out.length + 1)) out.push({ n: m[1], label: m[2] });
+  for (const m of rows.slice(start)) if (m[2] === String(out.length + 1)) out.push({ n: m[2], label: m[3], sel: !!m[1] });
   return out;
+}
+
+// Claude says whether it's waiting on the user; Codex and agy say nothing (null).
+export const waitState = (s) => (s.kind === 'claude' ? !!s.waitingFor : null);
+
+// The menu a session is showing, [] if none. With no waiting state (Codex, agy) a numbered
+// run with a highlighted row counts — their approvals highlight "Yes", so Enter approves.
+// ponytail: a past prompt echoed as "› 1. …" reads as a menu too; that fails safe (nothing typed).
+export async function openMenu(name, waiting) {
+  if (waiting === false) return [];
+  const opts = menuOptions(await capturePane(name, 0));
+  return waiting || opts.some((o) => o.sel) ? opts : [];
 }
 
 // Which key answers a menu: a number, "esc", or the start of an option's label
@@ -251,7 +264,7 @@ export function pickOption(opts, answer) {
 // menu is up (`waiting`), else typed in and submitted like sendText.
 export async function answerPrompt(name, answer, waiting) {
   assertManaged(name);
-  const opts = waiting ? menuOptions(await capturePane(name, 0)) : [];
+  const opts = await openMenu(name, waiting);
   if (!opts.length) { await sendText(name, answer); return { typed: true }; }
   const pick = pickOption(opts, answer);
   if (!pick) return { opts };
@@ -262,19 +275,27 @@ export async function answerPrompt(name, answer, waiting) {
 
 // A relayed message (send_to_session) into a session that may be showing a menu. Enter on a
 // question picker picks its highlighted option and the text is lost, so a picker (it has a
-// "Type something" row) is dismissed with Esc first — the CLI then waits for the user, and
-// the text arrives as their reply. Any other menu (a permission dialog) is the user's to
-// answer: nothing is sent and its options come back.
-const isPicker = (opts) => opts.some((o) => /^type something/i.test(o.label));
-export async function relayText(name, text, waiting) {
-  assertManaged(name);
-  const opts = waiting ? menuOptions(await capturePane(name, 0)) : [];
-  if (opts.length && !isPicker(opts)) return { opts };
-  if (opts.length) {
+// free-text row: Claude "Type something", agy "Write-in...", Codex "None of the above") is
+// dismissed with Esc first, and the text arrives as the user's reply. Any other menu (a
+// permission dialog) is the user's to answer: nothing is sent and its options come back.
+const isPicker = (opts) => opts.some((o) => /^(type something|write-in|none of the above)/i.test(o.label));
+// Claude and Codex close the whole picker on one Esc; agy skips one question per Esc.
+async function closePicker(name) {
+  for (let i = 0, last; i < 8; i++) {
     await tmux(['send-keys', '-t', name, 'Escape']);
     await sleep(500);
-    if (isPicker(menuOptions(await capturePane(name, 0)))) return { opts, stuck: true };
+    const now = await capturePane(name, 0);
+    if (!isPicker(menuOptions(now))) return true;
+    if (now === last) return false; // Esc changed nothing
+    last = now;
   }
+  return false;
+}
+export async function relayText(name, text, waiting) {
+  assertManaged(name);
+  const opts = await openMenu(name, waiting);
+  if (opts.length && !isPicker(opts)) return { opts };
+  if (opts.length && !(await closePicker(name))) return { opts, stuck: true };
   await sendText(name, text);
   return { dismissed: opts.length > 0 };
 }

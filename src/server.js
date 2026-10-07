@@ -23,6 +23,8 @@ import {
   sessionDir,
   resolveAllowedDir,
   sendText,
+  openMenu,
+  waitState,
 } from './tmux.js';
 import { attachHandler } from './pty.js';
 import { initServer } from './tmux.js';
@@ -396,6 +398,8 @@ app.post('/api/sessions/:name/apply-notes', async (req, reply) => {
   try {
     const s = (await enrichedSessions()).find((x) => x.name === req.params.name);
     if (!s?.liveSessionId) return reply.code(400).send({ error: 'No live Claude session to apply notes to' });
+    // Before consuming: typing the notes into a prompt would answer it, so they stay pending.
+    if ((await openMenu(s.name, waitState(s))).length) return reply.code(409).send({ error: 'The session is showing a prompt. Answer it first; the notes are kept.' });
     const seed = await consumeNotesSeedMany(lineageIds(s));
     if (!seed) return { applied: 0 };
     await sendText(req.params.name, seed);
