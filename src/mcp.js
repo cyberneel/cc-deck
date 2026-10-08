@@ -188,29 +188,68 @@ async function readHead(file, n) {
   } finally { await fh.close(); }
 }
 
-async function searchSessions(query, limit) {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+// The title the user sees on the deck, by transcript id (RUNNING sessions only).
+async function deckTitles() {
+  const m = new Map();
+  for (const s of await liveSessions()) for (const id of [s.liveSessionId, s.resumedFrom]) if (id && s.title) m.set(id, s.title);
+  return m;
+}
+
+// Which of `cands` ({ title, has: Set of query words found in the transcript, mtime }) a search
+// for `words` returns: the ones holding the MOST of the words (title or transcript), if that's at
+// least half of them. Title hits first, then newest. A caller describes a session in its own
+// words ("RTK base station survey-in"), so demanding every word found nothing.
+export function rankSessions(words, cands) {
+  // `w` starts a word of the title: "day" is not in "Friday".
+  const named = (t, w) => {
+    for (let i = t.indexOf(w); i >= 0; i = t.indexOf(w, i + 1)) if (i === 0 || !/[a-z0-9]/.test(t[i - 1])) return true;
+    return false;
+  };
+  const scored = cands.map((c) => {
+    const t = (c.title || '').toLowerCase();
+    const inTitle = words.filter((w) => named(t, w));
+    return { ...c, inTitle: inTitle.length, hit: words.filter((w) => inTitle.includes(w) || c.has.has(w)).length };
+  });
+  const best = Math.max(0, ...scored.map((c) => c.hit));
+  if (best * 2 < words.length) return [];
+  return scored.filter((c) => c.hit === best).sort((a, b) => b.inTitle - a.inTitle || b.mtime - a.mtime);
+}
+
+const TITLE_POOL = 40; // candidates whose own transcript title is read for ranking
+
+export async function searchSessions(query, limit) {
+  const words = [...new Set(query.toLowerCase().split(/\s+/).filter(Boolean))].slice(0, 8);
   if (!words.length) return [];
-  let files = await allTranscripts();
-  const hits = await rgFiles(words.reduce((a, b) => (b.length > a.length ? b : a)));
-  if (hits) files = files.filter((f) => hits.has(f.file));
-  const hidden = await proactiveSet(); // Friday-made sessions don't clutter the user's search
-  const results = [];
+  // Sessions Friday started are searched too: they're the ones the user asks it about by name.
+  const [files, deck, ...sets] = await Promise.all([allTranscripts(), deckTitles(), ...words.map(rgFiles)]);
+  const rg = sets.every(Boolean);
+  const heads = new Map(); // file → first READ_CAP bytes, read at most once
+  const head = async (f) => {
+    if (!heads.has(f.file)) heads.set(f.file, await readHead(f.file, READ_CAP).catch(() => ''));
+    return heads.get(f.file);
+  };
+  const cands = [];
   for (const f of files) {
-    if (results.length >= limit) break;
-    if (hidden.has(f.id)) continue;
-    let text;
-    try { text = await readHead(f.file, READ_CAP); } catch { continue; }
-    if (!words.every((w) => text.toLowerCase().includes(w))) continue; // cheap pre-filter
-    const meta = parseTranscript(text);
+    // ripgrep sees the whole transcript; without it, the first READ_CAP bytes (the old scan).
+    const lc = rg ? '' : (await head(f)).toLowerCase();
+    const has = new Set(words.filter((w, i) => (rg ? sets[i].has(f.file) : lc.includes(w))));
+    cands.push({ ...f, has, title: deck.get(f.id) || '' });
+  }
+  // ponytail: a past session's own title is read for the TITLE_POOL best only (deck titles
+  // count for all); rank every title if an old, well-named session ever loses to newer noise.
+  const pool = rankSessions(words, cands).slice(0, TITLE_POOL);
+  for (const c of pool) {
+    if (!c.title) c.title = (await transcriptMeta(c.file, { mtimeMs: c.mtime, size: c.size }).catch(() => ({}))).title || '';
+  }
+  const results = [];
+  for (const c of rankSessions(words, pool).slice(0, limit)) {
+    const meta = parseTranscript(await head(c));
     const hay = meta.body.toLowerCase();
-    const idx = hay.indexOf(words[0]);
-    if (idx === -1 && !words.every((w) => meta.title.toLowerCase().includes(w))) continue; // matched only in JSON noise
-    const at = idx === -1 ? 0 : idx;
+    const at = words.map((w) => hay.indexOf(w)).find((i) => i >= 0) || 0;
     const snippet = redact(meta.body.slice(Math.max(0, at - 140), at + 220).replace(/\s+/g, ' ').trim());
     results.push({
-      sessionId: f.id, title: redact(meta.title), cwd: meta.cwd, gitBranch: meta.gitBranch,
-      lastModified: new Date(f.mtime).toISOString(), snippet,
+      sessionId: c.id, title: redact(c.title || meta.title), cwd: meta.cwd, gitBranch: meta.gitBranch,
+      lastModified: new Date(c.mtime).toISOString(), snippet,
     });
   }
   return results;
@@ -301,11 +340,13 @@ export function createMcpServer({ sessionControl = false } = {}) {
     inputSchema: { limit: z.number().int().min(1).max(40).optional().describe('How many (default 15).') },
   }, async ({ limit }) => {
     const { sessions } = await listHistory();
-    const hidden = await proactiveSet(); // hide Friday-made sessions from "what have I worked on"
-    const top = sessions.filter((s) => !hidden.has(s.sessionId)).slice(0, limit || 15);
+    // Friday-made sessions stay out of "what have I worked on", except the ones open on the
+    // deck: the user sees those, and leaving them out read as Friday forgetting them.
+    const [hidden, deck] = await Promise.all([proactiveSet(), deckTitles()]);
+    const top = sessions.filter((s) => deck.has(s.sessionId) || !hidden.has(s.sessionId)).slice(0, limit || 15);
     if (!top.length) return text('No past Deep Sessions found.');
     return text(top.map((s, i) =>
-      `${i + 1}. ${redact(s.title)}\n   sessionId: ${s.sessionId}\n   dir: ${s.cwd || '?'}${s.gitBranch ? ' · ' + s.gitBranch : ''} · ${new Date(s.lastModified).toISOString().slice(0, 10)}`).join('\n\n'));
+      `${i + 1}. ${redact(deck.get(s.sessionId) || s.title)}\n   sessionId: ${s.sessionId}\n   dir: ${s.cwd || '?'}${s.gitBranch ? ' · ' + s.gitBranch : ''} · ${new Date(s.lastModified).toISOString().slice(0, 10)}`).join('\n\n'));
   });
 
   server.registerTool('get_session_context', {
