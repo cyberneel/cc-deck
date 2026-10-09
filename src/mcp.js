@@ -317,7 +317,8 @@ async function getContext(sessionId, format, maxChars, allowStale = false) {
 
 const text = (t) => ({ content: [{ type: 'text', text: t }] });
 
-export function createMcpServer({ sessionControl = false } = {}) {
+// `caller`: the Polymux session (tmux name) on the other end, '' for an outside chat or Friday.
+export function createMcpServer({ sessionControl = false, caller = '' } = {}) {
   const server = new McpServer({ name: 'polymux', version: '1.0.0' });
 
   server.registerTool('search_sessions', {
@@ -382,7 +383,9 @@ export function createMcpServer({ sessionControl = false } = {}) {
     const arg = String(session_id || '').trim();
     const id = (await resolveTranscriptId(arg)) || (ANY_ID_RE.test(arg) ? arg : null);
     if (!id) return text(`No Deep Session matches "${session_id}". Pass a sessionId (from search_sessions / get_session_context / list_sessions) or an exact Deep Session title.`);
-    try { await addNote(id, summary); }
+    // Stamped with the session that wrote it, so whoever is driving knows A left this for B.
+    const me = caller && (await liveSessions()).find((x) => x.name === caller);
+    try { await addNote(id, summary, me ? `the Deep Session “${me.title || me.name}”` : undefined, me ? me.name : ''); }
     catch (e) { return text(`Could not save: ${e.message}`); }
     return text('Saved. This summary will surface in that Deep Session the next time the user opens or resumes it.');
   });
@@ -425,7 +428,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
 
   server.registerTool('pending_notes', {
     title: "Read a Deep Session's undelivered notes",
-    description: "The notes saved to a Deep Session (save_session_summary) that it hasn't received yet — they're delivered when the user resumes it, or right away with apply_notes. Returns JSON [{ id, savedAt, text }], newest first; [] means none pending.",
+    description: "The notes saved to a Deep Session (save_session_summary) that it hasn't received yet — they're delivered when the user resumes it, or right away with apply_notes. Returns JSON [{ id, savedAt, from, text }], newest first; [] means none pending. `from` is the name (as in list_sessions) of the Deep Session that wrote the note, '' when it came from outside one.",
     inputSchema: {
       session_id: z.string().describe("A Claude session id, the Deep Session's name (from list_sessions), or its title."),
     },
@@ -437,7 +440,7 @@ export function createMcpServer({ sessionControl = false } = {}) {
     const id = s ? null : await resolveTranscriptId(val);
     if (!s && !id) return text(`No Deep Session matches "${session_id}". Live now: ${liveHint(sessions)}.`);
     const notes = s ? await readPendingMany([s.liveSessionId, s.resumedFrom]) : await readPending(id);
-    return text(redact(JSON.stringify(notes.map(({ id, savedAt, text: t }) => ({ id, savedAt, text: t })), null, 2)));
+    return text(redact(JSON.stringify(notes.map(({ id, savedAt, from, text: t }) => ({ id, savedAt, from, text: t })), null, 2)));
   });
 
   // Shared-browser broker: a visible lock registry over the one logged-in browser,

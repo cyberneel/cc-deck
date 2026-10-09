@@ -687,7 +687,9 @@ app.post('/mcp', async (req, reply) => {
     entry.seen = Date.now();
     transport = entry.transport;
   } else if (!sid && isInit) {
-    const server = createMcpServer({ sessionControl: mcpIsStatic(req) });
+    // Which Polymux session is calling, by its own say-so (a header its launch config sets).
+    const caller = /^[\w.-]{1,64}$/.test(req.headers['x-polymux-session'] || '') ? req.headers['x-polymux-session'] : '';
+    const server = createMcpServer({ sessionControl: mcpIsStatic(req), caller });
     transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (id) => mcpSessions.set(id, { server, transport, seen: Date.now(), streams: 0 }),

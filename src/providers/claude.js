@@ -55,7 +55,9 @@ export const claude = {
     const nudges = [];
     const ensureDir = () => mkdir(join(homedir(), '.claude', 'cc-deck'), { recursive: true });
     if (config.sessionMcp && config.mcpTokenReadonly) {
-      const cfg = { mcpServers: { 'polymux': { type: 'http', url: `http://127.0.0.1:${config.port}/mcp`, headers: { Authorization: `Bearer ${config.mcpTokenReadonly}` } } } };
+      // One file for every session: Claude Code fills ${POLYMUX_SESSION:-} from the session's own env
+      // (set on its launch line), so a note it saves says which session wrote it.
+      const cfg = { mcpServers: { 'polymux': { type: 'http', url: `http://127.0.0.1:${config.port}/mcp`, headers: { Authorization: `Bearer ${config.mcpTokenReadonly}`, 'X-Polymux-Session': '${POLYMUX_SESSION:-}' } } } };
       try { await ensureDir(); await writeFile(SESSION_MCP_PATH, JSON.stringify(cfg)); flags += ` --mcp-config ${SESSION_MCP_PATH}`; nudges.push(SESSION_NUDGE); } catch { /* skip Polymux MCP */ }
     }
     if (config.sessionBrowser || browser) {

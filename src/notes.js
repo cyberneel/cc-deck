@@ -23,8 +23,11 @@ const SESSION_ID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]
 // Restricted so a note id from the client can't escape NOTES_DIR.
 const NOTE_TOKEN_RE = /^[A-Za-z0-9]{1,32}$/;
 
-const noteBody = (summary, source) =>
-  `# External update from ${source}\n\n_Saved via Polymux MCP. This summarizes work that happened outside this session._\n\n${summary}\n`;
+// `from`: the Polymux session (tmux name) that wrote the note. It sits on line 2, above anything
+// the author wrote, and is only ever read from there, so a summary can't claim another author.
+const FROM_RE = /^<!-- polymux-from: ([\w.-]{1,64}) -->$/;
+const noteBody = (summary, source, from) =>
+  `# External update from ${source.replace(/[\r\n]+/g, ' ')}\n${from ? `<!-- polymux-from: ${from} -->\n` : ''}\n_Saved via Polymux MCP. This summarizes work that happened outside this session._\n\n${summary}\n`;
 
 // A buggy caller sometimes passes a TRUNCATED id (a UUID's first segment, e.g.
 // "0417a662"). Rather than orphan it (invisible) or hard-reject it (lost), expand
@@ -40,7 +43,7 @@ async function expandSessionId(id) {
   return hits.length === 1 ? hits[0] : null;
 }
 
-export async function addNote(sessionId, summary, source = 'an outside Claude chat') {
+export async function addNote(sessionId, summary, source = 'an outside Claude chat', from = '') {
   let id = sessionId;
   if (!SESSION_ID_RE.test(id)) {
     id = await expandSessionId(String(sessionId || '')); // recover a truncated id if unambiguous
@@ -48,7 +51,7 @@ export async function addNote(sessionId, summary, source = 'an outside Claude ch
   }
   await mkdir(NOTES_DIR, { recursive: true });
   const file = join(NOTES_DIR, `${id}~${Date.now().toString(36)}.md`);
-  await writeFile(file, noteBody(summary, source));
+  await writeFile(file, noteBody(summary, source, from));
   return file;
 }
 
@@ -104,7 +107,7 @@ export async function readPending(sessionId) {
     let savedAt = null;
     if (Number.isFinite(ms) && ms > 0 && ms < MAX_DATE_MS) savedAt = new Date(ms).toISOString();
     else { try { savedAt = (await stat(f)).mtime.toISOString(); } catch { /* leave null */ } }
-    out.push({ sessionId, id, savedAt, text });
+    out.push({ sessionId, id, savedAt, from: (text.split('\n', 2)[1] || '').match(FROM_RE)?.[1] || '', text });
   }
   out.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
   return out;
