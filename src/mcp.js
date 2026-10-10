@@ -10,7 +10,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { config } from './config.js';
 import { buildGraph, buildThread, isSessionId, findTranscriptFile } from './graph.js';
-import { listHistory, isExcludedProjectDir, transcriptMeta } from './history.js';
+import { listHistory, isExcludedProjectDir, isHeadless, transcriptMeta } from './history.js';
 import { summarize } from './handoff.js';
 import { addNote, pendingCounts, countNotes, readPending, readPendingMany, consumeNotesSeed, consumeNotesSeedMany } from './notes.js';
 import { sendText, listSessions, capturePane, answerPrompt, relayText, openMenu, waitState } from './tmux.js';
@@ -160,7 +160,7 @@ async function allTranscripts() {
       if (!isSessionId(id)) continue;
       const file = join(PROJECTS_DIR, d.name, n);
       const s = await stat(file).catch(() => null);
-      if (s && s.isFile() && s.size >= 200) out.push({ id, file, mtime: s.mtimeMs, size: s.size });
+      if (s && s.isFile() && s.size >= 200 && !(await isHeadless(file, s))) out.push({ id, file, mtime: s.mtimeMs, size: s.size });
     }
   }
   out.sort((a, b) => b.mtime - a.mtime);

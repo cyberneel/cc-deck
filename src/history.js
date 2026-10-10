@@ -90,6 +90,33 @@ function readHead(file) {
   });
 }
 
+// `claude -p` runs (eval judges, scripts, Friday's harnesses) save transcripts too. They're
+// one-shot, not sessions anyone resumes, and they outnumber real ones ~6:1 — so they're
+// skipped before the result cap (else they push real sessions out, and a search can
+// "resume" a judge run whose prompt happens to name the session you meant).
+const headlessCache = new Map(); // file -> { key, headless }
+export function isHeadless(file, s) {
+  const key = `${s.mtimeMs}:${s.size}`;
+  const c = headlessCache.get(file);
+  if (c && c.key === key) return c.headless;
+  return new Promise((resolve) => {
+    let lines = 0, done = false;
+    const input = createReadStream(file, { encoding: 'utf8' });
+    const rl = createInterface({ input, crlfDelay: Infinity });
+    const finish = (v) => {
+      if (done) return;
+      done = true; headlessCache.set(file, { key, headless: v }); rl.close(); input.destroy(); resolve(v);
+    };
+    rl.on('line', (line) => {
+      const m = line.match(/"entrypoint":"([^"]+)"/); // sdk-cli / sdk-ts / sdk-py; interactive = cli
+      if (m) finish(m[1].startsWith('sdk-'));
+      else if (++lines > 60) finish(false);
+    });
+    rl.on('close', () => finish(false));
+    rl.on('error', () => finish(false));
+  });
+}
+
 const metaCache = new Map(); // file -> { key, meta }
 
 // Cheap cached meta (cwd, branch, title, mode) for one transcript: head + tail only,
@@ -169,7 +196,7 @@ export async function listHistory() {
       const full = join(dir, name);
       let s;
       try { s = await stat(full); } catch { continue; }
-      if (s.size < 200) continue;
+      if (s.size < 200 || await isHeadless(full, s)) continue;
       files.push({ id, file: full, mtime: s.mtimeMs, size: s.size });
     }
   }
