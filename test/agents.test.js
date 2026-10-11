@@ -86,3 +86,34 @@ test('a prompt is answered by its option key, never a blind Enter', async () => 
   assert.equal(pickOption(codex, 'red').key, '1');
   assert.deepEqual(pickOption(codex, 'teal').keys, ['Down', 'Tab']);
 });
+
+test('a Codex/agy session gets its id, busy/idle and conversation from the transcript its CLI holds open', async (t) => {
+  const { openSync, appendFileSync, readFileSync } = await import('node:fs');
+  const { codex } = await import('../src/providers/codex.js');
+  const { agy } = await import('../src/providers/agy.js');
+  const id = '01a113cc-338e-7402-b51a-bb6c879b5a8c';
+  const dir = join(mkdtempSync(join(tmpdir(), 'ccdeck-cli-')), 'sessions', '2026', '10', '11');
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `rollout-2026-10-11T08-00-00-${id}.jsonl`);
+  const line = (o) => JSON.stringify(o) + '\n';
+  const msg = (role, text) => line({ type: 'response_item', payload: { type: 'message', role, content: [{ type: 'input_text', text }] } });
+  writeFileSync(file, line({ type: 'session_meta', payload: { id } }) + line({ type: 'event_msg', payload: { type: 'task_started' } })
+    + msg('user', '<environment_context>cwd</environment_context>') + msg('user', 'check the syllabi'));
+  const kid = spawn('sleep', ['30'], { stdio: [openSync(file, 'r'), 'ignore', 'ignore'] }); // stands in for codex holding its rollout
+  t.after(() => kid.kill());
+  await new Promise((r) => kid.once('spawn', r));
+  const s = () => matchAgents([{ name: 'ccdeck-c', kind: 'codex', dir: '/w', panePid: process.pid, paneCommand: 'node' }], [])[0];
+  assert.equal(s().liveSessionId, id);
+  assert.equal(deckStatus(s()), 'running');
+  appendFileSync(file, msg('assistant', 'All three are due Nov 3.') + line({ type: 'event_msg', payload: { type: 'task_complete' } }));
+  assert.equal(deckStatus(s()), 'idle');
+  assert.deepEqual(codex.messages(readFileSync(file, 'utf8').split('\n')), [{ role: 'user', text: 'check the syllabi' }, { role: 'assistant', text: 'All three are due Nov 3.' }]);
+  assert.equal(deckStatus({ kind: 'codex', paneCommand: 'bash' }), 'done', 'no transcript held open = the CLI exited');
+
+  const steps = [{ type: 'USER_INPUT', content: '<USER_REQUEST>\nhi\n</USER_REQUEST>' }, { type: 'PLANNER_RESPONSE', tool_calls: [{}] }, { type: 'GENERIC', content: 'ok' }];
+  const L = (a) => a.map((x) => JSON.stringify(x));
+  assert.equal(agy.turnEnded(L(steps)), false);
+  assert.equal(agy.turnEnded(L([...steps, { type: 'PLANNER_RESPONSE', content: 'Hello.' }])), true);
+  assert.deepEqual(agy.messages(L([...steps, { type: 'PLANNER_RESPONSE', content: 'Hello.' }])), [{ role: 'user', text: 'hi' }, { role: 'assistant', text: 'Hello.' }]);
+  assert.equal(agy.transcriptOf(`/h/.gemini/antigravity-cli/conversations/${id}.db-wal`).file, `/h/.gemini/antigravity-cli/brain/${id}/.system_generated/logs/transcript.jsonl`);
+});

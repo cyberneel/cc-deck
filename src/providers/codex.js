@@ -10,6 +10,7 @@ import { config } from '../config.js';
 import { enabled as turnTelemetry, hookCurl } from '../turn-telemetry.js';
 
 const UUID_RE = /^[0-9a-fA-F-]{36}$/;
+const rec = (l) => { try { return JSON.parse(l); } catch { return null; } };
 function badId() { const e = new Error('Invalid resume session id'); e.statusCode = 400; return e; }
 
 export const codex = {
@@ -29,6 +30,29 @@ export const codex = {
     }
     if (config.codexApproval) args += ` -a ${config.codexApproval}`; // approval policy = its permission mode
     return args;
+  },
+
+  // Live status + conversation (agents.js): the rollout the running codex holds open,
+  // ~/.codex/sessions/YYYY/MM/DD/rollout-<ts>-<uuid>.jsonl; the uuid is what `codex resume` takes.
+  transcriptOf(path) {
+    const m = /\/sessions\/.+\/rollout-.+-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/.exec(path);
+    return m && { id: m[1], file: path };
+  },
+  // true once the last turn completed or was interrupted, false mid-turn, null if none in view.
+  turnEnded(lines) {
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const d = rec(lines[i]);
+      if (d?.type !== 'event_msg') continue;
+      if (d.payload?.type === 'task_started') return false;
+      if (d.payload?.type === 'task_complete' || d.payload?.type === 'turn_aborted') return true;
+    }
+    return null;
+  },
+  // What was said, minus the context codex injects as user messages (<environment_context>, AGENTS.md).
+  messages(lines) {
+    return lines.map(rec).filter((d) => d?.type === 'response_item' && d.payload?.type === 'message' && /^(user|assistant)$/.test(d.payload.role))
+      .map((d) => ({ role: d.payload.role, text: (d.payload.content || []).map((c) => c.text || '').join('').trim() }))
+      .filter((m) => m.text && !(m.role === 'user' && /^(<[a-z_]+>|# AGENTS\.md)/.test(m.text)));
   },
 
   // Wire the read-only Polymux MCP as a streamable-HTTP server via `-c` config

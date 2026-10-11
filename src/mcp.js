@@ -261,13 +261,22 @@ const savedSummaries = readFile(SUMMARY_FILE, 'utf8').then(JSON.parse).catch(() 
 const inflightSummaries = new Map(); // same key → Promise, so concurrent asks share one claude -p
 
 async function getContext(sessionId, format, maxChars, allowStale = false) {
-  const g = await buildGraph(sessionId); // throws 404 if not found
-  const head = g.nodes.find((n) => n.current) || g.nodes[g.nodes.length - 1];
-  if (!head) return `Deep Session ${sessionId} has no conversation content.`;
-  const { messages } = await buildThread(sessionId, head.id);
   // The deck title ("lhrdash → lhre-2027 prod migration") is the name the user knows; the
   // transcript's own title is often just the first prompt. Folder = what a voice can say.
   const live = (await liveSessions()).find((x) => x.liveSessionId === sessionId || x.resumedFrom === sessionId);
+  let g, head, messages;
+  if (live?.transcript) { // a running Codex/agy session: its own transcript (agents.js)
+    messages = getProvider(live.kind).messages((await readFile(live.transcript, 'utf8')).split('\n'));
+    g = { cwd: live.dir, title: live.title };
+    head = { id: `m${messages.length}` }; // keys the summary cache: a new message → a fresh summary
+  } else {
+    g = await buildGraph(sessionId); // throws 404 if not found
+    head = g.nodes.find((n) => n.current) || g.nodes[g.nodes.length - 1];
+    if (!head) return `Deep Session ${sessionId} has no conversation content.`;
+    ({ messages } = await buildThread(sessionId, head.id));
+  }
+  // Friday's relay reads the last "## Claude" or "## Assistant" block.
+  const who = live?.transcript ? 'Assistant' : 'Claude';
   const folder = g.cwd ? basename(g.cwd) : '';
   const header = `# ${redact((live && live.title) || g.title)}\n_folder: ${folder || '?'} (${g.cwd || '?'})${g.gitBranch ? ' · branch: ' + g.gitBranch : ''} · ${messages.length} messages_\n\n`;
   if (format === 'summary') {
@@ -288,7 +297,7 @@ async function getContext(sessionId, format, maxChars, allowStale = false) {
     if (!p) {
       // Tail, not head: a long session's current state is at the end (Friday's episodic memory
       // was getting summaries of only the opening of multi-day sessions).
-      const src = redact(messages.map((m) => `${m.role === 'user' ? 'User' : 'Claude'}: ${m.text}`).join('\n\n').slice(-120_000));
+      const src = redact(messages.map((m) => `${m.role === 'user' ? 'User' : who}: ${m.text}`).join('\n\n').slice(-120_000));
       p = summarize(src).then(redact).then(async (s) => {
         saved[key] = s;
         const keys = Object.keys(saved); // insertion order → oldest first
@@ -304,7 +313,7 @@ async function getContext(sessionId, format, maxChars, allowStale = false) {
     if (stale) { p.catch(() => {}); return header.replace(/_\n\n$/, ' · summary may lag the newest messages_\n\n') + stale; }
     return header + await p;
   }
-  const body = redact(messages.map((m) => `## ${m.role === 'user' ? 'User' : 'Claude'}\n${m.text}`).join('\n\n'));
+  const body = redact(messages.map((m) => `## ${m.role === 'user' ? 'User' : who}\n${m.text}`).join('\n\n'));
   // Keep the END, not the start: the latest messages (the deliverable / current
   // state) are what a caller wants; the old opening is the disposable part. Marker
   // deliberately avoids the word "truncated" so Friday's relay (which falls back to
@@ -398,7 +407,7 @@ export function createMcpServer({ sessionControl = false, caller = '' } = {}) {
       '{ session_id, name, title, dir, status, needs_input, waiting_for, attached, last_activity, pending_notes }. ' +
       '`pending_notes` counts saved notes (save_session_summary) not yet delivered — read them with pending_notes, deliver with apply_notes. ' +
       "`status` is one of: running (Claude is working), waiting_input (blocked on the user — a prompt/permission/question), idle (at its prompt, not working), done (Claude exited, the shell remains), queued (the deck is at its session limit; it starts when a slot opens). " +
-      '`name` is stable for the Deep Session\'s lifetime; `session_id` is the live Claude id (changes across resume/fork) or null if Claude isn\'t running.',
+      '`name` is stable for the Deep Session\'s lifetime; `session_id` is the live conversation id of its CLI (Claude, Codex or agy; changes across resume/fork) or null if the CLI isn\'t running.',
     inputSchema: {},
   }, async () => {
     const sessions = await listSessions();
@@ -415,7 +424,9 @@ export function createMcpServer({ sessionControl = false, caller = '' } = {}) {
         needs_input: status === 'waiting_input',
         waiting_for: s.waitingFor || null,
         attached: s.attached,
-        last_activity: s.lastActivity ? new Date(s.lastActivity).toISOString() : null,
+        // Output too: tmux's session activity moves only on a client's keys, so a session Friday
+        // seeded looked untouched until the user opened it, and its finished reply never relayed.
+        last_activity: s.lastActivity || s.outputAt ? new Date(Math.max(s.lastActivity || 0, s.outputAt || 0)).toISOString() : null,
         pending_notes: countNotes(notes, [s.liveSessionId, s.resumedFrom]),
       };
     });

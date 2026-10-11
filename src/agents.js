@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dirname, join } from 'node:path';
-import { readFileSync, openSync, readSync, fstatSync, closeSync } from 'node:fs';
+import { readFileSync, openSync, readSync, fstatSync, closeSync, readdirSync, readlinkSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { swr } from './swr.js';
+import { getProvider } from './providers/index.js';
 
 const exec = promisify(execFile);
 
@@ -45,14 +46,46 @@ export function turnEnded(lines) {
 // ponytail: reads the last 32KB per busy session per poll; cache on mtime if that ever shows up.
 function busyInBackground(a) {
   if (a?.status !== 'busy' || !a.cwd || !a.sessionId) return false;
-  const file = join(homedir(), '.claude', 'projects', a.cwd.replace(/[^a-zA-Z0-9]/g, '-'), `${a.sessionId}.jsonl`);
+  const t = tail(join(homedir(), '.claude', 'projects', a.cwd.replace(/[^a-zA-Z0-9]/g, '-'), `${a.sessionId}.jsonl`));
+  return !!t && turnEnded(t.lines);
+}
+// A file's last 32KB as lines; `whole` when that is all of it.
+function tail(file) {
   let fd;
   try {
     fd = openSync(file, 'r');
     const size = fstatSync(fd).size, len = Math.min(size, 32 * 1024), buf = Buffer.alloc(len);
     readSync(fd, buf, 0, len, size - len);
-    return turnEnded(buf.toString('utf8').split('\n'));
-  } catch { return false; } finally { if (fd !== undefined) closeSync(fd); }
+    return { lines: buf.toString('utf8').split('\n'), whole: len === size };
+  } catch { return null; } finally { if (fd !== undefined) closeSync(fd); }
+}
+const descendants = (pid) => childPids(pid).flatMap((c) => [c, ...descendants(c)]);
+// Codex/agy aren't in `claude agents`; their own transcript stands in. The provider spots it among
+// the files the pane's processes hold open (exact even with several sessions in one dir); newest
+// wins if they hold more than one. Its end says busy or idle, and its id is what resume takes.
+export function cliTranscript(s) {
+  const p = getProvider(s.kind);
+  let best = null;
+  for (const pid of p.transcriptOf && s.panePid ? descendants(s.panePid) : []) {
+    let fds;
+    try { fds = readdirSync(`/proc/${pid}/fd`); } catch { continue; }
+    for (const fd of fds) {
+      let hit;
+      try { hit = p.transcriptOf(readlinkSync(`/proc/${pid}/fd/${fd}`)); if (hit) hit.mtime = statSync(hit.file).mtimeMs; } catch { continue; }
+      if (hit && (!best || hit.mtime > best.mtime)) best = hit;
+    }
+  }
+  return best;
+}
+// ponytail: no waiting_input for codex/agy (an approval prompt reads as running, so nothing relays
+// early); add it from their menu screens if Friday needs to answer them.
+function assignCli(s) {
+  const t = cliTranscript(s);
+  const tl = t && tail(t.file);
+  const ended = tl ? getProvider(s.kind).turnEnded(tl.lines) : null;
+  // No turn marker in the last 32KB: a long turn's output, unless that is the whole file (no turn yet).
+  const busy = ended === null ? !!tl && !tl.whole : !ended;
+  Object.assign(s, { liveSessionId: t?.id || null, claudeStatus: t ? (busy ? 'busy' : 'idle') : null, waitingFor: null, background: false, transcript: t?.file || null });
 }
 // The deck status Friday sees (list_sessions, reach-emit).
 export function deckStatus(s) {
@@ -100,6 +133,7 @@ export function matchAgents(sessions, all) {
   const assign = (s, a) => { s.liveSessionId = a?.sessionId || null; s.claudeStatus = a?.status || null; s.waitingFor = a?.waitingFor || null; s.background = busyInBackground(a); };
   const pending = [];
   for (const s of sessions) {
+    if (s.kind && s.kind !== 'claude') { assignCli(s); continue; } // never borrows a Claude agent by cwd
     const kids = s.panePid ? childPids(s.panePid) : [];
     let a = take((x) => kids.includes(x.pid)) || (s.resumedFrom && take((x) => x.sessionId === s.resumedFrom));
     const reg = !a && kids.map(registry).find((r) => r?.parkedJobId);

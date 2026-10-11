@@ -40,7 +40,32 @@ export const agy = {
 
   // MCP is registered globally (registerAgyMcp), not per launch. Nothing to append.
   async wireFlags() { return ''; },
+
+  // Live status + conversation (agents.js). The running agy holds its conversation open
+  // (antigravity-cli/conversations/<id>.db, or a file under brain/<id>/); the readable log of
+  // it is brain/<id>/.system_generated/logs/transcript.jsonl, one line per step.
+  // ponytail: which of those files agy keeps open is unverified on a live agy (none ran here).
+  transcriptOf(path) {
+    const m = /^(.*\/antigravity-cli)\/(?:conversations\/([^/]+)\.db|brain\/([^/]+)\/)/.exec(path);
+    const id = m && (m[2] || m[3]);
+    return id && ID_RE.test(id) ? { id, file: join(m[1], 'brain', id, '.system_generated', 'logs', 'transcript.jsonl') } : null;
+  },
+  // A turn ends on a model response that calls no tool; anything after it means a new one started.
+  turnEnded(lines) {
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const d = rec(lines[i]);
+      if (d) return d.type === 'PLANNER_RESPONSE' && !d.tool_calls?.length;
+    }
+    return null;
+  },
+  messages(lines) {
+    return lines.map(rec).filter((d) => d?.content && (d.type === 'USER_INPUT' || d.type === 'PLANNER_RESPONSE'))
+      .map((d) => d.type === 'USER_INPUT'
+        ? { role: 'user', text: (/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/.exec(d.content)?.[1] ?? d.content).trim() }
+        : { role: 'assistant', text: d.content.trim() });
+  },
 };
+const rec = (l) => { try { return JSON.parse(l); } catch { return null; } };
 
 // Register (idempotently) the read-only Polymux MCP with agy, so every agy session
 // gets the handoff-aware toolset. agy has no per-launch MCP flag, so this persists

@@ -17,8 +17,8 @@ let queue = []; // [{ name, at, args }], oldest first
 let draining = false;
 
 // Idle = the CLI exited (the pane is back at its shell) or Claude sits at its prompt.
-// Live status is only known for Claude, so a Codex/agy session never looks idle.
-const isIdle = (s) => /^-?(ba|z|da|fi)?sh$/.test(s.paneCommand) || (s.claudeStatus === 'idle' && !s.waitingFor);
+// A Codex/agy session at its prompt is never closed: History resumes only Claude conversations.
+const isIdle = (s) => /^-?(ba|z|da|fi)?sh$/.test(s.paneCommand) || ((!s.kind || s.kind === 'claude') && s.claudeStatus === 'idle' && !s.waitingFor);
 
 // The session to close for a slot: one Friday started, nobody attached, idle for idleMs
 // (Friday polls a session every 60s to relay its reply, so it gets to read it first).
