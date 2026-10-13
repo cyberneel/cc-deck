@@ -33,7 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends tmux git ripgre
     # the binary. Download-to-file (NOT `curl | bash`, whose pipeline masks a failed
     # fetch), then `agy --version` so the build FAILS if the install silently no-ops
     # or the binary can't run — rather than shipping an image that lacks agy.
-    && curl -fsSL https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh \
+    && curl -fsSL --compressed https://antigravity.google/cli/install.sh -o /tmp/agy-install.sh \
     && bash /tmp/agy-install.sh --dir /usr/local/bin \
     && rm -f /tmp/agy-install.sh \
     && agy --version
