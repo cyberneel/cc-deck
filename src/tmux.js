@@ -161,6 +161,19 @@ async function pasteSubmit(name, text) {
   await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
 }
 
+// The one key that walks a trust menu's highlight (❯ / › / >) to its "Yes" row: Up or Down,
+// then Enter only once the screen shows the highlight there; null if the menu can't be read.
+// Claude defaults the cursor to "No, exit", and a Down sent as the menu draws can be lost:
+// a Down+Enter burst then confirmed No and the session exited (2026-10-14). Bottom-most rows
+// win, since the menu sits under the echoed launch command, whose brief may say "yes" too.
+export function trustKey(pane, yesRe) {
+  const lines = String(pane || '').split('\n');
+  const cur = lines.findLastIndex((l) => /^\s*[>›❯]\s/.test(l));
+  const yes = lines.findLastIndex((l) => yesRe.test(l));
+  if (cur < 0 || yes < 0) return null;
+  return cur === yes ? 'Enter' : yes > cur ? 'Down' : 'Up';
+}
+
 // Some setup can only happen once the CLI has booted to its prompt: `/rename` (the
 // persisted title comes from the slash command, not `--name`) and seeding an initial
 // prompt (e.g. a context handoff). But first we must clear the CLI's "trust this
@@ -177,21 +190,9 @@ async function scheduleBoot(name, { rename, seed, provider }) {
     try { pane = await tmux(['capture-pane', '-p', '-t', name]); } catch { return; }
     if (!pane) continue;
     if (trust && trust.re.test(pane)) { // the trust gate is up
-      if (config.autoTrust && trustTries < 3) {
-        trustTries++;
-        // Read the menu and move the highlight (❯/›) onto the "Yes/trust" line, then
-        // Enter. Robust to option order/numbering — some Claude versions default the
-        // cursor to "No, exit", so a fixed keystroke would confirm No and exit.
-        const lines = pane.split('\n');
-        const cur = lines.findIndex((l) => /^\s*[>›❯]\s/.test(l)); // highlighted row (❯ / › / >)
-        const yes = lines.findIndex((l) => trust.yes.test(l));     // the "Yes" option row
-        if (yes >= 0) {
-          const delta = cur >= 0 ? yes - cur : 0;
-          const key = delta >= 0 ? 'Down' : 'Up';
-          for (let k = 0; k < Math.min(Math.abs(delta), 8); k++) await tmux(['send-keys', '-t', name, key]).catch(() => {});
-          await tmux(['send-keys', '-t', name, 'Enter']).catch(() => {});
-        }
-      }
+      const key = config.autoTrust && trustTries < 3 ? trustKey(pane, trust.yes) : null;
+      if (key === 'Enter') trustTries++;
+      if (key) await tmux(['send-keys', '-t', name, key]).catch(() => {});
       continue; // never type rename/seed into the trust menu; wait for the real prompt
     }
     if (/\? for shortcuts|❯|esc to interrupt/.test(pane)) { // the CLI's UI is up
