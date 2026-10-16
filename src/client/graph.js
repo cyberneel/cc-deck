@@ -1,6 +1,7 @@
 // Read-only session graph viewer: renders a transcript's branch/conversation
 // tree (git-log style rail on the left, message list on the right). Click a node
 // to load the full conversation thread leading to that point.
+import { toast } from './upload.js';
 
 const ROWH = 34, COLW = 18, PADX = 14, PADY = 16, DOT = 5;
 
@@ -69,7 +70,7 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
         const j = await r.json();
         if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
         location.href = `/terminal.html?session=${encodeURIComponent(j.name)}`;
-      } catch (e) { forkBtn.disabled = false; forkBtn.textContent = '⑂ Fork'; alert('Fork failed: ' + e.message); }
+      } catch (e) { forkBtn.disabled = false; forkBtn.textContent = '⑂ Fork'; toast('Fork failed: ' + e.message, { kind: 'error', action: 'Retry', onAction: () => forkBtn.click() }); }
     });
   } else {
     forkBtn.title = 'No recorded directory — can’t fork';

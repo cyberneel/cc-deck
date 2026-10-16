@@ -5,10 +5,10 @@
 const escA = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export async function populateSeedSources(listEl, excludeId) {
-  const [act, hist] = await Promise.all([
-    fetch('/api/sessions').then((r) => r.json()).catch(() => ({ sessions: [] })),
-    fetch('/api/history').then((r) => r.json()).catch(() => ({ sessions: [] })),
-  ]);
+  // A failed load says so rather than passing for "no other Deep Sessions".
+  const get = (u) => fetch(u).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))).catch((e) => ({ err: e.message }));
+  const [act, hist] = await Promise.all([get('/api/sessions'), get('/api/history')]);
+  const err = act.err || hist.err;
   const row = (id, cwd, title) =>
     `<label class="seed-item"><input type="checkbox" data-id="${escA(id)}" data-cwd="${escA(cwd)}"><span class="seed-item-main"><span class="seed-item-title">${escA(title)}</span><span class="seed-item-meta faint">${escA(cwd || '')}</span></span></label>`;
   const a = (act.sessions || [])
@@ -18,6 +18,7 @@ export async function populateSeedSources(listEl, excludeId) {
     .filter((s) => s.sessionId && s.sessionId !== excludeId)
     .map((s) => row(s.sessionId, s.cwd || '', s.title || '(untitled)'));
   listEl.innerHTML =
+    (err ? `<div class="faint" role="alert" style="padding:8px">Couldn't load every Deep Session: ${escA(err)}</div>` : '') +
     (a.length ? `<div class="seed-group">Active</div>${a.join('')}` : '') +
     (h.length ? `<div class="seed-group">Past</div>${h.join('')}` : '')
     || '<div class="faint" style="padding:8px">(no other Deep Sessions found)</div>';

@@ -2,6 +2,7 @@
 // (with overwrite confirmation), download files, delete, and launch a session
 // in any folder. Confined server-side to POLYMUX_ROOTS.
 import { pickFiles, sendFiles, toast } from './upload.js';
+import { loadingHtml, loadSteps } from './loading.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const kb = (n) => (n >= 1024 ? (n / 1024).toFixed(1) + ' MB' : `${n || 0} KB`);
@@ -14,15 +15,26 @@ async function gj(u, opts) {
 let cwd = localStorage.getItem('ccdeck.filespath') || '';
 
 export function renderFiles(container) {
-  container.innerHTML = `<div class="fx"><div class="fx-bar" id="fx-bar"></div><div class="fx-list" id="fx-list"><div class="empty muted">Loading…</div></div></div>`;
+  container.innerHTML = `<div class="fx"><div class="fx-bar" id="fx-bar"></div><div class="fx-list" id="fx-list"></div></div>`;
   load(cwd, container);
 }
 
+let loadSeq = 0; // only the latest load may paint
 async function load(path, container) {
   const listEl = container.querySelector('#fx-list');
+  const seq = ++loadSeq, since = Date.now();
+  let done = false;
+  const show = (err) => {
+    if (seq !== loadSeq || !listEl) return;
+    listEl.innerHTML = loadingHtml(since, err, 'this folder');
+    listEl.querySelector('[data-retry]')?.addEventListener('click', () => load(path, container));
+  };
+  loadSteps(() => { if (!done) show(); });
   let data;
   try { data = await gj(`/api/files?path=${encodeURIComponent(path || '')}`); }
-  catch (e) { if (listEl) listEl.innerHTML = `<div class="empty muted">${esc(e.message)}</div>`; return; }
+  catch (e) { done = true; show(e.message); return; }
+  done = true;
+  if (seq !== loadSeq) return;
   cwd = data.path;
   localStorage.setItem('ccdeck.filespath', cwd);
   renderBar(data, container);
@@ -77,21 +89,21 @@ async function mkdirHere(path, container) {
   const name = (prompt('New folder name') || '').trim();
   if (!name) return;
   try { await gj('/api/fs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ parent: path, name }) }); load(path, container); }
-  catch (e) { toast(e.message); }
+  catch (e) { toast('Couldn’t create folder: ' + e.message, { kind: 'error' }); }
 }
 
 async function del(full, parent, container) {
   if (!confirm(`Permanently delete "${full.split('/').pop()}"? This can’t be undone.`)) return;
   try {
     const r = await gj('/api/files/delete', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ paths: [full] }) });
-    if (r.errors && r.errors.length) toast(r.errors[0]); else toast('Deleted');
+    if (r.errors && r.errors.length) toast('Delete failed: ' + r.errors[0], { kind: 'error' }); else toast('Deleted', { kind: 'ok' });
     load(parent, container);
-  } catch (e) { toast(e.message); }
+  } catch (e) { toast('Delete failed: ' + e.message, { kind: 'error', action: 'Retry', onAction: () => del(full, parent, container) }); }
 }
 
 async function newSessionHere(dir) {
   try {
     const { name } = await gj('/api/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dir }) });
     location.href = `/terminal.html?session=${encodeURIComponent(name)}`;
-  } catch (e) { toast('Could not start Deep Session: ' + e.message); }
+  } catch (e) { toast('Could not start Deep Session: ' + e.message, { kind: 'error', action: 'Retry', onAction: () => newSessionHere(dir) }); }
 }

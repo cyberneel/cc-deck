@@ -2,6 +2,7 @@
 // Polymux keeps on disk — context handoffs, caches, and Claude transcripts
 // (grouped by directory, including ones hidden from the History tab). Nothing is
 // deleted unless explicitly checked and confirmed.
+import { toast } from './upload.js';
 
 const escH = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const kb = (n) => (n >= 1024 ? (n / 1024).toFixed(1) + ' MB' : `${n} KB`);
@@ -123,7 +124,7 @@ export async function openStorage() {
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
       await load();
       selEl.textContent = `Deleted ${j.deleted} · freed ~${kb(j.freedKb)}${j.errors.length ? ` · ${j.errors.length} skipped` : ''}`;
-    } catch (e) { alert('Delete failed: ' + e.message); }
+    } catch (e) { toast('Delete failed: ' + e.message, { kind: 'error' }); updateSel(); }
     finally { delBtn.textContent = 'Delete selected'; }
   });
 

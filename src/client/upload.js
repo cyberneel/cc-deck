@@ -1,11 +1,29 @@
 // Shared upload helpers used by the terminal and the dashboard file explorer.
 
-export function toast(msg) {
+// One toast at a time, on screen long enough to read: ok 2.5s, info 4s, with
+// an action (Retry/Undo) 6s, error 8s with a close button.
+// toast(msg) | toast(msg, { kind: 'ok'|'error', action: 'Retry', onAction, ms })
+let shown = null;
+export function toast(msg, { kind, action, onAction, ms } = {}) {
+  shown?.remove();
+  const err = kind === 'error';
   const t = document.createElement('div');
-  t.className = 'toast';
-  t.textContent = msg;
+  t.className = 'toast' + (err ? ' err' : '');
+  t.setAttribute('role', err ? 'alert' : 'status');
+  t.append(msg);
+  const close = () => { if (shown === t) shown = null; t.classList.add('out'); setTimeout(() => t.remove(), 220); };
+  const btn = (cls, label, fn) => {
+    const b = document.createElement('button');
+    b.className = cls; b.textContent = label;
+    b.addEventListener('click', () => { close(); fn?.(); });
+    t.append(b);
+    return b;
+  };
+  if (action) btn('ta', action, onAction);
+  if (err) btn('tx', '✕').setAttribute('aria-label', 'Dismiss');
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 4000);
+  shown = t;
+  setTimeout(close, ms || (err ? 8000 : action ? 6000 : kind === 'ok' ? 2500 : 4000));
 }
 
 // Open the OS file picker; `folder` => directory picker (desktop). Calls
@@ -73,13 +91,13 @@ export async function sendFiles(files, withPaths, dir) {
   const form = new FormData();
   // Carry each file's relative path in the field name so folder structure survives.
   for (const f of files) form.append('f:' + relOf(f, withPaths), f, f.name);
-  toast(`Uploading ${files.length} item(s)…`);
+  toast(`Uploading ${files.length} item(s)…`, { ms: 600e3 }); // stays until the result replaces it
   try {
     const r = await fetch(`/api/upload?dir=${encodeURIComponent(dir)}${mode ? `&mode=${mode}` : ''}`, { method: 'POST', body: form });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
     const skip = j.skipped && j.skipped.length ? `, skipped ${j.skipped.length} existing` : '';
-    toast(`Added ${j.count} file(s) to ${dir.split('/').slice(-2).join('/')}${skip}`);
+    toast(`Added ${j.count} file(s) to ${dir.split('/').slice(-2).join('/')}${skip}`, { kind: 'ok' });
     return true;
-  } catch (e) { toast('Upload failed: ' + e.message); return false; }
+  } catch (e) { toast('Upload failed: ' + e.message, { kind: 'error', action: 'Retry', onAction: () => sendFiles(files, withPaths, dir) }); return false; }
 }

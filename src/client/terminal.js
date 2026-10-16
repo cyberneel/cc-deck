@@ -64,7 +64,7 @@ document.body.innerHTML = `
         <button id="upload-btn" class="icon" title="Send files / folder to this Deep Session">📎</button>
         <button id="reload-btn" class="icon" title="Reload app">↻</button>
         <button id="scroll-toggle" class="icon" title="Scroll mode — tmux: full history; fast: smooth local scroll"></button>
-        <span class="status" id="status">connecting…</span>
+        <span class="status" id="status" role="status"></span>
       </div>
       <div id="terminal"></div>
       <div class="keybar" id="keybar"></div>
@@ -89,12 +89,43 @@ mainBtn.addEventListener('click', async () => {
     switchTo(name);
     disposePane(old);
     await refreshSessions();
-  } catch (err) { toast(err.message); }
+  } catch (err) { toast(err.message, { kind: 'error' }); }
 });
 const appEl = document.getElementById('app-term');
 const termHost = document.getElementById('terminal');
 
-function setStatus(text, cls) { statusEl.textContent = text; statusEl.className = `status ${cls || ''}`; }
+let lastStatus = '';
+function setStatus(text, cls, html) {
+  const key = `${cls}|${html || text}`;
+  if (key === lastStatus) return; // the 1s ticker repaints only on change (keeps Retry focusable)
+  lastStatus = key;
+  statusEl.className = `status ${cls || ''}`;
+  if (html) statusEl.innerHTML = html; else statusEl.textContent = text;
+}
+
+// Connection status for the current pane. While it can't connect the words
+// escalate — "Connecting…", elapsed after 3s, "Still connecting…" at 10s, and at
+// 30s "Can't reach Polymux · Retry". Background retries keep going regardless;
+// Retry probes now and restarts the clock.
+function renderConn() {
+  const p = panes.get(currentSession);
+  if (!p) return;
+  if (p.ws?.readyState === WebSocket.OPEN) return setStatus(scrollMode === 'fast' ? 'connected · fast' : 'connected', 'connected');
+  const s = Math.floor((Date.now() - (p.since ||= Date.now())) / 1000);
+  if (s >= 30) return setStatus('', 'closed', `Can't reach Polymux<button data-retry>Retry</button>`);
+  const word = s >= 10 ? 'Still connecting…' : p.lost ? 'Reconnecting…' : 'Connecting…';
+  setStatus('', 'connecting', `<span class="cdot"></span>${word}${s >= 3 ? ` ${s}s` : ''}`);
+}
+statusEl.addEventListener('click', (e) => {
+  if (!e.target.closest('[data-retry]')) return;
+  const p = panes.get(currentSession);
+  if (!p) return;
+  p.since = Date.now();
+  clearTimeout(p.rc);
+  reconnectWhenUp(p);
+  renderConn();
+});
+setInterval(renderConn, 1000);
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
 const TERM_OPTS = {
@@ -179,17 +210,19 @@ function connectPaneWs(pane) {
   const ws = new WebSocket(url);
   ws.binaryType = 'arraybuffer';
   pane.ws = ws;
-  ws.onopen = () => { sendPaneResize(pane); if (pane.name === currentSession) setStatus(scrollMode === 'fast' ? 'connected · fast' : 'connected', 'connected'); };
+  pane.since ||= Date.now();
+  ws.onopen = () => { pane.since = 0; pane.lost = false; sendPaneResize(pane); if (pane.name === currentSession) renderConn(); };
   ws.onmessage = (ev) => { pane.term.write(typeof ev.data === 'string' ? ev.data : new Uint8Array(ev.data)); };
   ws.onclose = (ev) => {
     if (ev.code === 4401) { location.href = '/login.html'; return; }
     if (pane.dispose) return;
     if (pane.manual) { pane.manual = false; return; }
-    if (pane.name === currentSession) setStatus('disconnected — reconnecting…', 'closed');
+    pane.since ||= Date.now();
+    pane.lost = true;
+    if (pane.name === currentSession) renderConn();
     clearTimeout(pane.rc);
     pane.rc = setTimeout(() => reconnectWhenUp(pane), 1500);
   };
-  ws.onerror = () => { if (pane.name === currentSession) setStatus('connection error', 'closed'); };
 }
 
 // Firefox (Zen) delays every websocket to a host after each failed handshake. The delay
@@ -252,10 +285,7 @@ function showPane(name) {
     try { p.term.refresh(0, p.term.rows - 1); } catch { /* */ }
     p.term.focus();
   });
-  setStatus(
-    p.ws?.readyState === WebSocket.OPEN ? (scrollMode === 'fast' ? 'connected · fast' : 'connected') : 'connecting…',
-    p.ws?.readyState === WebSocket.OPEN ? 'connected' : '',
-  );
+  renderConn();
 }
 
 // Keep the current + (WARM-1) most-recent sessions attached; drop the rest.
@@ -331,7 +361,7 @@ async function openResumeModal() {
       close();
       await refreshSessions();
       switchTo(name);
-    } catch (e) { el.style.opacity = ''; toast('Resume failed: ' + e.message); }
+    } catch (e) { el.style.opacity = ''; toast('Resume failed: ' + e.message, { kind: 'error' }); }
   }));
 }
 
@@ -423,7 +453,7 @@ function openCopyBox() {
     let ok = false;
     try { await navigator.clipboard.writeText(textVal); ok = true; } catch { /* */ }
     if (!ok) { try { ta.removeAttribute('readonly'); ta.focus(); ta.setSelectionRange(0, ta.value.length); ok = document.execCommand('copy'); ta.setAttribute('readonly', ''); } catch { /* */ } }
-    toast(ok ? 'Copied to clipboard' : 'Select the text and use the OS Copy');
+    toast(ok ? 'Copied to clipboard' : 'Select the text and use the OS Copy', { kind: ok ? 'ok' : undefined });
     if (ok) close();
   });
 }
@@ -777,16 +807,22 @@ async function renameSessionFromSidebar(name) {
   const s = sessions.find((x) => x.name === name);
   const title = prompt('Rename Deep Session', s?.title || '');
   if (title == null) return;
-  try { await api(`/api/sessions/${name}`, { method: 'PATCH', body: JSON.stringify({ title }) }); }
-  catch (e) { alert('Rename failed: ' + e.message); return; }
-  await refreshSessions();
+  const rename = async () => {
+    try { await api(`/api/sessions/${name}`, { method: 'PATCH', body: JSON.stringify({ title }) }); }
+    catch (e) { toast('Rename failed: ' + e.message, { kind: 'error', action: 'Retry', onAction: rename }); return; }
+    await refreshSessions();
+  };
+  await rename();
 }
 
 async function killSessionFromSidebar(name) {
   const s = sessions.find((x) => x.name === name);
-  if (!confirm(`Kill Deep Session "${s?.title || name}"? Claude and its tmux session will be terminated.`)) return;
+  if (!confirm(`Kill Deep Session "${s?.title || name}"? Its CLI and tmux session will be stopped.`)) return;
+  await killSession(name);
+}
+async function killSession(name) {
   try { await api(`/api/sessions/${name}`, { method: 'DELETE' }); }
-  catch (e) { alert('Kill failed: ' + e.message); return; }
+  catch (e) { toast('Kill failed: ' + e.message, { kind: 'error', action: 'Retry', onAction: () => killSession(name) }); return; }
   if (panes.has(name)) disposePane(name);
   await refreshSessions();
   if (name === currentSession) {

@@ -21,6 +21,12 @@
   --glass-blur: saturate(180%) blur(22px);
   --mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', ui-monospace, 'Cascadia Code', Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif;
+  /* Motion: animate only transform/opacity. Two loop speeds — --pulse for
+     working / connecting / needs-you, --pulse-calm for quiet "alive". */
+  --dur-1: 120ms; --dur-2: 200ms; --dur-3: 320ms;
+  --pulse: 1.2s; --pulse-calm: 2.4s;
+  --ease-out: cubic-bezier(.2,.8,.2,1);
+  --red: #ff8d85;
 }
 
 * { box-sizing: border-box; }
@@ -214,7 +220,7 @@ select:focus { outline: none; border-color: var(--accent); }
 .badge.ready { background: rgba(110,168,254,.14); color: #6ea8fe; }
 .badge.attn { background: rgba(217,119,87,.18); color: var(--accent); }
 .badge .pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.badge.live .pulse, .badge.attn .pulse { animation: pulse 1.8s infinite; }
+.badge.live .pulse, .badge.attn .pulse { animation: pulse var(--pulse) ease-in-out infinite; }
 .card.isrunning { border-color: var(--green); }
 
 /* permission-mode chip */
@@ -223,7 +229,9 @@ select:focus { outline: none; border-color: var(--accent); }
 .mode.mode-plan { color: #6ea8fe; border-color: rgba(110,168,254,.4); }
 .mode.mode-acceptEdits { color: var(--green); border-color: rgba(92,184,122,.4); }
 .mode.mode-bypassPermissions { color: #ff8d85; border-color: rgba(255,141,133,.5); }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes pulse { 50% { opacity: .35; } }
+@keyframes ring { from { transform: scale(.85); opacity: .9; } to { transform: scale(2.2); opacity: 0; } }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
 
 /* list view tweaks */
 .grid.list .card { flex-direction: row; align-items: center; }
@@ -233,6 +241,12 @@ select:focus { outline: none; border-color: var(--accent); }
 .grid.list .card-foot { border: none; }
 
 .empty { text-align: center; padding: 80px 20px; color: var(--text-dim); }
+/* Skeleton rows: shown only if a load passes 300ms (see loading.js). */
+.sk-wrap { padding: 8px 0; }
+.sk { height: 12px; border-radius: 6px; background: var(--border); margin: 15px 0; animation: pulse var(--pulse-calm) ease-in-out infinite; }
+.sk:nth-child(3n+2) { width: 82%; } .sk:nth-child(3n) { width: 64%; }
+.load-msg { color: var(--text-dim); font-size: 13px; padding: 24px 0; text-align: center; }
+.load-msg button { margin-left: 8px; }
 
 /* history cards */
 .card.hist { cursor: default; }
@@ -306,7 +320,12 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--bg-card); bor
 .term-bar .title { font-size: 14px; font-weight: 600; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .term-bar .status { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
 .term-bar .status.connected { color: var(--green); }
-.term-bar .status.closed { color: #ff8d85; }
+.term-bar .status.closed { color: var(--red); }
+/* ConnectingPulse: a ring on the dot while trying; words escalate at 10s/30s. */
+.term-bar .status.connecting { color: var(--accent); }
+.term-bar .status .cdot { position: relative; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: middle; }
+.term-bar .status.connecting .cdot::after  { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid currentColor; animation: ring var(--pulse) var(--ease-out) infinite; }
+.term-bar .status button { font-size: 12px; padding: 2px 10px; margin-left: 8px; }
 #terminal { position: relative; flex: 1; min-height: 0; background: #0a0a0a; }
 
 /* ---- terminal page layout + session sidebar ---- */
@@ -353,7 +372,7 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--bg-card); bor
 .sb-num { font-size: 10px; color: var(--text-faint); border: 1px solid var(--border); border-radius: 5px; padding: 0 5px; }
 .sb-item.attn .sb-title { color: var(--accent); font-weight: 600; }
 .sb-warm { color: var(--green); font-size: 9px; vertical-align: middle; opacity: .8; }
-.sb-attn { color: var(--accent); font-size: 10px; animation: pulse 1.6s infinite; }
+.sb-attn { color: var(--accent); font-size: 10px; animation: pulse var(--pulse) ease-in-out infinite; }
 .sb-foot { padding: 10px 14px; border-top: 1px solid var(--border); white-space: nowrap; }
 .sb-badge { position: absolute; top: 2px; right: 0; background: var(--accent); color: #1a0f0a; font-size: 9px; font-weight: 700; border-radius: 10px; padding: 0 4px; min-width: 14px; text-align: center; }
 .term-bar .icon { position: relative; }
@@ -365,7 +384,11 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--bg-card); bor
 .sw-item.sel { background: var(--accent); color: #1a0f0a; }
 .sw-item.sel .sb-dot { box-shadow: none; }
 
-.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--bg-elev); border: 1px solid var(--border); padding: 12px 18px; border-radius: 10px; font-size: 13px; z-index: 200; max-width: calc(100vw - 32px); text-align: center; }
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--bg-elev); border: 1px solid var(--border); padding: 12px 18px; border-radius: 10px; font-size: 13px; z-index: 200; max-width: calc(100vw - 32px); text-align: center; animation: toast-in var(--dur-2) var(--ease-out); transition: opacity var(--dur-2); }
+.toast.out { opacity: 0; }
+.toast.err { color: var(--red); }
+.toast .ta { margin-left: 10px; padding: 4px 12px; font-size: 12.5px; }
+.toast .tx { margin-left: 6px; padding: 2px 8px; border: none; background: transparent; color: var(--text-dim); }
 
 /* ccburn quick-view pill + popover (terminal top bar) */
 .burn-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; font-size: 12px; font-family: var(--mono); border: 1px solid var(--border); border-radius: 8px; background: var(--bg-elev); color: var(--text-dim); cursor: pointer; flex: 0 0 auto; }
@@ -487,6 +510,7 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--bg-card); bor
 
   .term-bar { padding-top: max(8px, env(safe-area-inset-top)); height: auto; min-height: 44px; gap: 10px; }
   .term-bar .status { display: none; }
+  .term-bar .status.connecting, .term-bar .status.closed { display: inline; }
 
   /* on-screen keys for Esc/Tab/Ctrl/arrows (iOS keyboard lacks them) */
   .keybar {
@@ -621,7 +645,11 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--bg-card); bor
   .grid { gap: 14px; }
 }
 
-/* Respect reduced-motion / transparency preferences. */
+/* Respect reduced-motion / transparency preferences. Reduced motion keeps
+   the words and numbers, drops the movement. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
 @media (prefers-reduced-transparency: reduce) {
   .modal, .sw-box, .toast { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg-elev); }
 }

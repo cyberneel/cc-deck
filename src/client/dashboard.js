@@ -5,6 +5,7 @@ import { openNewModal as openNewModalShared } from './newsession.js';
 import { openStorage } from './storage.js';
 import { renderFiles } from './files.js';
 import { toast } from './upload.js';
+import { loadingHtml, loadSteps } from './loading.js';
 import { openNotes } from './notes.js';
 import { fetchBurn, renderBurnPill, openBurnPopover } from './burnpill.js';
 import { openHelp, maybeShowIntro } from './help.js';
@@ -19,10 +20,16 @@ let view = localStorage.getItem('ccdeck.view') || 'grid'; // grid | list | group
 let tab = localStorage.getItem('ccdeck.tab') || 'active'; // active | history | usage
 let query = '';
 let sessions = [];
+const bootAt = Date.now();
+let sessionsLoaded = false;
+let sessionsFail = null; // { since, msg } while /api/sessions keeps failing
 let waiting = { queued: [], max: 0 }; // Friday's starts waiting for a slot (session cap)
 let history = [];
 let historyTotal = 0;
 let historyLoaded = false;
+let historyAt = Date.now(); // when the current history load started
+let historyErr = null;
+let usageErr = null;
 let cfg = { roots: [], launchCommand: 'claude' };
 
 // Collapsed directory groups (collapsed by default in grouped view).
@@ -322,7 +329,7 @@ function render() {
       const safe = !r.busy;
       toast(`💾 Snapshot saved · ${r.count} Deep Session${r.count === 1 ? '' : 's'} · ${safe ? '✓ all idle — safe to reboot' : `⚠ ${r.busy} still working — let them finish first`}`);
       loadSnap();
-    } catch (err) { toast('Snapshot failed: ' + err.message); }
+    } catch (err) { toast('Snapshot failed: ' + err.message, { kind: 'error', action: 'Retry', onAction: () => b.click() }); }
     finally { b.disabled = false; }
   });
   document.getElementById('help-btn').addEventListener('click', openHelp);
@@ -342,8 +349,8 @@ function render() {
       setTimeout(() => document.addEventListener('click', close), 0);
     }
   });
-  document.getElementById('logout-btn').addEventListener('click', async () => {
-    await api('/api/logout', { method: 'POST' });
+  document.getElementById('logout-btn').addEventListener('click', async function logout() {
+    try { await api('/api/logout', { method: 'POST' }); } catch (err) { toast('Sign out failed: ' + err.message, { kind: 'error', action: 'Retry', onAction: logout }); return; }
     location.href = '/login.html';
   });
 
@@ -359,12 +366,13 @@ function renderStats() {
   const tile = (label, value, opts = {}) =>
     `<div class="tile ${opts.accent ? 'accent' : ''} ${opts.tab ? 'clickable' : ''}" ${opts.tab ? `data-go="${opts.tab}"` : ''}>
       <div class="tile-val">${value}</div><div class="tile-label">${label}</div></div>`;
+  const n = (v) => (sessionsLoaded ? v : '…'); // no false zeros before the first load
   el.innerHTML =
-    tile('Active', sessions.length, { tab: 'active', accent: tab === 'active' }) +
-    tile('Running', running) +
-    tile('Attached', attached) +
-    tile('Directories', dirs) +
-    tile('Past Deep Sessions', historyLoaded ? historyTotal : '…', { tab: 'history', accent: tab === 'history' });
+    tile('Active', n(sessions.length), { tab: 'active', accent: tab === 'active' }) +
+    tile('Running', n(running)) +
+    tile('Attached', n(attached)) +
+    tile('Directories', n(dirs)) +
+    tile('Past Deep Sessions', historyLoaded ? historyTotal : historyErr ? '—' : '…', { tab: 'history', accent: tab === 'history' });
   el.querySelectorAll('.tile.clickable').forEach((t) =>
     t.addEventListener('click', () => {
       tab = t.dataset.go;
@@ -381,7 +389,15 @@ function renderBody() {
   if (tab === 'files') return renderFiles(document.getElementById('cards'));
   renderStats();
   if (tab === 'history') renderHistory();
-  else { renderActive(); renderWaiting(); }
+  else { renderActive(); renderWaiting(); renderStale(); }
+}
+
+// The 4s poll failing for 10s+ means the Active list is going stale — say so.
+function renderStale() {
+  const cards = document.getElementById('cards');
+  if (!cards || !sessionsLoaded || !sessionsFail || Date.now() - sessionsFail.since < 10_000) return;
+  cards.insertAdjacentHTML('afterbegin', `<p class="load-msg" role="alert">Can't reach Polymux — showing the last known Deep Sessions.<button data-retry>Retry</button></p>`);
+  cards.querySelector('[data-retry]').addEventListener('click', refresh);
 }
 
 // Friday's starts waiting for a slot, each with a cancel.
@@ -395,7 +411,7 @@ function renderWaiting() {
       return `${t} <button type="button" class="icon danger" data-cancel="${esc(q.name)}" aria-label="Cancel ${t}">Cancel</button>`;
     }).join(', ')}. This deck runs ${waiting.max} Deep Session${waiting.max === 1 ? '' : 's'} at once. Close one to start the next.</p>`);
   cards.querySelectorAll('[data-cancel]').forEach((b) => b.addEventListener('click', async () => {
-    try { await api(`/api/sessions/${b.dataset.cancel}`, { method: 'DELETE' }); } catch (err) { toast(err.message); }
+    try { await api(`/api/sessions/${b.dataset.cancel}`, { method: 'DELETE' }); } catch (err) { toast('Cancel failed: ' + err.message, { kind: 'error' }); }
     await refresh();
   }));
 }
@@ -404,6 +420,11 @@ function renderWaiting() {
 function renderActive() {
   const container = document.getElementById('cards');
   if (!container) return;
+  if (!sessionsLoaded) {
+    container.innerHTML = loadingHtml(bootAt, sessionsFail?.msg, 'Deep Sessions');
+    container.querySelector('[data-retry]')?.addEventListener('click', refresh);
+    return;
+  }
   if (!sessions.length) {
     container.innerHTML = `<div class="empty">
       <p style="font-size:18px">No Deep Sessions running.</p>
@@ -435,16 +456,19 @@ function wireActiveCards(container) {
     el.querySelector('.kill-btn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       const s = sessions.find((x) => x.name === name);
-      if (!confirm(`Kill Deep Session "${s.title}"? Claude and its tmux session will be terminated.`)) return;
-      await api(`/api/sessions/${name}`, { method: 'DELETE' });
-      await refresh();
+      if (!confirm(`Kill Deep Session "${s.title}"? Its CLI and tmux session will be stopped.`)) return;
+      const kill = async () => {
+        try { await api(`/api/sessions/${name}`, { method: 'DELETE' }); } catch (err) { toast('Kill failed: ' + err.message, { kind: 'error', action: 'Retry', onAction: kill }); }
+        await refresh();
+      };
+      kill();
     });
     el.querySelector('.main-btn')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
         const r = await api(`/api/sessions/${name}/main`, { method: 'POST' });
         location.href = `/terminal.html?session=${encodeURIComponent(r.name)}`;
-      } catch (err) { toast(err.message); }
+      } catch (err) { toast(err.message, { kind: 'error' }); }
     });
     el.querySelector('.graph-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -461,8 +485,11 @@ function wireActiveCards(container) {
       const s = sessions.find((x) => x.name === name);
       const title = prompt('Rename Deep Session', s.title);
       if (title == null) return;
-      await api(`/api/sessions/${name}`, { method: 'PATCH', body: JSON.stringify({ title }) });
-      await refresh();
+      const rename = async () => {
+        try { await api(`/api/sessions/${name}`, { method: 'PATCH', body: JSON.stringify({ title }) }); } catch (err) { toast('Rename failed: ' + err.message, { kind: 'error', action: 'Retry', onAction: rename }); }
+        await refresh();
+      };
+      rename();
     });
   });
 }
@@ -518,8 +545,10 @@ async function refresh() {
     const { sessions: list, queued = [], max = 0 } = await api('/api/sessions');
     sessions = list;
     waiting = { queued, max };
+    sessionsLoaded = true;
+    sessionsFail = null;
   } catch (e) {
-    /* transient */
+    sessionsFail = { since: sessionsFail?.since || Date.now(), msg: e.message };
   }
   if (tab === 'active') renderBody();
   else if (tab === 'usage') {
@@ -530,23 +559,29 @@ async function refresh() {
 
 // ---- history ----
 async function refreshHistory() {
+  historyAt = Date.now();
+  historyErr = null;
+  const rerender = () => { if (tab === 'history' && !historyLoaded) renderHistory(); };
+  rerender();
+  loadSteps(rerender);
   try {
     const data = await api('/api/history');
     history = data.sessions;
     historyTotal = data.total ?? data.sessions.length;
     historyLoaded = true;
-    renderStats();
-    if (tab === 'history') renderHistory();
   } catch (e) {
-    /* ignore */
+    historyErr = e.message;
   }
+  renderStats();
+  if (tab === 'history') renderHistory();
 }
 
 function renderHistory() {
   const container = document.getElementById('cards');
   if (!container) return;
   if (!historyLoaded) {
-    container.innerHTML = `<div class="empty"><p class="muted">Loading past Deep Sessions…</p></div>`;
+    container.innerHTML = loadingHtml(historyAt, historyErr, 'past Deep Sessions');
+    container.querySelector('[data-retry]')?.addEventListener('click', refreshHistory);
     return;
   }
   if (!history.length) {
@@ -596,7 +631,7 @@ function wireHistoryCards(container) {
         location.href = `/terminal.html?session=${encodeURIComponent(name)}`;
       } catch (e) {
         btn.disabled = false; btn.textContent = '▶ Resume';
-        alert('Could not resume: ' + e.message);
+        toast('Could not resume: ' + e.message, { kind: 'error', action: 'Retry', onAction: go });
       }
     };
     el.addEventListener('click', (e) => { if (!e.target.closest('button')) go(); });
@@ -624,7 +659,7 @@ const FORK_ICON = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" s
 // Fork a session into a NEW one that copies its context (claude --fork-session),
 // then jump into it. Used from history cards and the graph viewer.
 async function forkFrom(resume, dir, title, btn) {
-  if (!dir) { alert('No recorded directory for this Deep Session — can’t fork.'); return; }
+  if (!dir) { toast('No recorded directory for this Deep Session — can’t fork.', { kind: 'error' }); return; }
   if (btn) btn.disabled = true;
   try {
     const { name } = await api('/api/sessions', {
@@ -634,7 +669,7 @@ async function forkFrom(resume, dir, title, btn) {
     location.href = `/terminal.html?session=${encodeURIComponent(name)}`;
   } catch (e) {
     if (btn) btn.disabled = false;
-    alert('Fork failed: ' + e.message);
+    toast('Fork failed: ' + e.message, { kind: 'error', action: 'Retry', onAction: () => forkFrom(resume, dir, title, btn) });
   }
 }
 
@@ -685,7 +720,8 @@ async function loadUsage() {
   await Promise.all([loadUsageData(), loadBurn()]);
 }
 async function loadUsageData() {
-  try { usageData = await api(`/api/usage?billingDay=${billingDay}`); usageFetchedAt = Date.now(); } catch { /* */ }
+  usageErr = null;
+  try { usageData = await api(`/api/usage?billingDay=${billingDay}`); usageFetchedAt = Date.now(); } catch (e) { usageErr = e.message; }
   if (tab === 'usage') renderUsage();
 }
 async function loadBurn() {
@@ -733,8 +769,11 @@ function renderUsage() {
     </div>`;
 
   if (!u) {
-    html += `<div class="empty"><p class="muted">Crunching your transcripts…</p></div></div>`;
+    html += usageErr
+      ? `<div class="load-msg" role="alert">Couldn't load usage: ${esc(usageErr)}<button data-retry>Retry</button></div></div>`
+      : `<div class="empty" aria-busy="true"><p class="muted">Crunching your transcripts…</p></div></div>`;
     c.innerHTML = html;
+    c.querySelector('[data-retry]')?.addEventListener('click', () => { usageErr = null; renderUsage(); loadUsageData(); });
     wireUsage();
     return;
   }
@@ -867,9 +906,10 @@ function openNewModal() {
 // ---- boot ----
 (async () => {
   try { cfg = await api('/api/config'); } catch { /* defaults */ }
-  await refresh();
-  render();
+  render(); // Active shows a skeleton until the first refresh lands
+  loadSteps(() => { if (!sessionsLoaded && tab === 'active') renderBody(); });
   refreshHistory(); // populate the "Past sessions" stat + history tab data
+  await refresh();
   if (tab === 'usage') loadUsage();
   loadBurn(); // top-bar ccburn pill (all tabs)
   loadSnap(); // last-snapshot age indicator
