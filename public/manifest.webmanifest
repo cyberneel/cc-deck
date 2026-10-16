@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Deep Sessions",
-  "short_name": "Deep Sessions",
-  "description": "Your Deep Sessions — Claude CLI coding sessions",
+  "name": "Polymux",
+  "short_name": "Polymux",
+  "description": "Polymux — your Deep Sessions: coding CLIs (Claude Code, Codex, agy) in the browser",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",

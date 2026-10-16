@@ -79,7 +79,7 @@ const SECTIONS = [
     needed APIs yet).</p>`],
 
   ['Remote Deep Sessions', `
-    <p>Deep Sessions can list and attach tmux sessions running a CLI on <b>other hosts</b> (a laptop, another
+    <p>Polymux can list and attach tmux sessions running a CLI on <b>other hosts</b> (a laptop, another
     box) over SSH — shown in the sidebar's <b>Remote</b> group, tagged by host. Attach-only for now.
     Requires key-based SSH to the host and the Deep Session running inside tmux. Configured via
     <code>POLYMUX_REMOTE_HOSTS</code>.</p>`],
@@ -105,7 +105,7 @@ const SECTIONS = [
     prunes old artifacts/transcripts (running Deep Sessions protected).</p>`],
 
   ['Remote control (MCP)', `
-    <p>Deep Sessions exposes an <b>MCP endpoint</b> (<code>/mcp</code>) so Claude.ai, Claude Code, or your own
+    <p>Polymux exposes an <b>MCP endpoint</b> (<code>/mcp</code>) so Claude.ai, Claude Code, or your own
     agent can search your past Deep Sessions, read a Deep Session's context, leave handoff notes, and — with the
     right token — create, resume, and drive Deep Sessions and read the files they produce. New Deep Sessions can be auto-wired "handoff-aware" so they
     discover related work and hand off instead of duplicating.</p>`],
@@ -135,7 +135,7 @@ function helpHtml() {
   const nav = SECTIONS.map((s, i) => `<a href="#hs${i}">${s[0]}</a>`).join('');
   const body = SECTIONS.map((s, i) => `<section id="hs${i}"><h3>${s[0]}</h3>${s[1]}</section>`).join('');
   return `<div class="modal help-modal">
-    <div class="help-head"><h2>Deep Sessions Help</h2><button id="help-close" class="icon" title="Close">✕</button></div>
+    <div class="help-head"><h2>Polymux Help</h2><button id="help-close" class="icon" title="Close">✕</button></div>
     <nav class="help-nav">${nav}</nav>
     <div class="help-body">${body}</div>
   </div>`;
@@ -167,7 +167,7 @@ export function maybeShowIntro() {
   const bg = document.createElement('div');
   bg.className = 'modal-bg';
   bg.innerHTML = `<div class="modal intro-modal">
-    <h2>Welcome to Deep Sessions 👋</h2>
+    <h2>Welcome to Polymux 👋</h2>
     <p>Manage your <b>Claude Code, Codex, and agy</b> Deep Sessions from the browser — the real CLIs, running in
     tmux on the server, through a fast in-browser terminal.</p>
     <ol class="intro-steps">

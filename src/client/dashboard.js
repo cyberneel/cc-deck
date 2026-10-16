@@ -220,7 +220,7 @@ function wireGroupToggles(container) {
 function render() {
   app.innerHTML = `
     <div class="topbar">
-      <div class="brand"><span class="dot"></span> Deep Sessions</div>
+      <div class="brand"><span class="dot"></span> Polymux</div>
       <button id="menu-btn" class="icon menu-btn" title="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
       <div class="toggle tabs" id="tabs">
         <button data-tab="active" class="${tab === 'active' ? 'active' : ''}">Active</button>

@@ -1,4 +1,4 @@
-// Deep Sessions MCP server: exposes your past Deep Session transcripts as tools so
+// Polymux MCP server: exposes your past Deep Session transcripts as tools so
 // another Claude (claude.ai web/mobile, Claude Code, etc.) can search them and
 // pull relevant context. Reuses the transcript machinery from graph/handoff/history.
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -570,9 +570,9 @@ export function createMcpServer({ sessionControl = false, caller = '' } = {}) {
 
     server.registerTool('send_to_session', {
       title: 'Send input to a running Deep Session',
-      description: "Type a line into an already-running Deep Session (a live nudge, submitted with Enter). The Deep Session must be active — resume it in Deep Sessions first if not. If it's showing a question picker, the picker is closed and the text is delivered as the answer, so put every answer in the text. A permission dialog is never answered: nothing is sent and its options come back.",
+      description: "Type a line into an already-running Deep Session (a live nudge, submitted with Enter). The Deep Session must be active — resume it in Polymux first if not. If it's showing a question picker, the picker is closed and the text is delivered as the answer, so put every answer in the text. A permission dialog is never answered: nothing is sent and its options come back.",
       inputSchema: {
-        session_id: z.string().describe("A Claude session id OR the Deep Session's title (as shown in Deep Sessions) — the Deep Session must be live."),
+        session_id: z.string().describe("A Claude session id OR the Deep Session's title (as shown in Polymux) — the Deep Session must be live."),
         text: z.string().min(1).describe('The text to send; it is submitted with Enter.'),
       },
     }, async ({ session_id, text: line }) => {
@@ -581,14 +581,14 @@ export function createMcpServer({ sessionControl = false, caller = '' } = {}) {
       const s = isSessionId(val)
         ? sessions.find((x) => x.liveSessionId === val || x.resumedFrom === val)
         : pickByTitle(sessions, (x) => x.title, val);
-      if (!s) return text(`ERROR: no live Deep Session matches "${session_id}". Live now: ${liveHint(sessions)}. Pass one of those ids or an exact title (resume a past Deep Session in Deep Sessions first if it isn't listed).`);
+      if (!s) return text(`ERROR: no live Deep Session matches "${session_id}". Live now: ${liveHint(sessions)}. Pass one of those ids or an exact title (resume a past Deep Session in Polymux first if it isn't listed).`);
       // Only the instruction was delivered — callers narrated "Sent to X" as the task being done.
       const who = `"${s.title || s.name}"`;
       try {
         const r = await relayText(s.name, line, waitState(s));
         const list = () => r.opts.map((o) => `${o.n}. ${o.label}`).join(' · ');
-        if (r.stuck) return text(redact(`ERROR: ${who} is showing a question picker that didn't close, so nothing was sent. Options: ${list()}. The user needs to answer it in Deep Sessions.`));
-        if (r.opts) return text(redact(`ERROR: ${who} is waiting on a choice only the user can make, so nothing was sent: ${list()}. Ask the user to answer it in Deep Sessions.`));
+        if (r.stuck) return text(redact(`ERROR: ${who} is showing a question picker that didn't close, so nothing was sent. Options: ${list()}. The user needs to answer it in Polymux.`));
+        if (r.opts) return text(redact(`ERROR: ${who} is waiting on a choice only the user can make, so nothing was sent: ${list()}. Ask the user to answer it in Polymux.`));
         return text(redact(`${r.dismissed ? `Closed the question picker in ${who} and delivered the message as the answer` : `Delivered to ${who}`}. It's working on it now; the result isn't known until it replies.`));
       } catch (e) { return text(`ERROR: could not send — ${e.message}`); }
     });
@@ -634,7 +634,7 @@ export function createMcpServer({ sessionControl = false, caller = '' } = {}) {
       try {
         // Checked before the notes are consumed: a note isn't an answer, so a prompt keeps them pending.
         const menu = await openMenu(s.name, waitState(s));
-        if (menu.length) return text(redact(`ERROR: "${s.title || s.name}" is showing a prompt (${menu.map((o) => `${o.n}. ${o.label}`).join(' · ')}), so the notes were kept for later. Ask the user to answer it in Deep Sessions first.`));
+        if (menu.length) return text(redact(`ERROR: "${s.title || s.name}" is showing a prompt (${menu.map((o) => `${o.n}. ${o.label}`).join(' · ')}), so the notes were kept for later. Ask the user to answer it in Polymux first.`));
         const seed = await consumeNotesSeedMany([s.liveSessionId, s.resumedFrom]);
         if (!seed) return text(redact(`"${s.title || s.name}" has no pending notes.`));
         await sendText(s.name, seed);
