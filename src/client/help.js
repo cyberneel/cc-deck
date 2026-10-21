@@ -58,7 +58,7 @@ const SECTIONS = [
     <p>The terminal sidebar lists every Deep Session (grouped <b>Native</b> vs <b>Remote</b>), with
     live/idle and needs-attention dots. Click to switch, or:</p>
     <ul>
-      <li><b>Alt+\` / Alt+Shift+\`</b> — cycle most-recently-used.</li>
+      <li><b>Alt+\` / Alt+Shift+\`</b> — most-recently-used grid; hold Alt and use the arrows, Enter, or a click to pick.</li>
       <li><b>Alt+1–9</b> — jump to a Deep Session by its number.</li>
     </ul>
     <p><b>↩ Resume a Deep Session</b> at the top of the sidebar opens a searchable list of past Deep

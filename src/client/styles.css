@@ -379,8 +379,11 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--bg-card); bor
 
 /* Ctrl+Tab quick-switcher overlay */
 .switcher { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 300; backdrop-filter: blur(2px); }
-.sw-box { background: var(--bg-elev); border: 1px solid var(--border-hover); border-radius: 14px; padding: 10px; min-width: 320px; max-width: 70vw; box-shadow: 0 24px 60px rgba(0,0,0,.5); }
-.sw-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 9px; font-size: 14px; }
+.sw-box { background: var(--bg-elev); border: 1px solid var(--border-hover); border-radius: 14px; padding: 10px; box-shadow: 0 24px 60px rgba(0,0,0,.5);
+  display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 220px)); gap: 6px; max-width: 90vw; max-height: 80vh; overflow-y: auto; }
+.sw-item { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; padding: 10px 12px; border-radius: 9px; font-size: 14px; cursor: pointer; }
+.sw-t, .sw-d { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-d { grid-column: 2; font-size: 11px; opacity: .6; }
 .sw-item.sel { background: var(--accent); color: #1a0f0a; }
 .sw-item.sel .sb-dot { box-shadow: none; }
 
@@ -495,7 +498,7 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--bg-card); bor
   .mtable { font-size: 12px; }
 
   /* quick-switcher fits the screen */
-  .sw-box { min-width: 0; width: 86vw; }
+  .sw-box { width: 86vw; grid-template-columns: minmax(0, 1fr); }
 
   /* terminal: sidebar becomes an off-canvas drawer */
   #sidebar {

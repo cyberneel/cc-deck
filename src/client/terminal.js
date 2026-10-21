@@ -871,14 +871,24 @@ function openSwitcher(dir, mod) {
 }
 function stepSwitcher(dir) { swIdx = (swIdx + dir + swList.length) % swList.length; renderSwitcher(); }
 function cycle(mod, reverse) { if (!switching) openSwitcher(reverse ? -1 : 1, mod); else stepSwitcher(reverse ? -1 : 1); }
+// A grid, so a long MRU list fits on screen. Columns fill the width (max 6);
+// arrows move by cell/row, Enter or a click picks.
+const swCols = () => Math.max(1, Math.min(swList.length, 6, Math.floor((innerWidth * 0.9 - 20) / 226)));
 function renderSwitcher() {
+  swBox.style.setProperty('--cols', swCols());
   swBox.innerHTML = swList.map((name, i) => {
     const s = sessions.find((x) => x.name === name) || {};
-    return `<div class="sw-item ${i === swIdx ? 'sel' : ''}">
-      <span class="sb-dot ${statusDot(s)}"></span>${esc(titleOf(name))}${needsAttention(s) ? ' <span class="sb-attn">●</span>' : ''}
+    return `<div class="sw-item ${i === swIdx ? 'sel' : ''}" data-i="${i}">
+      <span class="sb-dot ${statusDot(s)}"></span><span class="sw-t">${esc(titleOf(name))}${needsAttention(s) ? ' <span class="sb-attn">●</span>' : ''}</span>
+      <span class="sw-d">${esc(baseName(s.dir))}</span>
     </div>`;
   }).join('');
+  swBox.children[swIdx]?.scrollIntoView({ block: 'nearest' });
 }
+sw.addEventListener('click', (e) => {
+  const it = e.target.closest('.sw-item');
+  if (it) { swIdx = Number(it.dataset.i); commitSwitcher(); } else if (e.target === sw) { sw.style.display = 'none'; switching = false; switchMod = null; }
+});
 function commitSwitcher() {
   sw.style.display = 'none';
   if (switching && swList[swIdx]) switchTo(swList[swIdx]);
@@ -888,6 +898,13 @@ function commitSwitcher() {
 window.addEventListener('keydown', (e) => {
   if (e.altKey && e.code === 'Backquote') { e.preventDefault(); cycle('Alt', e.shiftKey); return; }
   if (e.ctrlKey && e.key === 'Tab') { e.preventDefault(); cycle('Control', e.shiftKey); return; }
+  if (switching && /^Arrow(Left|Right|Up|Down)$/.test(e.key)) {
+    e.preventDefault(); e.stopPropagation(); // not to the terminal, not browser back/forward
+    const c = swCols();
+    stepSwitcher({ ArrowLeft: -1, ArrowRight: 1, ArrowUp: -c, ArrowDown: c }[e.key]);
+    return;
+  }
+  if (switching && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commitSwitcher(); return; }
   if (switching && e.key === 'Escape') { sw.style.display = 'none'; switching = false; switchMod = null; e.preventDefault(); return; }
   if (e.altKey && /^[1-9]$/.test(e.key)) { const t = groupedSessions()[Number(e.key) - 1]; if (t) { e.preventDefault(); switchTo(t.name); } }
 }, true);
