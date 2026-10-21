@@ -368,7 +368,7 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--surface); bor
 .sb-num { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 .sb-item.attn .sb-title { color: var(--fg); font-weight: 600; }
 .sb-warm { color: var(--green); font-size: 9px; vertical-align: middle; opacity: .8; }
-.sb-attn { color: var(--red); font-size: 10px; }
+.sb-attn { color: var(--fg); font-size: 10px; }
 .sb-foot { padding: 10px 14px; border-top: 1px solid var(--hair); white-space: nowrap; }
 .sb-badge { position: absolute; top: 2px; right: 0; background: var(--red); color: #fff; font-family: var(--mono); font-size: 9px; padding: 0 4px; min-width: 14px; text-align: center; }
 .term-bar .icon { position: relative; }
@@ -450,6 +450,10 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--surface); bor
 .fx-del:hover { color: var(--red); }
 @media (max-width: 700px) { .toggle.tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; } .toggle.tabs button { white-space: nowrap; } }
 
+/* iPad home-screen app: clear the window controls in the top-left corner (class set in swreg.js). */
+.ipad-app { --wc-left: 84px; }
+.ipad-app .topbar, .ipad-app .sb-head, .ipad-app #app-term.collapsed .term-bar { padding-left: var(--wc-left); }
+
 /* ---- mobile on-screen key bar + drawer backdrop (hidden on desktop) ---- */
 #sb-backdrop { display: none; }
 .keybar { display: none; }
@@ -505,6 +509,7 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--surface); bor
   #app-term:not(.collapsed) #sb-backdrop { display: block; position: absolute; inset: 0; z-index: 55; background: rgba(0,0,0,.45); }
 
   .term-bar { padding-top: max(8px, env(safe-area-inset-top)); height: auto; min-height: 44px; gap: 10px; }
+  .ipad-app .term-bar { padding-left: var(--wc-left); } /* the sidebar is a drawer here, so the bar is always leftmost */
   .term-bar .status { display: none; }
   .term-bar .status.connecting, .term-bar .status.closed { display: inline; }
 

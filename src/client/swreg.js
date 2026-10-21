@@ -2,6 +2,15 @@
 // onUpdate(worker) fires when a new build has installed and is waiting — the
 // caller shows a "Reload" toast and passes the worker back to applyUpdate().
 
+// iPadOS 26 draws its window controls over a home-screen web app's top-left
+// corner and no safe-area inset reports them, so styles.css offsets the
+// top-left controls under .ipad-app. iPads send a Mac UA; Macs have no touch.
+// ponytail: also on in full screen, where the controls hide (a gap, not a bug);
+// a maximized window can't be told apart from full screen by size.
+if (navigator.standalone && navigator.maxTouchPoints > 1 && /Macintosh|iPad/.test(navigator.userAgent)) {
+  document.documentElement.classList.add('ipad-app');
+}
+
 export function registerServiceWorker(onUpdate) {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', async () => {
