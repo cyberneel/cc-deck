@@ -46,8 +46,8 @@ export async function initServer() {
 
 // Polymux color palette (kept in sync with src/client/styles.css).
 const C = {
-  barBg: '#171717', dim: '#9b9b9b', faint: '#6a6a6a', text: '#ededed',
-  accent: '#d97757', accentInk: '#1a0f0a', border: '#2c2c2c', borderHi: '#3f3f3f',
+  barBg: '#000000', dim: '#a3a3a3', faint: '#5c5c5c', text: '#ffffff',
+  accent: '#ffffff', accentInk: '#000000', border: '#262626', borderHi: '#5c5c5c',
 };
 
 // Theme a session's tmux status bar / selection to match the webapp.
@@ -59,7 +59,7 @@ async function styleSession(name) {
   await set('status-left-length', '40');
   await set('status-right', `#[fg=${C.faint}]%H:%M `);
   await set('message-style', `bg=${C.accent},fg=${C.accentInk}`);
-  await set('mode-style', `bg=${C.accent},fg=${C.accentInk}`); // copy-mode selection
+  await set('mode-style', 'bg=#333333,fg=#ffffff'); // copy-mode selection
   await setw('window-status-current-style', `fg=${C.text},bg=${C.border},bold`);
   await setw('window-status-style', `fg=${C.dim},bg=${C.barBg}`);
   await setw('pane-active-border-style', `fg=${C.borderHi}`);

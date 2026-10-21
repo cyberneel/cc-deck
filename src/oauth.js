@@ -95,20 +95,16 @@ export function authorizePage(q) {
   const hidden = ['client_id', 'redirect_uri', 'code_challenge', 'code_challenge_method', 'state', 'scope', 'resource', 'response_type']
     .map((k) => `<input type="hidden" name="${k}" value="${esc(q[k] || '')}">`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Polymux · authorize</title><style>
-body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0c0c0c;color:#ededed;font-family:-apple-system,system-ui,sans-serif}
-.card{background:#171717;border:1px solid #2c2c2c;border-radius:16px;padding:28px;max-width:400px;width:90%}
-h1{font-size:18px;margin:0 0 6px}p{color:#9b9b9b;font-size:14px;line-height:1.5}
-input[type=password]{width:100%;box-sizing:border-box;background:#0c0c0c;border:1px solid #2c2c2c;color:#ededed;border-radius:8px;padding:11px;font-size:15px;margin:12px 0}
-button{width:100%;background:#d97757;border:none;color:#1a0f0a;font-weight:600;border-radius:9px;padding:12px;font-size:15px;cursor:pointer}
-.dot{width:9px;height:9px;border-radius:50%;background:#d97757;display:inline-block;margin-right:8px}.err{color:#ff8d85;font-size:13px;min-height:16px}
-</style></head><body><form class="card" method="POST" action="/oauth/authorize">
-<h1><span class="dot"></span>Authorize ${esc(client.name)}</h1>
-<p>This will let <strong>${esc(client.name)}</strong> search and read your Polymux session history. Enter your Polymux password to allow.</p>
+<title>Authorize ${esc(client.name)} for Polymux</title><meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:ital,wght@0,400;0,500;0,600;1,400&family=Martian+Mono:wght@300;400&display=swap">
+<link rel="stylesheet" href="/login.css"></head><body><form class="login" method="POST" action="/oauth/authorize">
+<div class="brand"><span class="dot"></span>Authorize ${esc(client.name)}</div>
+<p class="sub">This will let <strong>${esc(client.name)}</strong> search and read your Polymux session history. Enter your Polymux password to allow.</p>
 ${hidden}
 <input type="password" name="password" placeholder="Polymux password" autofocus autocomplete="current-password">
-<div class="err">${q._err ? esc(q._err) : ''}</div>
-<button type="submit">Allow access</button>
+<div class="error">${q._err ? esc(q._err) : ''}</div>
+<button class="primary" type="submit">Allow access</button>
 </form></body></html>`;
 }
 
