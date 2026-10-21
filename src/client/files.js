@@ -51,7 +51,7 @@ function renderBar(data, container) {
   bar.innerHTML = `
     <div class="fx-crumbs">${crumbs.join('')}</div>
     <div class="spacer"></div>
-    <button id="fx-up" ${data.parent ? '' : 'disabled'} title="Up one level">↑</button>
+    <button id="fx-up" ${data.parent ? '' : 'disabled'} title="Up one level">Up</button>
     <button id="fx-mkdir">+ Folder</button>
     <button id="fx-upload" class="primary">Upload here</button>`;
   bar.querySelectorAll('.fx-crumb').forEach((b) => b.addEventListener('click', () => load(b.dataset.path, container)));
@@ -67,14 +67,13 @@ function renderList(data, container) {
   list.innerHTML = data.entries.map((e) => {
     const full = data.path.replace(/\/$/, '') + '/' + e.name;
     const lead = e.type === 'file'
-      ? `<a class="fx-act" href="/api/files/download?path=${encodeURIComponent(full)}" title="Download" download>⬇</a>`
-      : `<button class="fx-act fx-sess" data-path="${esc(full)}" title="New Deep Session here">▶</button>`;
+      ? `<a class="fx-act" href="/api/files/download?path=${encodeURIComponent(full)}" title="Download" download>Download</a>`
+      : `<button class="fx-act fx-sess" data-path="${esc(full)}" title="New Deep Session here">New Deep Session</button>`;
     return `<div class="fx-row ${e.type}" data-name="${esc(e.name)}" data-full="${esc(full)}">
-      <span class="fx-ico">${e.type === 'dir' ? '📁' : '📄'}</span>
-      <span class="fx-name">${esc(e.name)}</span>
+      <span class="fx-name">${esc(e.name)}${e.type === 'dir' ? '/' : ''}</span>
       <span class="faint fx-meta">${e.type === 'file' ? kb(e.sizeKb) : ''}</span>
       ${lead}
-      <button class="fx-act fx-del" data-full="${esc(full)}" title="Delete">🗑</button>
+      <button class="fx-act fx-del" data-full="${esc(full)}" title="Delete">✕</button>
     </div>`;
   }).join('');
   list.querySelectorAll('.fx-row.dir').forEach((r) =>

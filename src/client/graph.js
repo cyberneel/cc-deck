@@ -25,7 +25,7 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
           <div class="faint" id="gx-sub">loading…</div>
         </div>
         <div class="graph-actions">
-          <button class="gx-share" title="Share this Deep Session's context into another Deep Session" disabled>Share →</button>
+          <button class="gx-share" title="Share this Deep Session's context into another Deep Session" disabled>Share</button>
           <button class="primary gx-fork" title="Fork into a new Deep Session that copies this context" disabled>⑂ Fork</button>
           <button class="icon gx-close" title="Close">✕</button>
         </div>
@@ -52,8 +52,8 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
 
   bg.querySelector('h2').textContent = g.title || fallbackTitle || 'Deep Session graph';
   bg.querySelector('#gx-sub').textContent =
-    `${g.cwd || ''}${g.gitBranch ? ' · ' + g.gitBranch : ''} · ${g.stats.messages} msgs · ` +
-    `${g.stats.branchPoints} branch${g.stats.branchPoints === 1 ? '' : 'es'} · ~${tok(g.stats.totalTokens)} tokens`;
+    `${g.cwd || ''}${g.gitBranch ? ', ' + g.gitBranch : ''}, ${g.stats.messages} messages, ` +
+    `${g.stats.branchPoints} branch${g.stats.branchPoints === 1 ? '' : 'es'}, ~${tok(g.stats.totalTokens)} tokens`;
 
   // Wire the Fork action now that we know the session's directory.
   const forkDir = g.cwd || cwd || '';
@@ -115,7 +115,7 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
   // rows
   const rows = g.nodes.map((n) => {
     const roleLabel = n.role === 'user' ? 'You' : 'Claude';
-    const tools = n.tools.length ? `<span class="gtag">🔧 ${n.tools.reduce((s, t) => s + t.count, 0)}</span>` : '';
+    const tools = n.tools.length ? `<span class="gtag">${n.tools.reduce((s, t) => s + t.count, 0)} tools</span>` : '';
     const sub = n.sub ? `<span class="gtag">⤷ ${n.sub}</span>` : '';
     const tt = (n.tokens.in + n.tokens.out + n.tokens.cache);
     const ttag = tt ? `<span class="gtag">${tok(tt)} tok</span>` : '';
@@ -150,7 +150,7 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
         <div class="gmsg-body">${escH(m.text) || '<span class="faint">(no text)</span>'}</div>${tools}
       </div>`;
     }).join('');
-    detail.innerHTML = `<div class="gd-head">Conversation up to this point · ${t.messages.length} message${t.messages.length === 1 ? '' : 's'}</div><div class="gd-thread">${msgs}</div>`;
+    detail.innerHTML = `<div class="gd-head">Conversation up to this point, ${t.messages.length} message${t.messages.length === 1 ? '' : 's'}</div><div class="gd-thread">${msgs}</div>`;
     detail.querySelector('.gd-thread')?.scrollTo(0, detail.querySelector('.gd-thread').scrollHeight);
   };
   scroll.querySelectorAll('.gnode').forEach((r) => r.addEventListener('click', () => selectNode(r.dataset.id)));

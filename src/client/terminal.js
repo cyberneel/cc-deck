@@ -47,9 +47,9 @@ document.body.innerHTML = `
     <aside id="sidebar">
       <div class="sb-head"><span>Deep Sessions</span><button id="sb-collapse" class="icon" title="Collapse">«</button></div>
       <button id="sb-new" class="sb-new">+ New Deep Session</button>
-      <button id="sb-resume" class="sb-new sb-resume">↩ Resume a Deep Session</button>
+      <button id="sb-resume" class="sb-new sb-resume">Resume a Deep Session</button>
       <div id="sb-list"></div>
-      <div class="sb-foot faint">Alt+\` to cycle · Alt+1–9 to jump</div>
+      <div class="sb-foot faint">Alt+\` to cycle, Alt+1–9 to jump</div>
     </aside>
     <div id="sb-backdrop"></div>
     <div id="main">
@@ -57,11 +57,11 @@ document.body.innerHTML = `
         <button id="sb-toggle" class="icon" title="Toggle sidebar (Deep Sessions)">☰<span id="sb-badge" class="sb-badge" style="display:none"></span></button>
         <a href="/" title="Back to dashboard">←</a>
         <span class="title" id="title">${currentSession || 'session'}</span>
-        <button id="main-btn" class="burn-pill" style="display:none">↩ main</button>
+        <button id="main-btn" class="burn-pill" style="display:none">Back to main</button>
         <div class="spacer" style="flex:1"></div>
         <button id="notes-btn" class="icon" title="Updates from outside chats" style="display:none"></button>
         <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
-        <button id="upload-btn" class="icon" title="Send files / folder to this Deep Session">📎</button>
+        <button id="upload-btn" class="icon" title="Send files or a folder to this Deep Session">Upload</button>
         <button id="reload-btn" class="icon" title="Reload app">↻</button>
         <button id="scroll-toggle" class="icon" title="Scroll mode — tmux: full history; fast: smooth local scroll"></button>
         <span class="status" id="status" role="status"></span>
@@ -105,12 +105,12 @@ function setStatus(text, cls, html) {
 
 // Connection status for the current pane. While it can't connect the words
 // escalate — "Connecting…", elapsed after 3s, "Still connecting…" at 10s, and at
-// 30s "Can't reach Polymux · Retry". Background retries keep going regardless;
+// 30s "Can't reach Polymux. Retry". Background retries keep going regardless;
 // Retry probes now and restarts the clock.
 function renderConn() {
   const p = panes.get(currentSession);
   if (!p) return;
-  if (p.ws?.readyState === WebSocket.OPEN) return setStatus(scrollMode === 'fast' ? 'connected · fast' : 'connected', 'connected');
+  if (p.ws?.readyState === WebSocket.OPEN) return setStatus(scrollMode === 'fast' ? 'connected, fast' : 'connected', 'connected');
   const s = Math.floor((Date.now() - (p.since ||= Date.now())) / 1000);
   if (s >= 30) return setStatus('', 'closed', `Can't reach Polymux<button data-retry>Retry</button>`);
   const word = s >= 10 ? 'Still connecting…' : p.lost ? 'Reconnecting…' : 'Connecting…';
@@ -132,9 +132,10 @@ const TERM_OPTS = {
   fontFamily: "'JetBrains Mono','SF Mono','Fira Code',ui-monospace,monospace",
   fontSize: isMobile ? 12 : 13, lineHeight: 1.0, cursorBlink: true, scrollback: 10000, allowProposedApi: true,
   theme: {
-    background: '#0a0a0a', foreground: '#ededed', cursor: '#d97757', selectionBackground: '#3a3a3a',
-    black: '#0a0a0a', brightBlack: '#6a6a6a', red: '#ff8d85', brightRed: '#ff8d85',
-    green: '#5cb87a', brightGreen: '#5cb87a', yellow: '#e0c060', brightYellow: '#e0c060',
+    // FridayOS dark palette; the terminal stays black in light mode too.
+    background: '#000000', foreground: '#ffffff', cursor: '#ffffff', selectionBackground: '#333333',
+    black: '#000000', brightBlack: '#6a6a6a', red: '#e5243b', brightRed: '#e5243b',
+    green: '#4cc276', brightGreen: '#4cc276', yellow: '#e0a32e', brightYellow: '#e0a32e',
     blue: '#6ea8fe', brightBlue: '#6ea8fe', magenta: '#c099ff', brightMagenta: '#c099ff',
     cyan: '#5fd3d3', brightCyan: '#5fd3d3', white: '#e6edf3', brightWhite: '#ffffff',
   },
@@ -304,7 +305,7 @@ function applySidebar() {
 
 // ---- scroll mode toggle: re-attach every pane with the new mode ----
 const scrollBtn = document.getElementById('scroll-toggle');
-function refreshScrollBtn() { scrollBtn.textContent = scrollMode === 'fast' ? '⚡ fast' : '↕ tmux'; }
+function refreshScrollBtn() { scrollBtn.textContent = scrollMode === 'fast' ? 'Fast' : 'tmux'; }
 refreshScrollBtn();
 scrollBtn.addEventListener('click', () => {
   scrollMode = scrollMode === 'fast' ? 'tmux' : 'fast';
@@ -348,7 +349,7 @@ async function openResumeModal() {
   catch (e) { list.innerHTML = `<div class="faint" style="padding:8px">${esc(e.message)}</div>`; return; }
   list.innerHTML = items.map((s) =>
     `<div class="seed-item" data-id="${esc(s.sessionId)}" data-dir="${esc(s.cwd)}" data-title="${esc(s.title)}">
-      <span class="seed-item-main"><span class="seed-item-title">${esc(s.title)}</span><span class="seed-item-meta faint">${esc(s.cwd)}${s.gitBranch ? ' · ' + esc(s.gitBranch) : ''}</span></span>
+      <span class="seed-item-main"><span class="seed-item-title">${esc(s.title)}</span><span class="seed-item-meta faint">${esc(s.cwd)}${s.gitBranch ? ', ' + esc(s.gitBranch) : ''}</span></span>
     </div>`).join('') || '<div class="faint" style="padding:8px">No past Deep Sessions.</div>';
   bg.querySelector('#rs-filter').addEventListener('input', (e) => {
     const q = e.target.value.toLowerCase();
@@ -420,7 +421,7 @@ const KEYS = [
   { label: '↓', seq: '\x1b[B', repeat: true },
   { label: '→', seq: '\x1b[C', repeat: true },
   { label: '^C', seq: '\x03' },
-  { label: '🎤', dictate: true, title: 'Dictate or type a message, then send' },
+  { label: 'Dictate', dictate: true, title: 'Dictate or type a message, then send' },
   { label: '⧉', copy: true, title: 'Copy on-screen text' },
   { label: '⎘', paste: true, title: 'Paste from clipboard' },
 ];
@@ -467,7 +468,7 @@ function pasteClipboard() {
   bg.className = 'modal-bg';
   bg.innerHTML = `<div class="modal" style="max-width:440px">
     <h2>Paste</h2>
-    <p class="faint">Long-press the box → <b>Paste</b>, then Send. (On desktop, just press ⌘/Ctrl+V into the terminal.)</p>
+    <p class="faint">Long-press the box, choose <b>Paste</b>, then Send. (On desktop, just press ⌘/Ctrl+V into the terminal.)</p>
     <textarea id="pb-ta" rows="4" style="width:100%;resize:vertical" placeholder="paste here…"></textarea>
     <div class="modal-actions"><button id="pb-cancel">Cancel</button><button class="primary" id="pb-send">Send</button></div>
   </div>`;
@@ -498,7 +499,7 @@ function composeAndSend() {
   bg.className = 'modal-bg';
   bg.innerHTML = `<div class="modal" style="max-width:440px">
     <h2>Speak or type</h2>
-    <p class="faint">Tap the 🎤 on your keyboard to dictate (or just type), then <b>Send</b> — dictation doubles words when typed straight into the terminal, but is clean here.</p>
+    <p class="faint">Tap the microphone on your keyboard to dictate (or just type), then <b>Send</b> — dictation doubles words when typed straight into the terminal, but is clean here.</p>
     <textarea id="cs-ta" rows="4" style="width:100%;resize:vertical" placeholder="Speak or type your message…"></textarea>
     <div class="modal-actions">
       <label class="faint" style="margin-right:auto;display:flex;align-items:center;gap:6px"><input type="checkbox" id="cs-submit" checked> submit ⏎</label>
@@ -604,8 +605,8 @@ function openUploadModal(files, withPaths) {
       const { path: abs, dirs } = await api(`/api/fs?path=${encodeURIComponent(path)}`);
       currentPath = abs; dirInput.value = abs;
       const parent = abs.split('/').slice(0, -1).join('/') || '/';
-      browser.innerHTML = `<div class="row up" data-path="${esc(parent)}">⬆ ..</div>` +
-        dirs.map((d) => `<div class="row" data-path="${esc(d.path)}">📁 ${esc(d.name)}</div>`).join('');
+      browser.innerHTML = `<div class="row up" data-path="${esc(parent)}">..</div>` +
+        dirs.map((d) => `<div class="row" data-path="${esc(d.path)}">${esc(d.name)}/</div>`).join('');
       browser.querySelectorAll('.row').forEach((r) => r.addEventListener('click', () => browse(r.dataset.path)));
     } catch (e) { errEl.textContent = e.message; }
   }
@@ -639,7 +640,7 @@ document.getElementById('upload-btn').addEventListener('click', (e) => {
   m.id = 'upload-menu';
   m.className = 'upload-menu';
   const desktop = !matchMedia('(max-width: 700px)').matches; // iOS can't pick folders
-  m.innerHTML = `<button data-folder="0">📄 Files…</button>${desktop ? '<button data-folder="1">📁 Folder…</button>' : ''}`;
+  m.innerHTML = `<button data-folder="0">Files…</button>${desktop ? '<button data-folder="1">Folder…</button>' : ''}`;
   const r = e.currentTarget.getBoundingClientRect();
   m.style.top = `${r.bottom + 4}px`;
   m.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
@@ -740,7 +741,7 @@ function updateNotesBtn() {
   const s = sessions.find((x) => x.name === currentSession);
   const n = s?.noteCount || 0;
   if (!n) { btn.style.display = 'none'; return; }
-  btn.textContent = `📝${n}`;
+  btn.textContent = `${n} note${n === 1 ? '' : 's'}`;
   btn.title = `${n} update(s) from outside chats — view / apply`;
   btn.style.display = '';
 }
@@ -753,7 +754,7 @@ function sidebarItemHtml(s, i) {
   const cur = s.name === currentSession;
   const att = needsAttention(s);
   const num = i < 9 ? `<span class="sb-num">${i + 1}</span>` : '';
-  const dirLine = s.remote ? `${esc(s.host)} · ${esc(baseName(s.dir))}` : esc(baseName(s.dir));
+  const dirLine = s.remote ? `${esc(s.host)}: ${esc(baseName(s.dir))}` : esc(baseName(s.dir));
   // Badge non-Claude CLIs (e.g. codex) so it's clear which tool a session runs.
   const cliTag = (s.kind && s.kind !== 'claude') ? `<span class="sb-cli" title="${esc(s.kind)} CLI">${esc(s.kind)}</span>` : '';
   // Remote sessions (over SSH) are attach-only for now — no rename/kill/share.

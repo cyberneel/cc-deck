@@ -21,18 +21,18 @@ export function renderBurnPill(btn, burn) {
   // Wrapped in .bp-scoped so the face can drop these on narrow screens (they'd
   // overflow the top bar); the popover still lists them. display:contents keeps
   // the inner spans as flex items on desktop.
-  const scSegs = scoped.map((x) => `<span class="bp-scoped"><span class="bp-sep">·</span><span class="bp-seg ${burnCls(x)}" title="${esc(x.model)} weekly">${pctOf(x) ?? '–'}%</span></span>`).join('');
-  btn.innerHTML = `<span class="bp-emoji">${paceEmoji(overallPace(burn))}</span><span class="bp-seg ${burnCls(s)}">${pctOf(s) ?? '–'}%</span><span class="bp-sep">·</span><span class="bp-seg ${burnCls(w)}">${pctOf(w) ?? '–'}%</span>${scSegs}`;
-  btn.title = `Session ${pctOf(s)}% · Weekly ${pctOf(w)}%${scoped.map((x) => ` · ${x.model} ${pctOf(x)}%`).join('')} used (ccburn) — tap for detail`;
+  const scSegs = scoped.map((x) => `<span class="bp-scoped"><span class="bp-sep">/</span><span class="bp-seg ${burnCls(x)}" title="${esc(x.model)} weekly">${pctOf(x) ?? '–'}%</span></span>`).join('');
+  btn.innerHTML = `${paceEmoji(overallPace(burn))}<span class="bp-seg ${burnCls(s)}">${pctOf(s) ?? '–'}%</span><span class="bp-sep">/</span><span class="bp-seg ${burnCls(w)}">${pctOf(w) ?? '–'}%</span>${scSegs}`;
+  btn.title = `Session ${pctOf(s)}%, weekly ${pctOf(w)}%${scoped.map((x) => `, ${x.model} ${pctOf(x)}%`).join('')} used. Tap for detail.`;
   btn.style.display = '';
 }
 
-// ccburn's own pace legend (its README): 🧊 behind pace · 🔥 on pace · 🚨 too hot.
-export const paceEmoji = (st) => { const r = paceRank(st); return r === 2 ? '🚨' : r === 0 ? '🧊' : '🔥'; };
-// Pill emoji = the 5h SESSION pace (what ccburn headlines and what the popover's
-// session row shows), but escalate to 🚨 if ANY window is actually ahead of pace
+// Pace marker: an amber dot only when burning ahead of pace (a heads-up); nothing otherwise.
+export const paceEmoji = (st) => paceRank(st) === 2 ? '<span class="pace-dot"></span>' : '';
+// Pill marker = the 5h SESSION pace (what ccburn headlines and what the popover's
+// session row shows), but escalate if ANY window is actually ahead of pace
 // so a real over-burn still surfaces. (Avoids a barely-started weekly at "on_pace"
-// flipping the pill to 🔥 while your session is chill.)
+// flipping the pill while your session is chill.)
 export function overallPace(burn) {
   const L = burn?.limits || {};
   const all = [L.session?.status, L.weekly?.status, L.monthly?.status, ...(burn?.scopedWeekly || []).map((s) => s.status)].filter(Boolean);
@@ -47,12 +47,12 @@ function detailHtml(b) {
     const resets = l.resets_in_minutes != null ? `${l.resets_in_minutes}m` : l.resets_in_hours != null ? `${l.resets_in_hours.toFixed(0)}h` : '—';
     return `<div class="limit"><div class="limit-top"><span>${name}</span><span>${paceEmoji(l.status)} ${pct.toFixed(0)}%</span></div>
       <div class="limit-bar"><div class="limit-fill" style="width:${Math.min(100, pct)}%"></div></div>
-      <div class="faint">resets in ${resets} · budget pace ${((l.budget_pace || 0) * 100).toFixed(0)}%</div></div>`;
+      <div class="faint">resets in ${resets}, budget pace ${((l.budget_pace || 0) * 100).toFixed(0)}%</div></div>`;
   };
   const br = b.burn_rate;
-  return `<div class="burn-pop-title">Plan limits <span class="faint">· ccburn</span></div>
+  return `<div class="burn-pop-title">Plan limits</div>
     ${card('Session (5h)', lim.session)}${card('Weekly', lim.weekly)}${(b.scopedWeekly || []).map((s) => card(`${esc(s.model)} weekly <span class="faint">(½ cap)</span>`, s)).join('')}${lim.monthly ? card('Monthly', lim.monthly) : ''}
-    ${br ? `<div class="faint" style="margin-top:2px">${paceEmoji(b.limits?.[br.limit]?.status)} burn ${Number(br.percent_per_hour).toFixed(1)}%/h (${esc(br.trend || '')})${br.estimated_minutes_to_100 ? ` · ~${Math.round(br.estimated_minutes_to_100 / 60 * 10) / 10}h to 100%` : ''}</div>` : ''}
+    ${br ? `<div class="faint" style="margin-top:2px">${paceEmoji(b.limits?.[br.limit]?.status)} burn ${Number(br.percent_per_hour).toFixed(1)}%/h (${esc(br.trend || '')})${br.estimated_minutes_to_100 ? `, ~${Math.round(br.estimated_minutes_to_100 / 60 * 10) / 10}h to 100%` : ''}</div>` : ''}
     ${b.recommendation ? `<div class="faint">${esc(String(b.recommendation).replace(/_/g, ' '))}</div>` : ''}`;
 }
 

@@ -1,35 +1,40 @@
-:root { --accent: #d97757; }
+/* FridayOS theme (friday/docs/ux-audit/theme.md): black and white, square, no shadows. */
+:root {
+  --bg: #fff; --fg: #000; --muted: #5c5c5c; --line: #000; --hair: #e0e0e0; --red: #a8071a;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #000; --fg: #fff; --muted: #a3a3a3; --line: #5c5c5c; --hair: #262626; --red: #e5243b; color-scheme: dark; }
+}
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
-  background: radial-gradient(1200px 600px at 50% -10%, #1c1c1c, #0c0c0c);
-  color: #ededed;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Schibsted Grotesk', system-ui, -apple-system, sans-serif;
   display: flex; align-items: center; justify-content: center;
 }
 .login {
-  background: #171717;
-  border: 1px solid #2c2c2c;
-  border-radius: 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
   padding: 32px;
-  width: min(360px, 90vw);
+  width: min(360px, calc(100vw - 32px));
   display: flex; flex-direction: column; gap: 14px;
-  box-shadow: 0 24px 60px rgba(0,0,0,.4);
 }
-.brand { font-weight: 700; font-size: 20px; display: flex; align-items: center; gap: 10px; }
-.brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
-.sub { margin: 0 0 6px; color: #9b9b9b; font-size: 13px; }
+.brand { font-weight: 600; font-size: 22px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
+.brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--fg); }
+.sub { margin: 0 0 6px; color: var(--muted); font-size: 14px; }
 input {
-  background: #0c0c0c; border: 1px solid #2c2c2c; color: #ededed;
-  border-radius: 8px; padding: 12px 14px; font-size: 15px; width: 100%; font-family: inherit;
+  background: var(--bg); border: 1px solid var(--line); color: var(--fg);
+  border-radius: 0; padding: 12px 14px; font-size: 16px; width: 100%; font-family: inherit;
 }
-input:focus { outline: none; border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 button.primary {
-  background: var(--accent); border: none; color: #1a0f0a; font-weight: 600;
-  border-radius: 8px; padding: 12px; font-size: 15px; cursor: pointer; font-family: inherit;
+  background: var(--fg); border: 1px solid var(--fg); color: var(--bg); font-weight: 500;
+  border-radius: 0; padding: 12px; font-size: 16px; cursor: pointer; font-family: inherit;
 }
-button.primary:hover { background: #b85f43; }
-.error { color: #ff8d85; font-size: 13px; min-height: 16px; text-align: center; }
-.sso { color: #9b9b9b; font-size: 13px; text-align: center; text-decoration: none; border-top: 1px solid #2c2c2c; padding-top: 14px; }
-.sso:hover { color: #ededed; }
+button.primary:hover { background: color-mix(in srgb, var(--fg) 82%, var(--bg)); }
+.error { color: var(--red); font-size: 14px; min-height: 16px; text-align: center; }
+.sso { color: var(--fg); font-size: 14px; text-align: center; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; border-top: 1px solid var(--hair); padding-top: 14px; }
+.sso:hover { text-decoration-thickness: 2px; }
 .sso[hidden] { display: none; }

@@ -70,8 +70,8 @@ export function openNewModal({ api, cfg = {}, onCreated }) {
       dirInput.value = abs;
       const parent = abs.split('/').slice(0, -1).join('/') || '/';
       browser.innerHTML =
-        `<div class="row up" data-path="${esc(parent)}">⬆ ..</div>` +
-        dirs.map((d) => `<div class="row" data-path="${esc(d.path)}">📁 ${esc(d.name)}</div>`).join('');
+        `<div class="row up" data-path="${esc(parent)}">..</div>` +
+        dirs.map((d) => `<div class="row" data-path="${esc(d.path)}">${esc(d.name)}/</div>`).join('');
       browser.querySelectorAll('.row').forEach((r) => r.addEventListener('click', () => browse(r.dataset.path)));
     } catch (e) {
       errEl.textContent = e.message;

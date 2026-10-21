@@ -230,22 +230,22 @@ function render() {
       </div>
       <div class="spacer"></div>
       <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
-      <button id="update-btn" class="burn-pill" style="display:none">${matchMedia('(max-width: 700px)').matches ? '⬆' : '⬆ Update'}</button>
+      <button id="update-btn" class="burn-pill" style="display:none">Update</button>
       <button class="primary" id="new-btn" title="New Deep Session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New Deep Session'}</button>
-      <button id="snapshot-btn" class="icon" title="Snapshot Deep Sessions (restore after a reboot)">💾<span class="snap-age" id="snap-age"></span></button>
-      <button id="storage-btn" class="icon" title="Storage &amp; cleanup">🗄</button>
+      <button id="snapshot-btn" class="icon" title="Snapshot Deep Sessions (restore after a reboot)">Snapshot<span class="snap-age" id="snap-age"></span></button>
+      <button id="storage-btn" class="icon" title="Storage &amp; cleanup">Storage</button>
       <button id="help-btn" class="icon help-btn" title="Help">?</button>
       <button id="reload-btn" class="icon" title="Reload app">↻</button>
-      ${cfg.account_url ? `<a id="account-link" class="icon" href="${esc(cfg.account_url)}" target="_blank" rel="noopener" title="Account">👤</a>` : ''}
-      <button id="logout-btn" title="Log out">⏻</button>
+      ${cfg.account_url ? `<a id="account-link" class="icon" href="${esc(cfg.account_url)}" target="_blank" rel="noopener" title="Account">Account</a>` : ''}
+      <button id="logout-btn" title="Log out">Log out</button>
       <button id="opts-btn" class="icon opts-btn" title="Options" aria-haspopup="true" aria-expanded="false">⋯</button>
       <div class="opts-menu" id="opts-menu">
-        <button data-target="help-btn">❔&nbsp; Help</button>
-        <button data-target="snapshot-btn">💾&nbsp; Snapshot Deep Sessions</button>
-        <button data-target="storage-btn">🗄&nbsp; Storage &amp; cleanup</button>
+        <button data-target="help-btn">Help</button>
+        <button data-target="snapshot-btn">Snapshot Deep Sessions</button>
+        <button data-target="storage-btn">Storage &amp; cleanup</button>
         <button data-target="reload-btn">↻&nbsp; Reload app</button>
-        ${cfg.account_url ? '<button data-target="account-link">👤&nbsp; Account ↗</button>' : ''}
-        <button data-target="logout-btn">⏻&nbsp; Log out</button>
+        ${cfg.account_url ? '<button data-target="account-link">Account</button>' : ''}
+        <button data-target="logout-btn">Log out</button>
       </div>
     </div>
     <div class="wrap">
@@ -258,9 +258,9 @@ function render() {
           <button class="search-clear" id="search-clear" title="Clear" style="${query ? '' : 'display:none'}">✕</button>
         </div>
         <div class="toggle" id="view-toggle">
-          <button data-view="grid" class="${view === 'grid' ? 'active' : ''}">▦ Grid</button>
-          <button data-view="list" class="${view === 'list' ? 'active' : ''}">☰ List</button>
-          <button data-view="group" class="${view === 'group' ? 'active' : ''}">⊞ Group</button>
+          <button data-view="grid" class="${view === 'grid' ? 'active' : ''}">Grid</button>
+          <button data-view="list" class="${view === 'list' ? 'active' : ''}">List</button>
+          <button data-view="group" class="${view === 'group' ? 'active' : ''}">Group</button>
         </div>
       </div>
       <div id="cards"></div>
@@ -327,7 +327,7 @@ function render() {
     try {
       const r = await api('/api/restore/snapshot', { method: 'POST' });
       const safe = !r.busy;
-      toast(`💾 Snapshot saved · ${r.count} Deep Session${r.count === 1 ? '' : 's'} · ${safe ? '✓ all idle — safe to reboot' : `⚠ ${r.busy} still working — let them finish first`}`);
+      toast(`Snapshot saved: ${r.count} Deep Session${r.count === 1 ? '' : 's'}. ${safe ? 'All idle, safe to reboot.' : `${r.busy} still working, let them finish first.`}`);
       loadSnap();
     } catch (err) { toast('Snapshot failed: ' + err.message, { kind: 'error', action: 'Retry', onAction: () => b.click() }); }
     finally { b.disabled = false; }
@@ -506,10 +506,10 @@ function cardHtml(s) {
     <div class="card-foot">
       <span class="badge ${st.cls}"><span class="pulse"></span>${st.text}</span>
       ${modeChip(s)}
-      <span class="faint">${s.attached ? 'attached · ' : ''}${fmtTime(s.lastActivity)}</span>
+      <span class="faint">${s.attached ? 'attached, ' : ''}${fmtTime(s.lastActivity)}</span>
       <div class="spacer"></div>
-      ${s.parked ? `<button class="burn-pill main-btn" title="${esc(parkedTip(s))}">↩ main</button>` : ''}
-      ${s.noteCount ? `<button class="icon note-btn" title="${s.noteCount} update(s) from outside chats — view / apply" data-note="${esc(s.name)}" data-live="${esc(s.liveSessionId || '')}">📝${s.noteCount}</button>` : ''}
+      ${s.parked ? `<button class="burn-pill main-btn" title="${esc(parkedTip(s))}">Back to main</button>` : ''}
+      ${s.noteCount ? `<button class="icon note-btn" title="${s.noteCount} update(s) from outside chats — view / apply" data-note="${esc(s.name)}" data-live="${esc(s.liveSessionId || '')}">${s.noteCount} note${s.noteCount === 1 ? '' : 's'}</button>` : ''}
       ${s.liveSessionId ? `<button class="icon graph-btn" title="Deep Session graph" data-graph="${esc(s.liveSessionId)}" data-cwd="${esc(s.dir || '')}" data-gtitle="${esc(s.title)}">⎇</button>` : ''}
       <button class="icon rename-btn" title="Rename">✎</button>
       <button class="icon danger kill-btn" title="Kill Deep Session">✕</button>
@@ -630,7 +630,7 @@ function wireHistoryCards(container) {
         });
         location.href = `/terminal.html?session=${encodeURIComponent(name)}`;
       } catch (e) {
-        btn.disabled = false; btn.textContent = '▶ Resume';
+        btn.disabled = false; btn.textContent = 'Resume';
         toast('Could not resume: ' + e.message, { kind: 'error', action: 'Retry', onAction: go });
       }
     };
@@ -676,19 +676,19 @@ async function forkFrom(resume, dir, title, btn) {
 function historyCardHtml(s) {
   const noCwd = !s.cwd;
   const runningName = liveClaudeMap.get(s.sessionId) || null;
-  const noteBadge = s.noteCount ? `<button class="icon note-btn" title="${s.noteCount} update(s) from outside chats — view (applied on resume)" data-note-id="${esc(s.sessionId)}">📝${s.noteCount}</button>` : '';
+  const noteBadge = s.noteCount ? `<button class="icon note-btn" title="${s.noteCount} update(s) from outside chats — view (applied on resume)" data-note-id="${esc(s.sessionId)}">${s.noteCount} note${s.noteCount === 1 ? '' : 's'}</button>` : '';
   const graphBtn = `<button class="icon graph-btn" title="Deep Session graph" data-graph="${esc(s.sessionId)}" data-cwd="${esc(s.cwd || '')}" data-gtitle="${esc(s.title)}">⎇</button>`;
   const forkBtn = noCwd ? '' : `<button class="icon fork-btn" title="Fork into a new Deep Session (copies this Deep Session's context)" data-fork="${esc(s.sessionId)}" data-cwd="${esc(s.cwd || '')}" data-gtitle="${esc(s.title)}">${FORK_ICON}</button>`;
   const foot = runningName
     ? `<span class="badge live"><span class="pulse"></span>running</span><div class="spacer"></div>
-       ${noteBadge}${graphBtn}${forkBtn}<button class="primary open-btn">▶ Open</button>`
-    : `${modeChip(s)}<span class="faint">${fmtAbsTime(s.lastModified)} · ${s.sizeKb} KB</span><div class="spacer"></div>
-       ${noteBadge}${graphBtn}${forkBtn}<button class="primary resume-btn" ${noCwd ? 'disabled title="No recorded directory"' : ''}>▶ Resume</button>`;
+       ${noteBadge}${graphBtn}${forkBtn}<button class="primary open-btn">Open</button>`
+    : `${modeChip(s)}<span class="faint">${fmtAbsTime(s.lastModified)}, ${s.sizeKb} KB</span><div class="spacer"></div>
+       ${noteBadge}${graphBtn}${forkBtn}<button class="primary resume-btn" ${noCwd ? 'disabled title="No recorded directory"' : ''}>Resume</button>`;
   return `<div class="card hist ${runningName ? 'isrunning' : ''}" data-id="${esc(s.sessionId)}" ${runningName ? `data-open="${esc(runningName)}"` : ''}>
     <div class="card-head">
       <div style="flex:1;min-width:0">
         <div class="card-title" title="${esc(s.title)}">${esc(s.title)}</div>
-        <div class="hist-dir">${esc(shortDir(s.cwd))}${s.gitBranch ? ` · ${esc(s.gitBranch)}` : ''}</div>
+        <div class="hist-dir">${esc(shortDir(s.cwd))}${s.gitBranch ? `, ${esc(s.gitBranch)}` : ''}</div>
       </div>
     </div>
     <div class="card-foot">${foot}</div>
@@ -712,8 +712,8 @@ function tokensFmt(n) {
   return String(n);
 }
 function paceEmoji(s) {
-  // ccburn's legend (match by keyword; its strings are e.g. "ahead_of_pace").
-  return /ahead/.test(s || '') ? '🚨' : /behind/.test(s || '') ? '🧊' : '🔥';
+  // ccburn's strings are e.g. "ahead_of_pace"; only ahead of pace gets the amber heads-up dot.
+  return /ahead/.test(s || '') ? '<span class="pace-dot"></span>' : '';
 }
 
 async function loadUsage() {
@@ -730,7 +730,7 @@ async function loadBurn() {
   if (tab === 'usage') renderUsage();
 }
 
-// ---- last-snapshot age indicator (next to the 💾 button) ----
+// ---- last-snapshot age indicator (next to the Snapshot button) ----
 let lastSnap = null;
 function ageShort(ms) {
   if (ms < 45_000) return 'now';
@@ -745,7 +745,7 @@ function renderSnapAge() {
   if (!lastSnap || !lastSnap.at) { el.textContent = ''; btn.title = 'Snapshot Deep Sessions (restore after a reboot)'; return; }
   const age = ageShort(Date.now() - lastSnap.at);
   el.textContent = age;
-  btn.title = `Last snapshot: ${lastSnap.count} Deep Session${lastSnap.count === 1 ? '' : 's'}, ${age} ago · click to snapshot now`;
+  btn.title = `Last snapshot: ${lastSnap.count} Deep Session${lastSnap.count === 1 ? '' : 's'}, ${age} ago. Click to snapshot now.`;
 }
 async function loadSnap() { try { lastSnap = await api('/api/restore'); } catch { /* */ } renderSnapAge(); }
 
@@ -791,9 +791,9 @@ function renderUsage() {
     <div class="roi-value">${money(cyc)} <span class="roi-of">/ ${money(price)} plan</span></div>
     <div class="roi-bar"><div class="roi-fill ${broke ? 'good' : ''}" style="width:${pct}%"></div></div>
     <div class="roi-verdict ${broke ? 'good' : ''}">${broke
-      ? `✓ Broken even — you've returned <strong>${multiple.toFixed(1)}×</strong> the subscription this cycle`
+      ? `Broken even: you've returned <strong>${multiple.toFixed(1)}×</strong> the subscription this cycle`
       : `<strong>${pct.toFixed(0)}%</strong> to break-even — ${money(price - cyc)} more value needed`}</div>
-    <div class="faint">On pace for ${money(u.cycle.projectedCost)} this cycle · day ${u.cycle.daysElapsed}/${u.cycle.daysInCycle}, renews ${cycEnd}</div>
+    <div class="faint">On pace for ${money(u.cycle.projectedCost)} this cycle, day ${u.cycle.daysElapsed}/${u.cycle.daysInCycle}, renews ${cycEnd}</div>
   </div>`;
 
   html += `<div class="usage-tiles">
@@ -854,7 +854,7 @@ function renderBurnCards() {
     return `<div class="limit">
       <div class="limit-top"><span>${name}</span><span>${paceEmoji(l.status)} ${pct.toFixed(0)}%</span></div>
       <div class="limit-bar"><div class="limit-fill" style="width:${Math.min(100, pct)}%"></div></div>
-      <div class="faint">resets in ${resets} · budget pace ${((l.budget_pace || 0) * 100).toFixed(0)}%</div>
+      <div class="faint">resets in ${resets}, budget pace ${((l.budget_pace || 0) * 100).toFixed(0)}%</div>
     </div>`;
   };
   return `<div class="panel"><h3>Plan limits — live <span class="faint">(ccburn)</span></h3>

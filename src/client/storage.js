@@ -45,13 +45,13 @@ export async function openStorage() {
 
   const fileRow = (cat, f) =>
     `<label class="st-row"><input type="checkbox" data-cat="${cat}" data-id="${escH(f.name)}" data-kb="${f.sizeKb}">
-      <span class="st-name">${escH(f.name)}</span><span class="faint st-rmeta">${dt(f.mtime)} · ${kb(f.sizeKb)}</span></label>`;
+      <span class="st-name">${escH(f.name)}</span><span class="faint st-rmeta">${dt(f.mtime)}, ${kb(f.sizeKb)}</span></label>`;
 
   const fileSection = (title, cat, files) => {
     if (!files.length) return `<div class="st-sec"><div class="st-sec-head"><span>${title}</span> <span class="faint">(none)</span></div></div>`;
     return `<div class="st-sec"><div class="st-sec-head">
         <label class="st-all"><input type="checkbox" class="st-selall"><span>${title}</span></label>
-        <span class="faint">${files.length} · ${kb(files.reduce((n, x) => n + x.sizeKb, 0))}</span>
+        <span class="faint">${files.length}, ${kb(files.reduce((n, x) => n + x.sizeKb, 0))}</span>
       </div>${files.map((f) => fileRow(cat, f)).join('')}</div>`;
   };
 
@@ -63,21 +63,21 @@ export async function openStorage() {
         return `<label class="st-row ${running ? 'st-disabled' : ''}">
           <input type="checkbox" data-cat="transcripts" data-id="${escH(it.sessionId)}" data-kb="${it.sizeKb}" ${running ? 'disabled' : ''}>
           <span class="st-name">${escH(it.sessionId.slice(0, 8))}…</span>
-          <span class="faint st-rmeta">${running ? '<span class="gtag gtag-branch">running</span> ' : ''}${dt(it.mtime)} · ${kb(it.sizeKb)}</span></label>`;
+          <span class="faint st-rmeta">${running ? '<span class="gtag gtag-branch">running</span> ' : ''}${dt(it.mtime)}, ${kb(it.sizeKb)}</span></label>`;
       }).join('');
       return `<details class="st-grp">
         <summary><label class="st-all st-selall-wrap"><input type="checkbox" class="st-selall"></label>
-          <span class="st-grp-dir">${escH(g.cwd)}</span><span class="faint">${g.count} · ${kb(g.sizeKb)}</span></summary>
+          <span class="st-grp-dir">${escH(g.cwd)}</span><span class="faint">${g.count}, ${kb(g.sizeKb)}</span></summary>
         ${rows}</details>`;
     }).join('');
     return `<div class="st-sec"><div class="st-sec-head"><span>Past sessions (transcripts)</span>
-      <span class="faint">includes ones hidden from History · deletes are permanent</span></div>${blocks}</div>`;
+      <span class="faint">includes ones hidden from History. Deletes are permanent.</span></div>${blocks}</div>`;
   };
 
   function updateSel() {
     const checked = [...body.querySelectorAll('input[type=checkbox][data-id]:checked')];
     const total = checked.reduce((n, c) => n + Number(c.dataset.kb || 0), 0);
-    selEl.textContent = checked.length ? `${checked.length} selected · ~${kb(total)}` : 'Nothing selected';
+    selEl.textContent = checked.length ? `${checked.length} selected, ~${kb(total)}` : 'Nothing selected';
     delBtn.disabled = !checked.length;
   }
 
@@ -102,7 +102,7 @@ export async function openStorage() {
     liveIds = new Set();
     (sess.sessions || []).forEach((s) => { if (s.liveSessionId) liveIds.add(s.liveSessionId); if (s.resumedFrom) liveIds.add(s.resumedFrom); });
     const t = data.totals;
-    sub.textContent = `${t.transcriptCount} transcripts · ${data.handoffs.length} handoffs · ${data.caches.length} caches · ~${kb(t.handoffsKb + t.cachesKb + t.transcriptsKb)} total`;
+    sub.textContent = `${t.transcriptCount} transcripts, ${data.handoffs.length} handoffs, ${data.caches.length} caches, ~${kb(t.handoffsKb + t.cachesKb + t.transcriptsKb)} total`;
     body.innerHTML = fileSection('Context handoffs', 'handoffs', data.handoffs)
       + fileSection('Caches', 'caches', data.caches)
       + transcriptSection(data.transcripts);
@@ -123,7 +123,7 @@ export async function openStorage() {
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
       await load();
-      selEl.textContent = `Deleted ${j.deleted} · freed ~${kb(j.freedKb)}${j.errors.length ? ` · ${j.errors.length} skipped` : ''}`;
+      selEl.textContent = `Deleted ${j.deleted}, freed ~${kb(j.freedKb)}${j.errors.length ? `, ${j.errors.length} skipped` : ''}`;
     } catch (e) { toast('Delete failed: ' + e.message, { kind: 'error' }); updateSel(); }
     finally { delBtn.textContent = 'Delete selected'; }
   });

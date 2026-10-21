@@ -28,7 +28,7 @@ const SECTIONS = [
     <ul>
       <li><b>Active</b> — your running Deep Sessions, as cards (with live previews), a compact list, or
         grouped by directory.</li>
-      <li><b>History</b> — past Deep Sessions from your CLI's store. <b>▶ Resume</b> reopens one as a
+      <li><b>History</b> — past Deep Sessions from your CLI's store. <b>Resume</b> reopens one as a
         fresh live Deep Session in its original directory (Claude; Codex resumes via its own picker).</li>
       <li><b>Usage</b> — token spend and plan ROI (see Usage &amp; limits).</li>
       <li><b>Files</b> — browse, download, delete, or drag-drop files into a Deep Session's directory.</li>
@@ -48,8 +48,8 @@ const SECTIONS = [
       <li><b>Warm Deep Sessions</b> — the current + 2 most-recent stay attached in the background, so
         switching between them is instant.</li>
       <li><b>Parked panes</b> — if a Deep Session is showing a background job instead of its main
-        conversation, its card and the terminal bar say <b>↩ main</b>; click it to swap back.</li>
-      <li><b>Mobile</b> — an on-screen key bar (Esc/Tab/Shift+Tab/Ctrl/arrows) plus <b>🎤</b> to dictate or
+        conversation, its card and the terminal bar say <b>Back to main</b>; click it to swap back.</li>
+      <li><b>Mobile</b> — an on-screen key bar (Esc/Tab/Shift+Tab/Ctrl/arrows) plus <b>Dictate</b> to dictate or
         type a message and send it (iOS dictation is clean there, unlike straight into the terminal).</li>
       <li><b>Copy / paste</b> — ⧉ copies the on-screen text; ⎘ pastes into the Deep Session.</li>
     </ul>`],
@@ -61,7 +61,7 @@ const SECTIONS = [
       <li><b>Alt+\` / Alt+Shift+\`</b> — most-recently-used grid; hold Alt and use the arrows, Enter, or a click to pick.</li>
       <li><b>Alt+1–9</b> — jump to a Deep Session by its number.</li>
     </ul>
-    <p><b>↩ Resume a Deep Session</b> at the top of the sidebar opens a searchable list of past Deep
+    <p><b>Resume a Deep Session</b> at the top of the sidebar opens a searchable list of past Deep
     Sessions — pick one to resume it and switch straight in.</p>`],
 
   ['Resume &amp; fork', `
@@ -94,14 +94,14 @@ const SECTIONS = [
   ['Notes &amp; handoff', `
     <p>Deep Sessions can hand context to each other. A <b>context handoff</b> seeds a new (or running)
     Deep Session with an AI summary or transcript of prior Deep Sessions. <b>External notes</b> (left via the
-    MCP <code>save_session_summary</code> tool) surface on a Deep Session's card (📝) and are injected when
+    MCP <code>save_session_summary</code> tool) surface on a Deep Session's card (as notes) and are injected when
     you next open/resume it — so a Deep Session picks up what happened elsewhere. Open a note to apply it
     to a running Deep Session now, edit it, or delete it.</p>`],
 
   ['Reliability', `
     <p><b>Snapshot / restore</b>: your active Deep Sessions are snapshotted periodically, on graceful stop, and
-    via 💾 — and relaunched (<code>--resume</code>) after a host reboot. It's an installable
-    <b>PWA</b> (add to home screen) with offline app-shell. The <b>🗄 Storage</b> hub inventories and
+    via Snapshot — and relaunched (<code>--resume</code>) after a host reboot. It's an installable
+    <b>PWA</b> (add to home screen) with offline app-shell. The <b>Storage</b> hub inventories and
     prunes old artifacts/transcripts (running Deep Sessions protected).</p>`],
 
   ['Remote control (MCP)', `
@@ -167,7 +167,7 @@ export function maybeShowIntro() {
   const bg = document.createElement('div');
   bg.className = 'modal-bg';
   bg.innerHTML = `<div class="modal intro-modal">
-    <h2>Welcome to Polymux 👋</h2>
+    <h2>Welcome to Polymux</h2>
     <p>Manage your <b>Claude Code, Codex, and agy</b> Deep Sessions from the browser — the real CLIs, running in
     tmux on the server, through a fast in-browser terminal.</p>
     <ol class="intro-steps">
