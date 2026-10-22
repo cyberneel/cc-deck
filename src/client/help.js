@@ -156,7 +156,6 @@ export function openHelp() {
     e.preventDefault();
     bg.querySelector(a.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }));
-  document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } });
 }
 
 // First visit: a short welcome, with a link to the full help. Shown once.
@@ -180,7 +179,7 @@ export function maybeShowIntro() {
     </ol>
     <div class="modal-actions">
       <button id="intro-help">Open full help</button>
-      <button class="primary" id="intro-go">Get started</button>
+      <button class="primary" id="intro-go" data-esc>Get started</button>
     </div>
   </div>`;
   document.body.appendChild(bg);

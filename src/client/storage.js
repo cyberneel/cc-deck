@@ -31,9 +31,7 @@ export async function openStorage() {
       </div>
     </div>`;
   document.body.appendChild(bg);
-  const close = () => { bg.remove(); document.removeEventListener('keydown', onKey); };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
-  document.addEventListener('keydown', onKey);
+  const close = () => bg.remove();
   bg.querySelector('.st-close').addEventListener('click', close);
   bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
 

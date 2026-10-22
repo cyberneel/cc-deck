@@ -261,6 +261,7 @@ select { font-family: inherit; background: var(--bg); border: 1px solid var(--li
 /* ---- Modal ---- */
 .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100;}
 .modal { background: var(--bg); border: 1px solid var(--line); width: min(560px, 92vw); max-height: 86vh; overflow: auto; padding: 22px; }
+.modal:focus { outline: none; }
 .modal h2 { margin: 0 0 16px; font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
 .field { margin-bottom: 14px; }
 .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }

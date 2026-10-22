@@ -1,3 +1,4 @@
+import './dialogs.js';
 import css from './styles.css';
 import { registerServiceWorker, applyUpdate } from './swreg.js';
 import { openGraph } from './graph.js';
