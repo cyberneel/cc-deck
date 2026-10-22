@@ -35,6 +35,7 @@ button.primary {
   border-radius: 0; padding: 12px; font-size: 16px; cursor: pointer; font-family: inherit;
 }
 button.primary:hover { background: color-mix(in srgb, var(--fg) 82%, var(--bg)); }
+button.secondary { background: var(--bg); border: 1px solid var(--line); color: var(--fg); border-radius: 0; padding: 12px; font-size: 16px; cursor: pointer; font-family: inherit; }
 .error { color: var(--red); font-size: 14px; min-height: 16px; text-align: center; }
 .sso { color: var(--fg); font-size: 14px; text-align: center; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; border-top: 1px solid var(--hair); padding-top: 14px; }
 .sso:hover { text-decoration-thickness: 2px; }

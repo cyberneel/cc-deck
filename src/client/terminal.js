@@ -148,7 +148,7 @@ function shortcutGuard(e) {
   if (e.type !== 'keydown') return true;
   if (e.ctrlKey && e.key === 'Tab') return false;
   if (e.altKey && e.code === 'Backquote') return false;
-  if (e.altKey && /^[1-9]$/.test(e.key)) return false;
+  if (e.altKey && /^Digit[1-9]$/.test(e.code)) return false; // e.code: on a Mac Alt+1 types ¡
   return true;
 }
 
@@ -699,8 +699,9 @@ function needsAttention(s) {
 }
 function titleOf(name) { return sessions.find((s) => s.name === name)?.title || name; }
 function baseName(p) { if (!p) return ''; return p.replace(/\/$/, '').split('/').slice(-2).join('/'); }
-function orderedSessions() { return [...sessions].sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0)); }
-// Sidebar/jump order: native sessions first, then remote — each activity-sorted.
+// Oldest first, so a session keeps its Alt+1–9 number while others get busy. Remotes have no created time.
+function orderedSessions() { return [...sessions].sort((a, b) => (a.created || Infinity) - (b.created || Infinity) || a.name.localeCompare(b.name)); }
+// Sidebar/jump order: native sessions first, then remote — each oldest first.
 // The single source of truth for both the rendered grouping and Alt+1–9 numbering.
 function groupedSessions() { const a = orderedSessions(); return [...a.filter((s) => !s.remote), ...a.filter((s) => s.remote)]; }
 function mruOrderedExisting() {
@@ -919,7 +920,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (switching && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commitSwitcher(); return; }
   if (switching && e.key === 'Escape') { sw.style.display = 'none'; switching = false; switchMod = null; e.preventDefault(); return; }
-  if (e.altKey && /^[1-9]$/.test(e.key)) { const t = groupedSessions()[Number(e.key) - 1]; if (t) { e.preventDefault(); switchTo(t.name); } }
+  if (e.altKey && /^Digit[1-9]$/.test(e.code)) { const t = groupedSessions()[Number(e.code.slice(5)) - 1]; if (t) { e.preventDefault(); switchTo(t.name); } }
 }, true);
 window.addEventListener('keyup', (e) => {
   if (!switching || !switchMod) return;
@@ -959,7 +960,7 @@ document.addEventListener('visibilitychange', () => {
 
 // ---- boot ----
 if (!currentSession) {
-  setStatus('no Deep Session specified', 'closed');
+  location.replace('/'); // nothing to attach to: back to the dashboard
 } else {
   makePane(currentSession);
   showPane(currentSession);

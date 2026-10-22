@@ -198,11 +198,11 @@ function groupHtml(dir, items, cardFn, gridClass) {
   const key = dir || 'unknown';
   const open = expandedGroups.has(key);
   return `<div class="group ${open ? 'open' : ''}">
-    <div class="group-head" data-dir="${esc(key)}">
+    <button class="group-head" data-dir="${esc(key)}" aria-expanded="${open}">
       <span class="chev">${open ? '▾' : '▸'}</span>
       <span class="group-dir">${esc(shortDir(dir))}</span>
       <span class="group-count">${items.length}</span>
-    </div>
+    </button>
     ${open ? `<div class="${gridClass}">${items.map(cardFn).join('')}</div>` : ''}
   </div>`;
 }
@@ -394,7 +394,16 @@ function renderStats() {
 }
 
 // ---- body dispatch ----
+// The 4s poll rebuilds the cards; put keyboard focus back on the same control.
 function renderBody() {
+  const a = document.activeElement, card = a?.closest('#cards [data-name], #cards [data-id], #cards [data-dir]');
+  renderTab();
+  if (!card || a.isConnected) return;
+  const k = ['name', 'id', 'dir'].find((x) => card.dataset[x] != null);
+  const c = document.querySelector(`#cards [data-${k}="${CSS.escape(card.dataset[k])}"]`);
+  (a === card ? c : [...(c?.querySelectorAll(a.tagName) || [])].find((x) => x.className === a.className))?.focus();
+}
+function renderTab() {
   if (tab === 'usage') return renderUsage();
   if (tab === 'files') return renderFiles(document.getElementById('cards'));
   renderStats();
@@ -460,7 +469,7 @@ function wireActiveCards(container) {
   container.querySelectorAll('.card').forEach((el) => {
     const name = el.dataset.name;
     el.addEventListener('click', (e) => {
-      if (e.target.closest('button')) return;
+      if (e.target.closest('button, a')) return;
       location.href = `/terminal.html?session=${encodeURIComponent(name)}`;
     });
     el.querySelector('.kill-btn')?.addEventListener('click', async (e) => {
@@ -510,7 +519,7 @@ const parkedTip = (s) => `On background job${s.parked.jobName ? ` “${s.parked.
 function cardHtml(s) {
   const st = statusOf(s);
   return `<div class="card" data-name="${esc(s.name)}">
-    <div class="card-head"><div class="card-title" title="${esc(s.title)}">${s.kind && s.kind !== 'claude' ? `<span class="card-cli" title="${esc(s.kind)} CLI">${esc(s.kind)}</span>` : ''}${esc(s.title)}</div></div>
+    <div class="card-head"><div class="card-title" title="${esc(s.title)}">${s.kind && s.kind !== 'claude' ? `<span class="card-cli" title="${esc(s.kind)} CLI">${esc(s.kind)}</span>` : ''}<a class="card-open" href="/terminal.html?session=${encodeURIComponent(s.name)}">${esc(s.title)}</a></div></div>
     <div class="card-dir" title="${esc(s.dir)}">${esc(shortDir(s.dir))}</div>
     <pre class="preview" data-preview="${esc(s.name)}">${esc(previews.get(s.name)?.text ?? '…')}</pre>
     <div class="card-foot">

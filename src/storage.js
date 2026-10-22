@@ -3,6 +3,7 @@ import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
 import './config.js'; // loads .env and the old CCDECK_* names before the env reads below
 import { findTranscriptFile, isSessionId } from './graph.js';
+import { transcriptMeta } from './history.js';
 
 // App-owned artifact locations.
 const HANDOFF_DIR = join(homedir(), '.claude', 'cc-deck', 'handoffs');
@@ -25,8 +26,7 @@ async function listFiles(dir) {
 
 // All Claude transcripts on disk, grouped by project directory — including ones
 // the History tab hides (e.g. POLYMUX_EXCLUDE_DIRS), so the hub can purge junk
-// like headless /tmp runs. cwd label is a best-effort decode of the dir name
-// (lossy for names containing '-'), but deletion keys off the exact sessionId.
+// like headless /tmp runs. Deletion keys off the exact sessionId, never the cwd label.
 async function listTranscripts() {
   let dirs;
   try { dirs = await readdir(PROJECTS_DIR, { withFileTypes: true }); } catch { return []; }
@@ -48,7 +48,8 @@ async function listTranscripts() {
     items.sort((a, b) => b.mtime - a.mtime);
     groups.push({
       encoded: d.name,
-      cwd: '/' + d.name.replace(/^-/, '').replace(/-/g, '/'),
+      // The real cwd from the newest transcript; the dir-name decode is lossy ('-' becomes '/').
+      cwd: (await transcriptMeta(join(dir, `${items[0].sessionId}.jsonl`)).catch(() => null))?.cwd || '/' + d.name.replace(/^-/, '').replace(/-/g, '/'),
       count: items.length,
       sizeKb: items.reduce((n, x) => n + x.sizeKb, 0),
       items,

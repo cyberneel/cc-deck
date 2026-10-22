@@ -65,7 +65,7 @@ export async function openStorage() {
       }).join('');
       return `<details class="st-grp">
         <summary><label class="st-all st-selall-wrap"><input type="checkbox" class="st-selall"></label>
-          <span class="st-grp-dir">${escH(g.cwd)}</span><span class="faint">${g.count}, ${kb(g.sizeKb)}</span></summary>
+          <span class="st-grp-dir" title="${escH(g.cwd)}"><b>${escH(g.cwd.split('/').pop() || '/')}</b> <span class="faint">${escH(g.cwd)}</span></span><span class="faint">${g.count}, ${kb(g.sizeKb)}</span></summary>
         ${rows}</details>`;
     }).join('');
     return `<div class="st-sec"><div class="st-sec-head"><span>Past sessions (transcripts)</span>

@@ -100,23 +100,27 @@ export function authorizePage(q) {
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:ital,wght@0,400;0,500;0,600;1,400&family=Martian+Mono:wght@300;400&display=swap">
 <link rel="stylesheet" href="/login.css"></head><body><form class="login" method="POST" action="/oauth/authorize">
 <div class="brand"><span class="dot"></span>Authorize ${esc(client.name)}</div>
-<p class="sub">This will let <strong>${esc(client.name)}</strong> search and read your Polymux session history. Enter your Polymux password to allow.</p>
+<p class="sub"><strong>${esc(client.name)}</strong> at ${esc(new URL(q.redirect_uri).host)} wants to read your Deep Sessions and their history, and also start new ones, send them messages and leave notes. A Deep Session can run commands on this server. Enter your Polymux password to allow.</p>
 ${hidden}
 <input type="password" name="password" placeholder="Polymux password" autofocus autocomplete="current-password">
 <div class="error">${q._err ? esc(q._err) : ''}</div>
 <button class="primary" type="submit">Allow access</button>
+<button class="secondary" type="submit" name="deny" value="1">Deny</button>
 </form></body></html>`;
 }
 
 // Handle consent form POST → issue an auth code and return the redirect URL.
 export function approveAuthorize(form) {
-  if (!checkPassword(form.password || '')) { const e = new Error('Incorrect password'); e.statusCode = 401; throw e; }
   const client = validClient(form.client_id, form.redirect_uri);
   if (!client) { const e = new Error('unknown client'); e.statusCode = 400; throw e; }
-  const code = crypto.randomBytes(32).toString('base64url');
-  codes.set(code, { clientId: form.client_id, redirectUri: form.redirect_uri, challenge: form.code_challenge, resource: form.resource, exp: Date.now() + CODE_TTL });
   const u = new URL(form.redirect_uri);
-  u.searchParams.set('code', code);
+  if (form.deny) u.searchParams.set('error', 'access_denied'); // RFC 6749 4.1.2.1, no password needed to say no
+  else {
+    if (!checkPassword(form.password || '')) { const e = new Error('Incorrect password'); e.statusCode = 401; throw e; }
+    const code = crypto.randomBytes(32).toString('base64url');
+    codes.set(code, { clientId: form.client_id, redirectUri: form.redirect_uri, challenge: form.code_challenge, resource: form.resource, exp: Date.now() + CODE_TTL });
+    u.searchParams.set('code', code);
+  }
   if (form.state) u.searchParams.set('state', form.state);
   return u.toString();
 }
