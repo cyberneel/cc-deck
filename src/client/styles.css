@@ -12,12 +12,18 @@
   --ease-out: cubic-bezier(.2,.8,.2,1);
   color-scheme: light;
 }
+/* data-theme: the top bar's light/dark pick (ccdeck.theme), set before paint in the page heads. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #000; --fg: #fff; --muted: #a3a3a3; --line: #5c5c5c; --hair: #262626; --surface: #141414;
     --red: #e5243b; --green: #4cc276; --amber: #e0a32e;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #000; --fg: #fff; --muted: #a3a3a3; --line: #5c5c5c; --hair: #262626; --surface: #141414;
+  --red: #e5243b; --green: #4cc276; --amber: #e0a32e;
+  color-scheme: dark;
 }
 /* The top bars are black in both modes: re-point the tokens and everything inside inverts. */
 .topbar, .term-bar {
@@ -295,7 +301,7 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--surface); bor
 @media (max-width: 700px) {
   /* On mobile, secondary actions collapse into the ⋯ options menu so the tight
      portrait top bar stays uncluttered (☰ · burn · + New · ⋯). */
-  .help-btn, #snapshot-btn, #storage-btn, #reload-btn, #logout-btn { display: none; }
+  .help-btn, #theme-btn, #snapshot-btn, #storage-btn, #reload-btn, #logout-btn { display: none; }
   .opts-btn { display: inline-flex; }
 }
 

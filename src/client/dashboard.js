@@ -234,12 +234,14 @@ function render() {
       <button class="primary" id="new-btn" title="New Deep Session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New Deep Session'}</button>
       <button id="snapshot-btn" class="icon" title="Snapshot Deep Sessions (restore after a reboot)">Snapshot<span class="snap-age" id="snap-age"></span></button>
       <button id="storage-btn" class="icon" title="Storage &amp; cleanup">Storage</button>
+      <button id="theme-btn" class="icon" title="Switch light or dark mode" aria-label="Switch light or dark mode"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
       <button id="help-btn" class="icon help-btn" title="Help">?</button>
       <button id="reload-btn" class="icon" title="Reload app">↻</button>
       ${cfg.account_url ? `<a id="account-link" class="icon" href="${esc(cfg.account_url)}" target="_blank" rel="noopener" title="Account">Account</a>` : ''}
       <button id="logout-btn" title="Log out">Log out</button>
       <button id="opts-btn" class="icon opts-btn" title="Options" aria-haspopup="true" aria-expanded="false">⋯</button>
       <div class="opts-menu" id="opts-menu">
+        <button data-target="theme-btn">Light or dark mode</button>
         <button data-target="help-btn">Help</button>
         <button data-target="snapshot-btn">Snapshot Deep Sessions</button>
         <button data-target="storage-btn">Storage &amp; cleanup</button>
@@ -333,6 +335,13 @@ function render() {
     finally { b.disabled = false; }
   });
   document.getElementById('help-btn').addEventListener('click', openHelp);
+  // Flip light/dark over the OS setting; the page heads re-apply the pick before paint.
+  document.getElementById('theme-btn').addEventListener('click', () => {
+    const el = document.documentElement;
+    const dark = el.dataset.theme ? el.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    el.dataset.theme = dark ? 'light' : 'dark';
+    localStorage.setItem('ccdeck.theme', el.dataset.theme);
+  });
   document.getElementById('reload-btn').addEventListener('click', () => applyUpdate(pendingWorker));
   // Mobile "⋯" options menu: its items just trigger the (mobile-hidden) top-bar
   // buttons, so there's one set of handlers. Toggle + close on outside tap.
