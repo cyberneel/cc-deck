@@ -19,14 +19,16 @@
   <link rel="stylesheet" href="/login.css" />
 </head>
 <body>
+  <main>
   <form class="login" id="form">
-    <div class="brand"><span class="dot"></span> Polymux</div>
+    <h1 class="brand"><span class="dot"></span> Polymux</h1>
     <p class="sub">Sign in to manage your Deep Sessions</p>
-    <input type="password" id="password" placeholder="Password" autofocus autocomplete="current-password" />
+    <input type="password" id="password" aria-label="Password" placeholder="Password" autofocus autocomplete="current-password" />
     <button type="submit" class="primary">Sign in</button>
-    <div class="error" id="error"></div>
+    <div class="error" id="error" role="status"></div>
     <a class="sso" id="sso" target="_top" hidden>Sign in with your FridayOS account</a>
   </form>
+  </main>
   <script>
     const form = document.getElementById('form');
     const err = document.getElementById('error');
@@ -42,9 +44,9 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: document.getElementById('password').value }),
-      });
-      if (res.ok) { location.href = '/'; }
-      else { err.textContent = 'Invalid password'; }
+      }).catch(() => null);
+      if (res?.ok) { location.href = '/'; }
+      else { err.textContent = res?.status === 401 ? 'Wrong password' : 'Can’t reach Polymux. Try again.'; }
     });
   </script>
 </body>

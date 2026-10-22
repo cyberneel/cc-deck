@@ -20,7 +20,7 @@ export async function openStorage() {
     <div class="modal storage-modal">
       <div class="graph-top">
         <div class="graph-titles"><h2>Storage &amp; cleanup</h2><div class="faint" id="st-sub">Loading…</div></div>
-        <button class="icon st-close" title="Close">✕</button>
+        <button class="icon st-close">Close</button>
       </div>
       <div class="st-body" id="st-body"><div class="graph-hint">Loading…</div></div>
       <div class="st-foot">
@@ -64,7 +64,7 @@ export async function openStorage() {
           <span class="faint st-rmeta">${running ? '<span class="gtag gtag-branch">running</span> ' : ''}${dt(it.mtime)}, ${kb(it.sizeKb)}</span></label>`;
       }).join('');
       return `<details class="st-grp">
-        <summary><label class="st-all st-selall-wrap"><input type="checkbox" class="st-selall"></label>
+        <summary><label class="st-all st-selall-wrap"><input type="checkbox" class="st-selall" aria-label="Select all in ${escH(g.cwd)}"></label>
           <span class="st-grp-dir" title="${escH(g.cwd)}"><b>${escH(g.cwd.split('/').pop() || '/')}</b> <span class="faint">${escH(g.cwd)}</span></span><span class="faint">${g.count}, ${kb(g.sizeKb)}</span></summary>
         ${rows}</details>`;
     }).join('');

@@ -46,31 +46,31 @@ const prevStatus = {};
 document.body.innerHTML = `
   <div id="app-term" class="${sidebarOpen ? '' : 'collapsed'}">
     <aside id="sidebar">
-      <div class="sb-head"><span>Deep Sessions</span><button id="sb-collapse" class="icon" title="Collapse">«</button></div>
-      <button id="sb-new" class="sb-new">+ New Deep Session</button>
+      <div class="sb-head"><span>Deep Sessions</span><button id="sb-collapse" class="icon" title="Hide the sidebar">Hide</button></div>
+      <button id="sb-new" class="sb-new">New Deep Session</button>
       <button id="sb-resume" class="sb-new sb-resume">Resume a Deep Session</button>
-      <div id="sb-list"></div>
+      <div id="sb-list" tabindex="0" role="region" aria-label="Deep Sessions"></div>
       <div class="sb-foot faint">Alt+\` to cycle, Alt+1–9 to jump</div>
     </aside>
     <div id="sb-backdrop"></div>
-    <div id="main">
+    <main id="main">
       <div class="term-bar">
-        <button id="sb-toggle" class="icon" title="Toggle sidebar (Deep Sessions)">☰<span id="sb-badge" class="sb-badge" style="display:none"></span></button>
-        <a href="/" title="Back to dashboard">←</a>
-        <span class="title" id="title">${esc(currentSession || 'session')}</span>
+        <button id="sb-toggle" class="icon" title="Show or hide the Deep Sessions sidebar">Sessions<span id="sb-badge" class="sb-badge" style="display:none"></span></button>
+        <a href="/">Dashboard</a>
+        <h1 class="title" id="title">${esc(currentSession || 'session')}</h1>
         <button id="main-btn" class="burn-pill" style="display:none">Back to main</button>
         <div class="spacer" style="flex:1"></div>
         <button id="notes-btn" class="icon" title="Updates from outside chats" style="display:none"></button>
         <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
         <button id="upload-btn" class="icon" title="Send files or a folder to this Deep Session">Upload</button>
         <button id="tb-theme" class="icon" title="Switch light or dark mode" aria-label="Switch light or dark mode"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
-        <button id="reload-btn" class="icon" title="Reload app">↻</button>
-        <button id="scroll-toggle" class="icon" title="Scroll mode — tmux: full history; fast: smooth local scroll"></button>
+        <button id="reload-btn" class="icon" title="Reload app">Reload</button>
+        <button id="scroll-toggle" class="icon" title="Scroll mode. tmux keeps full history; Fast scrolls locally and smoothly."></button>
         <span class="status" id="status" role="status"></span>
       </div>
       <div id="terminal"></div>
       <div class="keybar" id="keybar"></div>
-    </div>
+    </main>
   </div>
   <div id="switcher" class="switcher" style="display:none"><div class="sw-box" id="sw-box"></div></div>`;
 
@@ -82,7 +82,7 @@ const mainBtn = document.getElementById('main-btn');
 function renderParked() {
   const p = sessions.find((s) => s.name === currentSession)?.parked;
   mainBtn.style.display = p ? '' : 'none';
-  if (p) mainBtn.title = `On background job${p.jobName ? ` “${p.jobName}”` : ''} (summary-only context) — back to your full-context main conversation`;
+  if (p) mainBtn.title = `On background job${p.jobName ? ` “${p.jobName}”` : ''} (summary-only context). Go back to your full-context main conversation.`;
 }
 mainBtn.addEventListener('click', async () => {
   const old = currentSession;
@@ -347,7 +347,7 @@ async function openResumeModal() {
   bg.className = 'modal-bg';
   bg.innerHTML = `<div class="modal" style="max-width:520px">
     <h2>Resume a Deep Session</h2>
-    <input id="rs-filter" placeholder="filter by title / directory…" spellcheck="false" autocomplete="off" style="margin-bottom:6px" />
+    <input id="rs-filter" aria-label="Filter Deep Sessions" placeholder="filter by title / directory…" spellcheck="false" autocomplete="off" style="margin-bottom:6px" />
     <div id="rs-list" class="seed-list"><div class="faint" style="padding:8px">Loading…</div></div>
     <div class="modal-actions"><button id="rs-cancel">Cancel</button></div>
   </div>`;
@@ -423,19 +423,19 @@ function updateCtrlBtn() { document.getElementById('kb-ctrl')?.classList.toggle(
 function updateMetaBtn() { document.getElementById('kb-meta')?.classList.toggle('armed', metaArm); }
 const KEYS = [
   { label: 'esc', seq: '\x1b' },
-  { label: '⌫', seq: '\x7f', repeat: true, title: 'Backspace (hold to repeat)' },
+  { label: '⌫', aria: 'Backspace', seq: '\x7f', repeat: true, title: 'Backspace (hold to repeat)' },
   { label: 'tab', seq: '\t' },
-  { label: '⇧⇥', seq: '\x1b[Z', title: 'Shift+Tab — cycle permission mode' },
+  { label: '⇧⇥', aria: 'Shift+Tab', seq: '\x1b[Z', title: 'Shift+Tab (cycles the permission mode)' },
   { label: 'ctrl', ctrl: true },
   { label: 'meta', meta: true },
-  { label: '←', seq: '\x1b[D', repeat: true },
-  { label: '↑', seq: '\x1b[A', repeat: true },
-  { label: '↓', seq: '\x1b[B', repeat: true },
-  { label: '→', seq: '\x1b[C', repeat: true },
-  { label: '^C', seq: '\x03' },
+  { label: '←', aria: 'Left', seq: '\x1b[D', repeat: true },
+  { label: '↑', aria: 'Up', seq: '\x1b[A', repeat: true },
+  { label: '↓', aria: 'Down', seq: '\x1b[B', repeat: true },
+  { label: '→', aria: 'Right', seq: '\x1b[C', repeat: true },
+  { label: '^C', aria: 'Ctrl+C', seq: '\x03' },
   { label: 'Dictate', dictate: true, title: 'Dictate or type a message, then send' },
-  { label: '⧉', copy: true, title: 'Copy on-screen text' },
-  { label: '⎘', paste: true, title: 'Paste from clipboard' },
+  { label: 'Copy', copy: true, title: 'Copy on-screen text' },
+  { label: 'Paste', paste: true, title: 'Paste from clipboard' },
 ];
 
 // Copy the terminal's on-screen text out — xterm is a canvas so there's no native
@@ -453,7 +453,7 @@ function openCopyBox() {
   bg.innerHTML = `<div class="modal" style="max-width:480px">
     <h2>Copy</h2>
     <p class="faint">Long-press to select text and use the OS <b>Copy</b>, or tap “Copy all”.</p>
-    <textarea id="cp-ta" readonly rows="9" style="width:100%;resize:vertical;font-family:var(--mono);font-size:12px"></textarea>
+    <textarea id="cp-ta" aria-label="On-screen text" readonly rows="9" style="width:100%;resize:vertical;font-family:var(--mono);font-size:12px"></textarea>
     <div class="modal-actions"><button id="cp-close">Close</button><button class="primary" id="cp-all">Copy all</button></div>
   </div>`;
   document.body.appendChild(bg);
@@ -481,7 +481,7 @@ function pasteClipboard() {
   bg.innerHTML = `<div class="modal" style="max-width:440px">
     <h2>Paste</h2>
     <p class="faint">Long-press the box, choose <b>Paste</b>, then Send. (On desktop, just press ⌘/Ctrl+V into the terminal.)</p>
-    <textarea id="pb-ta" rows="4" style="width:100%;resize:vertical" placeholder="paste here…"></textarea>
+    <textarea id="pb-ta" aria-label="Text to paste" rows="4" style="width:100%;resize:vertical" placeholder="paste here…"></textarea>
     <div class="modal-actions"><button id="pb-cancel">Cancel</button><button class="primary" id="pb-send">Send</button></div>
   </div>`;
   document.body.appendChild(bg);
@@ -511,10 +511,10 @@ function composeAndSend() {
   bg.className = 'modal-bg';
   bg.innerHTML = `<div class="modal" style="max-width:440px">
     <h2>Speak or type</h2>
-    <p class="faint">Tap the microphone on your keyboard to dictate (or just type), then <b>Send</b> — dictation doubles words when typed straight into the terminal, but is clean here.</p>
-    <textarea id="cs-ta" rows="4" style="width:100%;resize:vertical" placeholder="Speak or type your message…"></textarea>
+    <p class="faint">Tap the microphone on your keyboard to dictate (or just type), then <b>Send</b>. Dictation doubles words when typed straight into the terminal, but is clean here.</p>
+    <textarea id="cs-ta" aria-label="Message" rows="4" style="width:100%;resize:vertical" placeholder="Speak or type your message…"></textarea>
     <div class="modal-actions">
-      <label class="faint" style="margin-right:auto;display:flex;align-items:center;gap:6px"><input type="checkbox" id="cs-submit" checked> submit ⏎</label>
+      <label class="faint" style="margin-right:auto;display:flex;align-items:center;gap:6px"><input type="checkbox" id="cs-submit" checked> Press Enter after</label>
       <button id="cs-cancel">Cancel</button><button class="primary" id="cs-send">Send</button>
     </div>
   </div>`;
@@ -539,7 +539,7 @@ function composeAndSend() {
 
 const keybar = document.getElementById('keybar');
 keybar.innerHTML = KEYS.map((k, i) =>
-  `<button ${k.ctrl ? 'id="kb-ctrl"' : ''}${k.meta ? 'id="kb-meta"' : ''} data-i="${i}" title="${k.title || ''}">${k.label}</button>`).join('');
+  `<button ${k.ctrl ? 'id="kb-ctrl"' : ''}${k.meta ? 'id="kb-meta"' : ''} data-i="${i}" title="${k.title || ''}"${k.aria ? ` aria-label="${k.aria}"` : ''}>${k.label}</button>`).join('');
 keybar.querySelectorAll('button').forEach((btn) => {
   const k = KEYS[Number(btn.dataset.i)];
   if (k.repeat) {
@@ -590,17 +590,17 @@ function openUploadModal(files, withPaths) {
     <div class="modal">
       <h2>Send ${files.length} item${files.length === 1 ? '' : 's'}</h2>
       <div class="field">
-        <label>Destination folder</label>
+        <label for="up-dir">Destination folder</label>
         <input id="up-dir" value="${esc(currentPath)}" spellcheck="false" />
         <div class="browser" id="up-browser"></div>
         <div class="mkdir-row">
-          <input id="up-mk" placeholder="new-folder-name" spellcheck="false" autocapitalize="off" autocomplete="off" />
-          <button type="button" id="up-mk-btn">+ Create folder here</button>
+          <input id="up-mk" aria-label="New folder name" placeholder="new-folder-name" spellcheck="false" autocapitalize="off" autocomplete="off" />
+          <button type="button" id="up-mk-btn">Create folder here</button>
         </div>
       </div>
       <div class="field">
         <label>Sending</label>
-        <div class="up-files">${files.map((f) => `<div class="up-f">${esc((withPaths && f.webkitRelativePath) || f.name)}</div>`).join('')}</div>
+        <div class="up-files" tabindex="0" role="region" aria-label="Files to send">${files.map((f) => `<div class="up-f">${esc((withPaths && f.webkitRelativePath) || f.name)}</div>`).join('')}</div>
       </div>
       <div class="error" id="up-err"></div>
       <div class="modal-actions">
@@ -725,7 +725,7 @@ async function refreshSessions() {
       prevStatus[s.name] = s.claudeStatus;
     }
     attention.delete(currentSession);
-    titleEl.textContent = titleOf(currentSession);
+    titleEl.textContent = document.title = titleOf(currentSession);
     renderParked();
     renderSidebar();
   } catch { /* */ }
@@ -755,7 +755,7 @@ function updateNotesBtn() {
   const n = s?.noteCount || 0;
   if (!n) { btn.style.display = 'none'; return; }
   btn.textContent = `${n} note${n === 1 ? '' : 's'}`;
-  btn.title = `${n} update(s) from outside chats — view / apply`;
+  btn.title = `${n} update(s) from outside chats. View or apply them.`;
   btn.style.display = '';
 }
 document.getElementById('notes-btn').addEventListener('click', () => {
@@ -772,14 +772,14 @@ function sidebarItemHtml(s, i) {
   const cliTag = (s.kind && s.kind !== 'claude') ? `<span class="sb-cli" title="${esc(s.kind)} CLI">${esc(s.kind)}</span>` : '';
   // Remote sessions (over SSH) are attach-only for now — no rename/kill/share.
   const actions = s.remote
-    ? `<span class="sb-remote-tag" title="Remote tmux session on ${esc(s.host)} — attach only">${esc(s.paneCommand || 'remote')}</span>`
+    ? `<span class="sb-remote-tag" title="Remote tmux session on ${esc(s.host)}, attach only">${esc(s.paneCommand || 'remote')}</span>`
     : `${s.liveSessionId ? `<button class="sb-share" title="Share this Deep Session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
-        <button class="sb-rename" title="Rename Deep Session" data-rename="${esc(s.name)}">✎</button>
-        <button class="sb-kill" title="Kill Deep Session" data-kill="${esc(s.name)}">✕</button>`;
+        <button class="sb-rename" title="Rename Deep Session" aria-label="Rename Deep Session" data-rename="${esc(s.name)}"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.5 13.5 5 5.5 13H3v-2.5z"/></svg></button>
+        <button class="sb-kill" title="Kill Deep Session" aria-label="Kill Deep Session" data-kill="${esc(s.name)}"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>`;
   return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''} ${s.remote ? 'remote' : ''}" data-name="${esc(s.name)}">
       <span class="sb-dot ${statusDot(s)}"></span>
       <span class="sb-meta"><span class="sb-title">${cliTag}${esc(s.title)}</span><span class="sb-dir">${dirLine}</span></span>
-      ${att ? '<span class="sb-attn" title="Needs your attention">●</span>' : num}
+      ${att ? '<span class="sb-attn" role="img" title="Needs your attention" aria-label="Needs your attention"></span>' : num}
       <div class="sb-actions">${actions}</div>
     </div>`;
 }
@@ -854,7 +854,7 @@ function switchTo(name) {
   bumpMru(name);
   attention.delete(name); // you're now viewing it
   history.replaceState({}, '', `?session=${encodeURIComponent(name)}`);
-  titleEl.textContent = titleOf(name);
+  titleEl.textContent = document.title = titleOf(name);
   renderParked();
   if (isMobile && sidebarOpen) { sidebarOpen = false; applySidebar(); } // close the drawer
   showPane(name);
@@ -893,7 +893,7 @@ function renderSwitcher() {
   swBox.innerHTML = swList.map((name, i) => {
     const s = sessions.find((x) => x.name === name) || {};
     return `<div class="sw-item ${i === swIdx ? 'sel' : ''}" data-i="${i}">
-      <span class="sb-dot ${statusDot(s)}"></span><span class="sw-t">${esc(titleOf(name))}${needsAttention(s) ? ' <span class="sb-attn">●</span>' : ''}</span>
+      <span class="sb-dot ${statusDot(s)}"></span><span class="sw-t">${esc(titleOf(name))}${needsAttention(s) ? ' <span class="sb-attn" role="img" aria-label="Needs your attention"></span>' : ''}</span>
       <span class="sw-d">${esc(baseName(s.dir))}</span>
     </div>`;
   }).join('');

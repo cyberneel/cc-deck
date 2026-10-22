@@ -178,6 +178,15 @@ app.addHook('onRequest', async (req, reply) => {
   return reply.redirect('/login.html');
 });
 
+// Unknown pages get a small HTML page that links home; API-style paths keep Fastify's JSON 404.
+app.setNotFoundHandler(async (req, reply) => {
+  const path = req.raw.url?.split('?')[0] || '/';
+  if (req.method !== 'GET' || /^\/(api|mcp|oauth|ws|\.well-known)(\/|$)/.test(path)) {
+    return reply.code(404).send({ message: `Route ${req.method}:${path} not found`, error: 'Not Found', statusCode: 404 });
+  }
+  return reply.code(404).type('text/html; charset=utf-8').send(await readFile(join(publicDir, '404.html')));
+});
+
 // Liveness for the hosted rollout health poll (public — 200 = the server is serving).
 app.get('/healthz', async () => ({ ok: true }));
 // claude/codex/agy turn start/end hooks (see turn-telemetry.js). The key is baked into each

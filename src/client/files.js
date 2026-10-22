@@ -73,7 +73,7 @@ function renderList(data, container) {
       <span class="fx-name">${esc(e.name)}${e.type === 'dir' ? '/' : ''}</span>
       <span class="faint fx-meta">${e.type === 'file' ? kb(e.sizeKb) : ''}</span>
       ${lead}
-      <button class="fx-act fx-del" data-full="${esc(full)}" title="Delete">✕</button>
+      <button class="fx-act fx-del" data-full="${esc(full)}" >Delete</button>
     </div>`;
   }).join('');
   list.querySelectorAll('.fx-row.dir').forEach((r) =>

@@ -26,12 +26,12 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
         </div>
         <div class="graph-actions">
           <button class="gx-share" title="Share this Deep Session's context into another Deep Session" disabled>Share</button>
-          <button class="primary gx-fork" title="Fork into a new Deep Session that copies this context" disabled>⑂ Fork</button>
-          <button class="icon gx-close" title="Close">✕</button>
+          <button class="primary gx-fork" title="Fork into a new Deep Session that copies this context" disabled>Fork</button>
+          <button class="icon gx-close">Close</button>
         </div>
       </div>
       <div class="graph-body">
-        <div class="graph-scroll" id="gx-scroll"><div class="graph-empty">Loading transcript…</div></div>
+        <div class="graph-scroll" id="gx-scroll" tabindex="0" role="region" aria-label="Conversation graph"><div class="graph-empty">Loading transcript…</div></div>
         <div class="graph-detail" id="gx-detail"><div class="graph-hint">Click a point to read the conversation up to there.</div></div>
       </div>
     </div>`;
@@ -68,10 +68,10 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
         const j = await r.json();
         if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
         location.href = `/terminal.html?session=${encodeURIComponent(j.name)}`;
-      } catch (e) { forkBtn.disabled = false; forkBtn.textContent = '⑂ Fork'; toast('Fork failed: ' + e.message, { kind: 'error', action: 'Retry', onAction: () => forkBtn.click() }); }
+      } catch (e) { forkBtn.disabled = false; forkBtn.textContent = 'Fork'; toast('Fork failed: ' + e.message, { kind: 'error', action: 'Retry', onAction: () => forkBtn.click() }); }
     });
   } else {
-    forkBtn.title = 'No recorded directory — can’t fork';
+    forkBtn.title = 'Can’t fork: no recorded directory';
   }
 
   // ---- Share context flow ----
@@ -114,7 +114,7 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
   const rows = g.nodes.map((n) => {
     const roleLabel = n.role === 'user' ? 'You' : 'Claude';
     const tools = n.tools.length ? `<span class="gtag">${n.tools.reduce((s, t) => s + t.count, 0)} tools</span>` : '';
-    const sub = n.sub ? `<span class="gtag">⤷ ${n.sub}</span>` : '';
+    const sub = n.sub ? `<span class="gtag">${n.sub}</span>` : '';
     const tt = (n.tokens.in + n.tokens.out + n.tokens.cache);
     const ttag = tt ? `<span class="gtag">${tok(tt)} tok</span>` : '';
     const branchTag = (n.leaf && !n.current) ? `<span class="gtag gtag-branch">branch</span>` : '';
@@ -148,7 +148,7 @@ export async function openGraph(sessionId, fallbackTitle, cwd) {
         <div class="gmsg-body">${escH(m.text) || '<span class="faint">(no text)</span>'}</div>${tools}
       </div>`;
     }).join('');
-    detail.innerHTML = `<div class="gd-head">Conversation up to this point, ${t.messages.length} message${t.messages.length === 1 ? '' : 's'}</div><div class="gd-thread">${msgs}</div>`;
+    detail.innerHTML = `<div class="gd-head">Conversation up to this point, ${t.messages.length} message${t.messages.length === 1 ? '' : 's'}</div><div class="gd-thread" tabindex="0" role="region" aria-label="Conversation">${msgs}</div>`;
     detail.querySelector('.gd-thread')?.scrollTo(0, detail.querySelector('.gd-thread').scrollHeight);
   };
   scroll.querySelectorAll('.gnode').forEach((r) => r.addEventListener('click', () => selectNode(r.dataset.id)));
@@ -188,9 +188,9 @@ export async function openShare(sessionId, meta, getSelectedId = () => null) {
           <button data-v="new" class="active">New Deep Session</button>
           <button data-v="running">Running Deep Session</button>
         </div></div>
-      <div class="field" id="sh-new-wrap"><label>Directory</label>
+      <div class="field" id="sh-new-wrap"><label for="sh-dir">Directory</label>
         <input id="sh-dir" value="${escH(g.cwd || cwd || '')}" spellcheck="false" /></div>
-      <div class="field" id="sh-run-wrap" style="display:none"><label>Target Deep Session</label>
+      <div class="field" id="sh-run-wrap" style="display:none"><label for="sh-target">Target Deep Session</label>
         <select id="sh-target"></select></div>
       <div class="error" id="sh-err"></div>
       <div class="modal-actions">

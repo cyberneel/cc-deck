@@ -17,19 +17,19 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #000; --fg: #fff; --muted: #a3a3a3; --line: #5c5c5c; --hair: #262626; --surface: #141414;
-    --red: #e5243b; --green: #4cc276; --amber: #e0a32e; --accent: #c990da;
+    --red: #f04a5e; --green: #4cc276; --amber: #e0a32e; --accent: #c990da;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #000; --fg: #fff; --muted: #a3a3a3; --line: #5c5c5c; --hair: #262626; --surface: #141414;
-  --red: #e5243b; --green: #4cc276; --amber: #e0a32e; --accent: #c990da;
+  --red: #f04a5e; --green: #4cc276; --amber: #e0a32e; --accent: #c990da;
   color-scheme: dark;
 }
 /* The top bars are black in both modes: re-point the tokens and everything inside inverts. */
 .topbar, .term-bar {
   --bg: #000; --fg: #fff; --muted: #a3a3a3; --line: #5c5c5c; --hair: #333; --surface: #1a1a1a;
-  --red: #e5243b; --green: #4cc276; --amber: #e0a32e; --accent: #c990da;
+  --red: #f04a5e; --green: #4cc276; --amber: #e0a32e; --accent: #c990da;
   color: var(--fg);
 }
 
@@ -94,7 +94,7 @@ input, textarea {
   top: 0;
   z-index: 10;
 }
-.brand { font-weight: 600; font-size: 16px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 9px; }
+.brand { margin: 0; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 9px; }
 .brand .dot { width: 9px; height: 9px;background: var(--accent);}
 .spacer { flex: 1; }
 .menu-btn { display: none; } /* hamburger — mobile only (see media query) */
@@ -130,8 +130,7 @@ input, textarea {
 /* ---- Search + view toggle row ---- */
 .subbar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
 .search { flex: 1; position: relative; display: flex; align-items: center; }
-.search-ico { position: absolute; left: 12px; color: var(--muted); font-size: 16px; pointer-events: none; }
-.search input { padding-left: 36px; padding-right: 34px; }
+.search input { padding-right: 64px; }
 .search-clear { position: absolute; right: 6px; border: none; background: transparent; color: var(--muted); padding: 6px 8px; }
 .search-clear:hover { color: var(--fg); }
 
@@ -140,7 +139,8 @@ input, textarea {
 .group.open { margin-bottom: 26px; }
 .group-head { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 10px 12px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; transition: background .15s; }
 .group-head:hover { background: var(--surface); }
-.group-head .chev { color: var(--muted); font-size: 12px; width: 12px; }
+.group-head .chev { color: var(--muted); display: flex; transition: transform .15s; }
+.group.open .chev { transform: rotate(90deg); }
 .group-dir { font-family: var(--mono); font-size: 13px; color: var(--fg); font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .group-count { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 
@@ -304,9 +304,9 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--surface); bor
 .intro-steps b { color: var(--fg); }
 @media (max-width: 700px) {
   /* On mobile, secondary actions collapse into the ⋯ options menu so the tight
-     portrait top bar stays uncluttered (☰ · burn · + New · ⋯). */
+     portrait top bar stays uncluttered (Menu, burn, New, More). */
   .help-btn, #theme-btn, #snapshot-btn, #storage-btn, #reload-btn, #logout-btn { display: none; }
-  .opts-btn { display: inline-flex; }
+  .opts-btn { display: inline-flex; align-items: center; }
 }
 
 /* directory browser */
@@ -323,7 +323,7 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--surface); bor
 
 /* ---- Terminal page ---- */
 .term-bar { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--bg); border-bottom: 1px solid var(--hair); height: 44px; flex: 0 0 auto; }
-.term-bar .title { font-size: 14px; font-weight: 600; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.term-bar .title { margin: 0; font-size: 14px; font-weight: 600; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .term-bar .status { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .term-bar .status.connected { color: var(--green); }
 .term-bar .status.closed { color: var(--red); }
@@ -378,7 +378,7 @@ kbd { font-family: var(--mono); font-size: 11px; background: var(--surface); bor
 .sb-num { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 .sb-item.attn .sb-title { color: var(--fg); font-weight: 600; }
 .sb-warm { color: var(--green); font-size: 9px; vertical-align: middle; opacity: .8; }
-.sb-attn { color: var(--fg); font-size: 10px; }
+.sb-attn { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--red); flex: 0 0 auto; }
 .sb-foot { padding: 10px 14px; border-top: 1px solid var(--hair); white-space: nowrap; }
 .sb-badge { position: absolute; top: 2px; right: 0; background: var(--red); color: #fff; font-family: var(--mono); font-size: 9px; padding: 0 4px; min-width: 14px; text-align: center; }
 .term-bar .icon { position: relative; }
@@ -410,7 +410,6 @@ body:has(#update-toast) #update-howto { bottom: 88px; } /* both update notices: 
 .bp-sep { color: var(--muted); }
 .sb-remote-tag { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .sb-cli, .card-cli { display: inline-block; font-size: 12px; font-weight: 400; color: var(--muted); margin-right: 5px; vertical-align: baseline; }
-.sb-item.remote .sb-title::before { content: '⇢ '; color: var(--muted); } /* mark cross-host (SSH) sessions */
 .bp-scoped { display: contents; } /* model-scoped weekly segs (e.g. Fable); hidden on mobile */
 @media (max-width: 700px) { .bp-scoped { display: none; } } /* keep the phone top bar uncluttered — Fable stays in the popover */
 .snap-age { font-size: 9px; color: var(--muted); margin-left: 2px; vertical-align: top; }
@@ -475,6 +474,11 @@ body:has(#update-toast) #update-howto { bottom: 88px; } /* both update notices: 
   .topbar { padding: max(12px, env(safe-area-inset-top)) 12px 12px; gap: 6px; }
   .topbar .brand { display: none; }
   .topbar button.icon { padding: 6px 7px; }
+  /* Tap targets: 44px for bar, form and dialog controls; dense rows (key bar, card and sidebar actions) keep at least 24px. */
+  .topbar > button, .term-bar > button, .term-bar > a, .sb-head button, .sb-new, .toggle button, .modal-actions button, .mkdir-row button, #usage-refresh, input:not([type=checkbox]):not([type=radio]), select { min-height: 44px; }
+  .term-bar { height: auto; }
+  .term-bar > a { display: inline-flex; align-items: center; }
+  .sb-kill, .sb-rename, .sb-share { min-width: 24px; min-height: 24px; }
   .burn-pill { padding: 5px 7px; gap: 4px; } /* keep the pill compact so all controls fit narrow phones */
   /* Tabs collapse into a hamburger dropdown so the strip can't squish and the
      right-side controls (burn pill, New, icons) always stay on screen. */

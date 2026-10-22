@@ -38,9 +38,9 @@ const expandedGroups = new Set();
 
 // Usage / ROI state.
 const PLANS = [
-  { id: 'pro', label: 'Pro — $20/mo', price: 20 },
-  { id: 'max5', label: 'Max 5× — $100/mo', price: 100 },
-  { id: 'max20', label: 'Max 20× — $200/mo', price: 200 },
+  { id: 'pro', label: 'Pro, $20/mo', price: 20 },
+  { id: 'max5', label: 'Max 5×, $100/mo', price: 100 },
+  { id: 'max20', label: 'Max 20×, $200/mo', price: 200 },
   { id: 'custom', label: 'Custom…', price: null },
 ];
 let planId = localStorage.getItem('ccdeck.plan') || 'max5';
@@ -81,7 +81,7 @@ function renderUpdatePill() {
   const b = document.getElementById('update-btn');
   if (!b) return;
   b.style.display = upstream ? '' : 'none';
-  if (upstream) b.title = `${upstream.behind} new commit${upstream.behind === 1 ? '' : 's'} upstream — how to update`;
+  if (upstream) b.title = `${upstream.behind} new commit${upstream.behind === 1 ? '' : 's'} upstream. Click for how to update.`;
 }
 function showUpdateHowTo() {
   document.getElementById('update-howto')?.remove();
@@ -89,8 +89,8 @@ function showUpdateHowTo() {
   const cmd = `cd ${/\s/.test(upstream.dir) ? JSON.stringify(upstream.dir) : upstream.dir} && ./update.sh`;
   const t = document.createElement('div');
   t.id = 'update-howto'; t.className = 'toast';
-  t.innerHTML = `Polymux is ${upstream.behind} commit${upstream.behind === 1 ? '' : 's'} behind. Run this in any terminal — sessions keep running:<br>
-    <code>${esc(cmd)}</code> <button data-a="copy">Copy</button> <button data-a="close">✕</button>`;
+  t.innerHTML = `Polymux is ${upstream.behind} commit${upstream.behind === 1 ? '' : 's'} behind. Run this in any terminal. Deep Sessions keep running.<br>
+    <code>${esc(cmd)}</code> <button data-a="copy">Copy</button> <button data-a="close">Dismiss</button>`;
   t.addEventListener('click', async (e) => {
     const a = e.target.dataset?.a;
     if (a === 'copy') { try { await navigator.clipboard.writeText(cmd); e.target.textContent = 'Copied'; } catch { /* select it by hand */ } }
@@ -199,7 +199,7 @@ function groupHtml(dir, items, cardFn, gridClass) {
   const open = expandedGroups.has(key);
   return `<div class="group ${open ? 'open' : ''}">
     <button class="group-head" data-dir="${esc(key)}" aria-expanded="${open}">
-      <span class="chev">${open ? '▾' : '▸'}</span>
+      <span class="chev"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg></span>
       <span class="group-dir">${esc(shortDir(dir))}</span>
       <span class="group-count">${items.length}</span>
     </button>
@@ -219,10 +219,11 @@ function wireGroupToggles(container) {
 
 // ---- shell ----
 function render() {
+  document.title = tab === 'active' ? 'Polymux' : `Polymux ${tab}`;
   app.innerHTML = `
     <div class="topbar">
-      <div class="brand"><span class="dot"></span> Polymux</div>
-      <button id="menu-btn" class="icon menu-btn" title="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
+      <h1 class="brand"><span class="dot"></span> Polymux</h1>
+      <button id="menu-btn" class="icon menu-btn" title="Menu" aria-haspopup="true" aria-expanded="false">Menu</button>
       <div class="toggle tabs" id="tabs">
         <button data-tab="active" class="${tab === 'active' ? 'active' : ''}">Active</button>
         <button data-tab="history" class="${tab === 'history' ? 'active' : ''}">History</button>
@@ -232,33 +233,32 @@ function render() {
       <div class="spacer"></div>
       <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
       <button id="update-btn" class="burn-pill" style="display:none">Update</button>
-      <button class="primary" id="new-btn" title="New Deep Session">${matchMedia('(max-width: 700px)').matches ? '+' : '+ New Deep Session'}</button>
+      <button class="primary" id="new-btn" title="New Deep Session">${matchMedia('(max-width: 700px)').matches ? 'New' : 'New Deep Session'}</button>
       <button id="snapshot-btn" class="icon" title="Snapshot Deep Sessions (restore after a reboot)">Snapshot<span class="snap-age" id="snap-age"></span></button>
       <button id="storage-btn" class="icon" title="Storage &amp; cleanup">Storage</button>
       <button id="theme-btn" class="icon" title="Switch light or dark mode" aria-label="Switch light or dark mode"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
-      <button id="help-btn" class="icon help-btn" title="Help">?</button>
-      <button id="reload-btn" class="icon" title="Reload app">↻</button>
+      <button id="help-btn" class="icon help-btn">Help</button>
+      <button id="reload-btn" class="icon" title="Reload app">Reload</button>
       ${cfg.account_url ? `<a id="account-link" class="icon" href="${esc(cfg.account_url)}" target="_blank" rel="noopener" title="Account">Account</a>` : ''}
       <button id="logout-btn" title="Log out">Log out</button>
-      <button id="opts-btn" class="icon opts-btn" title="Options" aria-haspopup="true" aria-expanded="false">⋯</button>
+      <button id="opts-btn" class="icon opts-btn" title="More options" aria-haspopup="true" aria-expanded="false">More</button>
       <div class="opts-menu" id="opts-menu">
         <button data-target="theme-btn">Light or dark mode</button>
         <button data-target="help-btn">Help</button>
         <button data-target="snapshot-btn">Snapshot Deep Sessions</button>
         <button data-target="storage-btn">Storage &amp; cleanup</button>
-        <button data-target="reload-btn">↻&nbsp; Reload app</button>
+        <button data-target="reload-btn">Reload app</button>
         ${cfg.account_url ? '<button data-target="account-link">Account</button>' : ''}
         <button data-target="logout-btn">Log out</button>
       </div>
     </div>
-    <div class="wrap">
+    <main class="wrap">
       <div class="stats" id="stats" style="${tab === 'usage' || tab === 'files' ? 'display:none' : ''}"></div>
       <div class="subbar" style="${tab === 'usage' || tab === 'files' ? 'display:none' : ''}">
         <div class="search">
-          <span class="search-ico">⌕</span>
-          <input id="search" type="text" spellcheck="false" autocomplete="off"
+          <input id="search" type="search" aria-label="Search Deep Sessions" spellcheck="false" autocomplete="off"
             placeholder="Fuzzy search by title, directory, branch…" value="${esc(query)}" />
-          <button class="search-clear" id="search-clear" title="Clear" style="${query ? '' : 'display:none'}">✕</button>
+          <button class="search-clear" id="search-clear" style="${query ? '' : 'display:none'}">Clear</button>
         </div>
         <div class="toggle" id="view-toggle">
           <button data-view="grid" class="${view === 'grid' ? 'active' : ''}">Grid</button>
@@ -267,7 +267,7 @@ function render() {
         </div>
       </div>
       <div id="cards"></div>
-    </div>`;
+    </main>`;
 
   app.querySelectorAll('.tabs button[data-tab]').forEach((b) =>
     b.addEventListener('click', () => {
@@ -415,7 +415,7 @@ function renderTab() {
 function renderStale() {
   const cards = document.getElementById('cards');
   if (!cards || !sessionsLoaded || !sessionsFail || Date.now() - sessionsFail.since < 10_000) return;
-  cards.insertAdjacentHTML('afterbegin', `<p class="load-msg" role="alert">Can't reach Polymux — showing the last known Deep Sessions.<button data-retry>Retry</button></p>`);
+  cards.insertAdjacentHTML('afterbegin', `<p class="load-msg" role="alert">Can't reach Polymux. Showing the last known Deep Sessions.<button data-retry>Retry</button></p>`);
   cards.querySelector('[data-retry]').addEventListener('click', refresh);
 }
 
@@ -447,7 +447,7 @@ function renderActive() {
   if (!sessions.length) {
     container.innerHTML = `<div class="empty">
       <p style="font-size:18px">No Deep Sessions running.</p>
-      <p class="muted">Launch one with <strong>+ New Deep Session</strong> — it starts <code>${esc(cfg.launchCommand)}</code> in the directory you choose.</p>
+      <p class="muted">Launch one with <strong>New Deep Session</strong>. It starts <code>${esc(cfg.launchCommand)}</code> in the directory you choose.</p>
     </div>`;
     return;
   }
@@ -514,7 +514,7 @@ function wireActiveCards(container) {
 }
 
 // A parked pane shows a background job, seeded from a summary — not the full conversation.
-const parkedTip = (s) => `On background job${s.parked.jobName ? ` “${s.parked.jobName}”` : ''} (summary-only context) — reopen your full-context main conversation`;
+const parkedTip = (s) => `On background job${s.parked.jobName ? ` “${s.parked.jobName}”` : ''} (summary-only context). Reopen your full-context main conversation.`;
 
 function cardHtml(s) {
   const st = statusOf(s);
@@ -528,10 +528,10 @@ function cardHtml(s) {
       <span class="faint">${s.attached ? 'attached, ' : ''}${fmtTime(s.lastActivity)}</span>
       <div class="spacer"></div>
       ${s.parked ? `<button class="burn-pill main-btn" title="${esc(parkedTip(s))}">Back to main</button>` : ''}
-      ${s.noteCount ? `<button class="icon note-btn" title="${s.noteCount} update(s) from outside chats — view / apply" data-note="${esc(s.name)}" data-live="${esc(s.liveSessionId || '')}">${s.noteCount} note${s.noteCount === 1 ? '' : 's'}</button>` : ''}
-      ${s.liveSessionId ? `<button class="icon graph-btn" title="Deep Session graph" data-graph="${esc(s.liveSessionId)}" data-cwd="${esc(s.dir || '')}" data-gtitle="${esc(s.title)}">⎇</button>` : ''}
-      <button class="icon rename-btn" title="Rename">✎</button>
-      <button class="icon danger kill-btn" title="Kill Deep Session">✕</button>
+      ${s.noteCount ? `<button class="icon note-btn" title="${s.noteCount} update(s) from outside chats. View or apply them." data-note="${esc(s.name)}" data-live="${esc(s.liveSessionId || '')}">${s.noteCount} note${s.noteCount === 1 ? '' : 's'}</button>` : ''}
+      ${s.liveSessionId ? `<button class="icon graph-btn" title="Deep Session graph" data-graph="${esc(s.liveSessionId)}" data-cwd="${esc(s.dir || '')}" data-gtitle="${esc(s.title)}">Graph</button>` : ''}
+      <button class="icon rename-btn" title="Rename Deep Session">Rename</button>
+      <button class="icon danger kill-btn" title="Kill Deep Session">Kill</button>
     </div>
   </div>`;
 }
@@ -678,7 +678,7 @@ const FORK_ICON = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" s
 // Fork a session into a NEW one that copies its context (claude --fork-session),
 // then jump into it. Used from history cards and the graph viewer.
 async function forkFrom(resume, dir, title, btn) {
-  if (!dir) { toast('No recorded directory for this Deep Session — can’t fork.', { kind: 'error' }); return; }
+  if (!dir) { toast('Can’t fork: this Deep Session has no recorded directory.', { kind: 'error' }); return; }
   if (btn) btn.disabled = true;
   try {
     const { name } = await api('/api/sessions', {
@@ -695,8 +695,8 @@ async function forkFrom(resume, dir, title, btn) {
 function historyCardHtml(s) {
   const noCwd = !s.cwd;
   const runningName = liveClaudeMap.get(s.sessionId) || null;
-  const noteBadge = s.noteCount ? `<button class="icon note-btn" title="${s.noteCount} update(s) from outside chats — view (applied on resume)" data-note-id="${esc(s.sessionId)}">${s.noteCount} note${s.noteCount === 1 ? '' : 's'}</button>` : '';
-  const graphBtn = `<button class="icon graph-btn" title="Deep Session graph" data-graph="${esc(s.sessionId)}" data-cwd="${esc(s.cwd || '')}" data-gtitle="${esc(s.title)}">⎇</button>`;
+  const noteBadge = s.noteCount ? `<button class="icon note-btn" title="${s.noteCount} update(s) from outside chats. They apply on resume." data-note-id="${esc(s.sessionId)}">${s.noteCount} note${s.noteCount === 1 ? '' : 's'}</button>` : '';
+  const graphBtn = `<button class="icon graph-btn" title="Deep Session graph" data-graph="${esc(s.sessionId)}" data-cwd="${esc(s.cwd || '')}" data-gtitle="${esc(s.title)}">Graph</button>`;
   const forkBtn = noCwd ? '' : `<button class="icon fork-btn" title="Fork into a new Deep Session (copies this Deep Session's context)" data-fork="${esc(s.sessionId)}" data-cwd="${esc(s.cwd || '')}" data-gtitle="${esc(s.title)}">${FORK_ICON}</button>`;
   const foot = runningName
     ? `<span class="badge live"><span class="pulse"></span>running</span><div class="spacer"></div>
@@ -778,13 +778,13 @@ function renderUsage() {
   let html = `<div class="usage">
     <div class="usage-head">
       <div class="plan-pick">
-        <label class="faint">Plan</label>
+        <label class="faint" for="plan-select">Plan</label>
         <select id="plan-select">${planOpts}</select>
-        ${planId === 'custom' ? `<input id="custom-price" type="number" min="1" value="${customPrice}" /> <span class="faint">$/mo</span>` : ''}
-        <label class="faint" style="margin-left:8px">Renews on day</label>
+        ${planId === 'custom' ? `<input id="custom-price" type="number" min="1" aria-label="Custom price in dollars per month" value="${customPrice}" /> <span class="faint">$/mo</span>` : ''}
+        <label class="faint" for="billing-day" style="margin-left:8px">Renews on day</label>
         <input id="billing-day" type="number" min="1" max="31" value="${billingDay}" title="Day of month your plan renews" />
       </div>
-      <button id="usage-refresh" class="icon" title="Refresh">↻</button>
+      <button id="usage-refresh" class="icon">Refresh</button>
     </div>`;
 
   if (!u) {
@@ -811,7 +811,7 @@ function renderUsage() {
     <div class="roi-bar"><div class="roi-fill ${broke ? 'good' : ''}" style="width:${pct}%"></div></div>
     <div class="roi-verdict ${broke ? 'good' : ''}">${broke
       ? `Broken even: you've returned <strong>${multiple.toFixed(1)}×</strong> the subscription this cycle`
-      : `<strong>${pct.toFixed(0)}%</strong> to break-even — ${money(price - cyc)} more value needed`}</div>
+      : `<strong>${pct.toFixed(0)}%</strong> to break-even. ${money(price - cyc)} more value needed`}</div>
     <div class="faint">On pace for ${money(u.cycle.projectedCost)} this cycle, day ${u.cycle.daysElapsed}/${u.cycle.daysInCycle}, renews ${cycEnd}</div>
   </div>`;
 
@@ -836,8 +836,8 @@ function renderUsage() {
     <tbody>${u.byModel.map((m) =>
       `<tr><td>${esc(m.model)}</td><td>${m.messages.toLocaleString()}</td><td>${tokensFmt(m.input)}</td><td>${tokensFmt(m.output)}</td><td>${tokensFmt(m.cacheWrite + m.cacheRead)}</td><td>${tokensFmt(m.totalTokens)}</td><td>${money(m.cost)}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td>Total</td><td>${tot.messages.toLocaleString()}</td><td>${tokensFmt(tot.input)}</td><td>${tokensFmt(tot.output)}</td><td>${tokensFmt(tot.cache)}</td><td>${tokensFmt(tot.total)}</td><td>${money(tot.cost)}</td></tr></tfoot></table>
-    <p class="faint">Covers all Claude Code CLI usage on this machine (Deep Sessions, direct <code>claude</code> runs, and headless <code>claude -p</code>) — <strong>not</strong> claude.ai web/mobile. For account-wide plan usage, see the ccburn pill.<br>
-    Estimated by applying Anthropic API list prices (including cache read/write rates) to your actual token usage. Your subscription isn't billed per token — this is what the same usage would cost on the pay-as-you-go API.<br>${pricingNote(u.pricing)}</p>
+    <p class="faint">Covers all Claude Code CLI usage on this machine (Deep Sessions, direct <code>claude</code> runs, and headless <code>claude -p</code>), <strong>not</strong> claude.ai web/mobile. For account-wide plan usage, see the ccburn pill.<br>
+    Estimated by applying Anthropic API list prices (including cache read/write rates) to your actual token usage. Your subscription isn't billed per token; this is what the same usage would cost on the pay-as-you-go API.<br>${pricingNote(u.pricing)}</p>
   </div></div>`;
 
   c.innerHTML = html;
@@ -854,14 +854,14 @@ function pricingNote(p) {
   const when = p.fetchedAt ? new Date(p.fetchedAt).toLocaleDateString() : 'n/a';
   if (!isLive) return `Prices: built-in fallback${p.error ? ` (live fetch failed: ${esc(p.error)})` : ''}.`;
   const host = (() => { try { return new URL(p.source).host; } catch { return p.source; } })();
-  return `Prices: live from ${esc(host)}, updated ${when}${p.stale ? ' (stale — using cached)' : ''}.`;
+  return `Prices: live from ${esc(host)}, updated ${when}${p.stale ? ' (stale, using cached)' : ''}.`;
 }
 
 function renderBurnCards() {
   const b = burnData;
-  if (!b) return `<div class="panel"><h3>Plan limits — live</h3><p class="muted">Loading ccburn…</p></div>`;
+  if (!b) return `<div class="panel"><h3>Plan limits</h3><p class="muted">Loading ccburn…</p></div>`;
   if (!b.available) {
-    return `<div class="panel"><h3>Plan limits — live <span class="faint">(ccburn)</span></h3>
+    return `<div class="panel"><h3>Plan limits <span class="faint">(ccburn)</span></h3>
       <p class="muted">ccburn unavailable: ${esc(b.error || 'unknown')}</p></div>`;
   }
   const lim = b.limits || {};
@@ -876,7 +876,7 @@ function renderBurnCards() {
       <div class="faint">resets in ${resets}, budget pace ${((l.budget_pace || 0) * 100).toFixed(0)}%</div>
     </div>`;
   };
-  return `<div class="panel"><h3>Plan limits — live <span class="faint">(ccburn)</span></h3>
+  return `<div class="panel"><h3>Plan limits <span class="faint">(ccburn)</span></h3>
     <div class="limits">${card('Session (5h)', lim.session)}${card('Weekly', lim.weekly)}${lim.monthly ? card('Monthly', lim.monthly) : ''}</div>
     ${b.recommendation ? `<p class="faint">recommendation: ${esc(b.recommendation)}</p>` : ''}</div>`;
 }

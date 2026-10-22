@@ -20,7 +20,7 @@ export function toast(msg, { kind, action, onAction, ms } = {}) {
     return b;
   };
   if (action) btn('ta', action, onAction);
-  if (err) btn('tx', '✕').setAttribute('aria-label', 'Dismiss');
+  if (err) btn('tx', 'Dismiss');
   document.body.appendChild(t);
   shown = t;
   setTimeout(close, ms || (err ? 8000 : action ? 6000 : kind === 'ok' ? 2500 : 4000));
@@ -52,7 +52,7 @@ function conflictChoice(exists) {
     bg.innerHTML = `
       <div class="modal">
         <h2>${exists.length} ${exists.length === 1 ? 'file already exists' : 'files already exist'} here</h2>
-        <div class="up-files">${shown}</div>${more}
+        <div class="up-files" tabindex="0" role="region" aria-label="Files that already exist">${shown}</div>${more}
         <p class="faint" style="margin:14px 0 4px">How do you want to upload these?</p>
         <div class="modal-actions">
           <button id="cf-cancel">Cancel</button>

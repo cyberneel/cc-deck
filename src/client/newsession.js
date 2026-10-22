@@ -18,10 +18,10 @@ export function openNewModal({ api, cfg = {}, onCreated }) {
     if (p.signin === 'account') return `${esc(p.label)}: signed in through your account`;
     if (p.signin === 'deck') return `${esc(p.label)}: signed in on this deck`;
     return `${esc(p.label)}: no login found here` + (cfg.account_url
-      ? ` — <a href="${esc(cfg.account_url)}" target="_blank" rel="noopener">connect it on your account page</a>` : '');
+      ? `. <a href="${esc(cfg.account_url)}" target="_blank" rel="noopener">Connect it on your account page</a>` : '');
   };
   const cliField = providers.length > 1
-    ? `<div class="field"><label>CLI</label><select id="cli-mode">${providers.map((p) => `<option value="${esc(p.kind)}">${esc(p.label)}</option>`).join('')}</select>
+    ? `<div class="field"><label for="cli-mode">CLI</label><select id="cli-mode">${providers.map((p) => `<option value="${esc(p.kind)}">${esc(p.label)}</option>`).join('')}</select>
         <div class="faint" id="cli-signin" style="margin-top:6px">${signinLine(providers[0].kind)}</div></div>`
     : '';
   const bg = document.createElement('div');
@@ -31,20 +31,20 @@ export function openNewModal({ api, cfg = {}, onCreated }) {
       <h2>New Deep Session</h2>
       ${cliField}
       <div class="field">
-        <label>Directory</label>
+        <label for="dir-input">Directory</label>
         <input id="dir-input" value="${esc(currentPath)}" spellcheck="false" />
         <div class="browser" id="browser"></div>
         <div class="mkdir-row">
-          <input id="mkdir-name" placeholder="new-folder-name" spellcheck="false" autocapitalize="off" autocomplete="off" />
-          <button type="button" id="mkdir-btn">+ Create folder here</button>
+          <input id="mkdir-name" aria-label="New folder name" placeholder="new-folder-name" spellcheck="false" autocapitalize="off" autocomplete="off" />
+          <button type="button" id="mkdir-btn">Create folder here</button>
         </div>
       </div>
       <div class="field">
-        <label>Title <span class="faint">(optional)</span></label>
+        <label for="title-input">Title <span class="faint">(optional)</span></label>
         <input id="title-input" placeholder="defaults to the folder name" spellcheck="false" />
       </div>
       <div class="field">
-        <label>Browser access <span class="faint">(optional)</span></label>
+        <label for="browser-mode">Browser access <span class="faint">(optional)</span></label>
         <select id="browser-mode">
           <option value="">None</option>
           <option value="1">Attach a logged-in Chrome (CDP)</option>

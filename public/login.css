@@ -4,9 +4,9 @@
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --bg: #000; --fg: #fff; --muted: #a3a3a3; --line: #5c5c5c; --hair: #262626; --red: #e5243b; color-scheme: dark; }
+  :root:not([data-theme="light"]) { --bg: #000; --fg: #fff; --muted: #a3a3a3; --line: #5c5c5c; --hair: #262626; --red: #f04a5e; color-scheme: dark; }
 }
-:root[data-theme="dark"] { --bg: #000; --fg: #fff; --muted: #a3a3a3; --line: #5c5c5c; --hair: #262626; --red: #e5243b; color-scheme: dark; }
+:root[data-theme="dark"] { --bg: #000; --fg: #fff; --muted: #a3a3a3; --line: #5c5c5c; --hair: #262626; --red: #f04a5e; color-scheme: dark; }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {
@@ -22,7 +22,7 @@ body {
   width: min(360px, calc(100vw - 32px));
   display: flex; flex-direction: column; gap: 14px;
 }
-.brand { font-weight: 600; font-size: 22px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
+.brand { margin: 0; font-weight: 600; font-size: 22px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
 .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--fg); }
 .sub { margin: 0 0 6px; color: var(--muted); font-size: 14px; }
 input {
@@ -30,11 +30,12 @@ input {
   border-radius: 0; padding: 12px 14px; font-size: 16px; width: 100%; font-family: inherit;
 }
 :focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
-button.primary {
+.primary {
+  text-align: center; text-decoration: none;
   background: var(--fg); border: 1px solid var(--fg); color: var(--bg); font-weight: 500;
   border-radius: 0; padding: 12px; font-size: 16px; cursor: pointer; font-family: inherit;
 }
-button.primary:hover { background: color-mix(in srgb, var(--fg) 82%, var(--bg)); }
+.primary:hover { background: color-mix(in srgb, var(--fg) 82%, var(--bg)); }
 button.secondary { background: var(--bg); border: 1px solid var(--line); color: var(--fg); border-radius: 0; padding: 12px; font-size: 16px; cursor: pointer; font-family: inherit; }
 .error { color: var(--red); font-size: 14px; min-height: 16px; text-align: center; }
 .sso { color: var(--fg); font-size: 14px; text-align: center; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; border-top: 1px solid var(--hair); padding-top: 14px; }
