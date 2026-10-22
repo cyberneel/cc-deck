@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 process.env.HOME = mkdtempSync(join(tmpdir(), 'ccdeck-graph-'));
+process.env.CCDECK_PARSE_CHUNK = '64'; // smaller than most lines: every read crosses a line
 const dir = join(process.env.HOME, '.claude', 'projects', '-tmp-proj');
 mkdirSync(dir, { recursive: true });
 const { buildGraph, buildThread } = await import('../src/graph.js');

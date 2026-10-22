@@ -50,27 +50,38 @@ function slim(o) {
 // new bytes parsed: the full 7s parse happens once per file per process, not per ask.
 // ponytail: unbounded map of slim entries; LRU-cap it if many huge sessions get read.
 const parsed = new Map();
+// Read in chunks: V8 caps a string at ~512MB, so a 690MB transcript decoded in one go threw
+// "Cannot create a string longer than 0x1fffffe8 characters" and Friday relayed that as the
+// session's reply. The env override is for the test (tiny chunks hit every boundary).
+const CHUNK = Number(process.env.CCDECK_PARSE_CHUNK) || 64 << 20;
 
 async function parseEntries(file) {
   const { size } = await stat(file);
   let c = parsed.get(file);
   if (!c || size < c.size) c = { size: 0, entries: [] }; // new, or rewritten/truncated
   if (size > c.size) {
-    const fh = await open(file, 'r');
-    let buf;
-    try {
-      buf = Buffer.alloc(size - c.size);
-      await fh.read(buf, 0, buf.length, c.size);
-    } finally { await fh.close(); }
-    // Only consume through the last newline: a line still being written waits for next time.
-    const end = buf.lastIndexOf(0x0a) + 1;
     const entries = c.entries.slice();
-    for (const line of buf.toString('utf8', 0, end).split('\n')) {
-      if (!line) continue;
-      let o; try { o = JSON.parse(line); } catch { continue; }
-      if (o && o.uuid) entries.push(slim(o));
-    }
-    c = { size: c.size + end, entries };
+    let at = c.size, n = CHUNK;
+    const fh = await open(file, 'r');
+    try {
+      while (at < size) {
+        const buf = Buffer.alloc(Math.min(n, size - at));
+        await fh.read(buf, 0, buf.length, at);
+        // Only consume through the last newline: a line still being written waits for next time.
+        const end = buf.lastIndexOf(0x0a) + 1;
+        if (!end) {
+          if (buf.length === size - at) break; // the half-written last line
+          n *= 2; continue; // one line longer than the chunk
+        }
+        for (const line of buf.toString('utf8', 0, end).split('\n')) {
+          if (!line) continue;
+          let o; try { o = JSON.parse(line); } catch { continue; }
+          if (o && o.uuid) entries.push(slim(o));
+        }
+        at += end; n = CHUNK;
+      }
+    } finally { await fh.close(); }
+    c = { size: at, entries };
     parsed.set(file, c);
   }
   return c.entries;
