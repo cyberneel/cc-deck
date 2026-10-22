@@ -56,7 +56,7 @@ document.body.innerHTML = `
       <div class="term-bar">
         <button id="sb-toggle" class="icon" title="Toggle sidebar (Deep Sessions)">☰<span id="sb-badge" class="sb-badge" style="display:none"></span></button>
         <a href="/" title="Back to dashboard">←</a>
-        <span class="title" id="title">${currentSession || 'session'}</span>
+        <span class="title" id="title">${esc(currentSession || 'session')}</span>
         <button id="main-btn" class="burn-pill" style="display:none">Back to main</button>
         <div class="spacer" style="flex:1"></div>
         <button id="notes-btn" class="icon" title="Updates from outside chats" style="display:none"></button>
