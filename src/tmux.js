@@ -96,6 +96,8 @@ export async function resolveAllowedDir(dir) {
   return abs;
 }
 
+// tmux 3.7 prints a tab in -F output as "_", so fields are split on a printable marker.
+const SEP = '|~|';
 const FIELDS = [
   '#{session_name}',
   '#{session_attached}',
@@ -110,14 +112,14 @@ const FIELDS = [
   '#{@ccdeck_origin}',
   '#{pane_title}',
   '#{window_activity}', // last pane OUTPUT (session_activity only moves on client input)
-].join('\t');
+].join(SEP);
 
 export async function listSessions() {
   const out = await tmux(['list-sessions', '-F', FIELDS]);
   const sessions = [];
   for (const line of out.split('\n')) {
     if (!line.trim()) continue;
-    const [name, attached, activity, created, title, dir, paneCmd, resume, panePid, kind, origin, paneTitle, outAct] = line.split('\t');
+    const [name, attached, activity, created, title, dir, paneCmd, resume, panePid, kind, origin, paneTitle, outAct] = line.split(SEP);
     if (!isManagedName(name)) continue;
     sessions.push({
       name,
