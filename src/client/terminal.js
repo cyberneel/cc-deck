@@ -62,6 +62,7 @@ document.body.innerHTML = `
         <button id="notes-btn" class="icon" title="Updates from outside chats" style="display:none"></button>
         <button id="burn-btn" class="burn-pill" title="Usage limits (ccburn)" style="display:none"></button>
         <button id="upload-btn" class="icon" title="Send files or a folder to this Deep Session">Upload</button>
+        <button id="tb-theme" class="icon" title="Switch light or dark mode" aria-label="Switch light or dark mode"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button>
         <button id="reload-btn" class="icon" title="Reload app">↻</button>
         <button id="scroll-toggle" class="icon" title="Scroll mode — tmux: full history; fast: smooth local scroll"></button>
         <span class="status" id="status" role="status"></span>
@@ -328,6 +329,13 @@ document.getElementById('sb-backdrop').addEventListener('click', () => {
 document.getElementById('sb-new').addEventListener('click', openNewModal);
 document.getElementById('sb-resume').addEventListener('click', openResumeModal);
 document.getElementById('reload-btn').addEventListener('click', () => applyUpdate(pendingWorker));
+// Same flip as the dashboard's; the terminal itself stays black either way.
+document.getElementById('tb-theme').addEventListener('click', () => {
+  const el = document.documentElement;
+  const dark = el.dataset.theme ? el.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  el.dataset.theme = dark ? 'light' : 'dark';
+  localStorage.setItem('ccdeck.theme', el.dataset.theme);
+});
 
 // Resume a past session: filterable list of on-disk sessions (History) → resume.
 async function openResumeModal() {
