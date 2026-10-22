@@ -1,6 +1,6 @@
 import pkg from 'node-pty';
 import { isRequestAuthed } from './auth.js';
-import { isManagedName, setMouse, resizeWindow, TMUX_ARGS } from './tmux.js';
+import { isManagedName, setMouse, resizeWindow, sessionExists, TMUX_ARGS } from './tmux.js';
 import { resolveRemote, isRemoteSessionName, SSH_OPTS } from './remote.js';
 
 const { spawn } = pkg;
@@ -106,8 +106,10 @@ export function attachHandler(socket, req) {
 
   pty.onData(send);
 
-  pty.onExit(() => {
-    if (socket.readyState === socket.OPEN) socket.close(1000, 'pty exited');
+  pty.onExit(async () => {
+    // A tmux session that no longer exists gets its own code so the client stops reconnecting.
+    const gone = !remote && !(await sessionExists(session));
+    if (socket.readyState === socket.OPEN) socket.close(gone ? 4404 : 1000, gone ? 'session ended' : 'pty exited');
   });
 
   socket.on('message', (raw) => {

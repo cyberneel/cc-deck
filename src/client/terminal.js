@@ -111,6 +111,7 @@ function setStatus(text, cls, html) {
 function renderConn() {
   const p = panes.get(currentSession);
   if (!p) return;
+  if (p.ended) return setStatus('', 'closed', 'This Deep Session has ended');
   if (p.ws?.readyState === WebSocket.OPEN) return setStatus(scrollMode === 'fast' ? 'connected, fast' : 'connected', 'connected');
   const s = Math.floor((Date.now() - (p.since ||= Date.now())) / 1000);
   if (s >= 30) return setStatus('', 'closed', `Can't reach Polymux<button data-retry>Retry</button>`);
@@ -217,6 +218,7 @@ function connectPaneWs(pane) {
   ws.onmessage = (ev) => { pane.term.write(typeof ev.data === 'string' ? ev.data : new Uint8Array(ev.data)); };
   ws.onclose = (ev) => {
     if (ev.code === 4401) { location.href = '/login.html'; return; }
+    if (ev.code === 4404 || ev.code === 4400) { pane.ended = true; if (pane.name === currentSession) renderConn(); return; }
     if (pane.dispose) return;
     if (pane.manual) { pane.manual = false; return; }
     pane.since ||= Date.now();
@@ -233,6 +235,7 @@ function connectPaneWs(pane) {
 // fetch doesn't count toward that delay, so probe with one and open the socket only once
 // the server answers.
 function reconnectWhenUp(pane) {
+  if (pane.ended) return;
   fetch('/api/version', { cache: 'no-store' })
     .then((r) => {
       if (r.status >= 500) throw r;
