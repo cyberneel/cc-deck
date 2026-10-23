@@ -4,7 +4,7 @@
 // Best-effort: if Friday is unreachable we drop the event (Friday's poll is the backstop).
 
 import { config } from './config.js';
-import { listSessions } from './tmux.js';
+import { listSessions, capturePane, promptText } from './tmux.js';
 import { getAgents, matchAgents, deckStatus } from './agents.js';
 
 const last = new Map(); // session name -> last status
@@ -78,6 +78,8 @@ async function tick() {
     // only push real transitions once primed.
     if (!primed || from === undefined || from === to) continue;
     const ev = eventFor(s, from, to);
+    // The dialog itself (command, question, options), so it's answerable from Friday unseen.
+    if (ev && to === 'waiting_input') ev.detail = promptText(await capturePane(s.name, 0).catch(() => '')) || ev.detail;
     if (ev) post(ev);
   }
   // Forget sessions that vanished so a reused name re-primes cleanly.

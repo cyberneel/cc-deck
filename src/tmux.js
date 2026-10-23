@@ -242,6 +242,19 @@ export function menuOptions(screen) {
   return out;
 }
 
+// The prompt a menu belongs to, for Friday's "needs your input" notice: up to 8 lines above
+// the options (back to the dialog's top rule: the command, the question), then the options.
+// '' when no menu is up.
+export function promptText(screen) {
+  const opts = menuOptions(screen);
+  if (!opts.length) return '';
+  const lines = String(screen).split('\n').map((l) => l.trim());
+  const at = lines.findLastIndex((l) => /^([❯›>]\s*)?1\.\s/.test(l));
+  let top = at;
+  while (top > 0 && at - top < 8 && !/^[─━═╌┄╭╰-]{8}/.test(lines[top - 1])) top--;
+  return [...lines.slice(top, at).filter(Boolean), ...opts.map((o) => `${o.n}. ${o.label}`)].join('\n');
+}
+
 // Claude says whether it's waiting on the user; Codex and agy say nothing (null).
 export const waitState = (s) => (s.kind === 'claude' ? !!s.waitingFor : null);
 

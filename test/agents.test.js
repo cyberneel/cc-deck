@@ -75,6 +75,10 @@ test('a prompt is answered by its option key, never a blind Enter', async () => 
   assert.equal(pickOption(opts, 'esc').key, 'Escape');
   assert.equal(pickOption(opts, 'y'), null); // not a whole word of any label
   assert.equal(pickOption(opts, 'ship it'), null);
+  const { promptText } = await import('../src/tmux.js');
+  const dialog = ['● Pushing now.', '──────────────────', ' Bash command', '', '   git push origin main', '   Push to remote', '', screen.split('\n').slice(2).join('\n'), ' Esc to cancel'].join('\n');
+  assert.equal(promptText(dialog), "Bash command\ngit push origin main\nPush to remote\nDo you want to proceed?\n1. Yes\n2. Yes, and don't ask again for rm commands\n3. No, and tell Claude what to do differently (esc)");
+  assert.equal(promptText('just output, no menu'), '');
   const picker = menuOptions('❯ 1. Postgres\n     fast\n  2. SQLite\n  3. Type something.\n  4. Chat about this');
   assert.deepEqual(pickOption(picker, 'sqlite'), { key: '2', label: 'SQLite' });
   assert.equal(pickOption(picker, 'use duckdb instead').type, true);
