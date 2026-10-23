@@ -763,9 +763,11 @@ document.getElementById('notes-btn').addEventListener('click', () => {
   if (s) openNotes(s.liveSessionId || s.resumedFrom, s.name, refreshSessions);
 });
 
+const DONE_TAG = '<span class="sb-done">Done</span>';
 function sidebarItemHtml(s, i) {
   const cur = s.name === currentSession;
   const att = needsAttention(s);
+  const done = att && !s.waitingFor; // finished a turn while you were elsewhere
   const num = i < 9 ? `<span class="sb-num">${i + 1}</span>` : '';
   const dirLine = s.remote ? `${esc(s.host)}: ${esc(baseName(s.dir))}` : esc(baseName(s.dir));
   // Badge non-Claude CLIs (e.g. codex) so it's clear which tool a session runs.
@@ -776,10 +778,10 @@ function sidebarItemHtml(s, i) {
     : `${s.liveSessionId ? `<button class="sb-share" title="Share this Deep Session's context" data-share="${esc(s.name)}">${SHARE_ICON}</button>` : ''}
         <button class="sb-rename" title="Rename Deep Session" aria-label="Rename Deep Session" data-rename="${esc(s.name)}"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.5 13.5 5 5.5 13H3v-2.5z"/></svg></button>
         <button class="sb-kill" title="Kill Deep Session" aria-label="Kill Deep Session" data-kill="${esc(s.name)}"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>`;
-  return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''} ${s.remote ? 'remote' : ''}" data-name="${esc(s.name)}">
+  return `<div class="sb-item ${cur ? 'current' : ''} ${att ? 'attn' : ''} ${done ? 'done' : ''} ${s.remote ? 'remote' : ''}" data-name="${esc(s.name)}">
       <span class="sb-dot ${statusDot(s)}"></span>
       <span class="sb-meta"><span class="sb-title">${cliTag}${esc(s.title)}</span><span class="sb-dir">${dirLine}</span></span>
-      ${att ? '<span class="sb-attn" role="img" title="Needs your attention" aria-label="Needs your attention"></span>' : num}
+      ${done ? DONE_TAG : att ? '<span class="sb-attn" role="img" title="Needs your attention" aria-label="Needs your attention"></span>' : num}
       <div class="sb-actions">${actions}</div>
     </div>`;
 }
@@ -893,7 +895,7 @@ function renderSwitcher() {
   swBox.innerHTML = swList.map((name, i) => {
     const s = sessions.find((x) => x.name === name) || {};
     return `<div class="sw-item ${i === swIdx ? 'sel' : ''}" data-i="${i}">
-      <span class="sb-dot ${statusDot(s)}"></span><span class="sw-t">${esc(titleOf(name))}${needsAttention(s) ? ' <span class="sb-attn" role="img" aria-label="Needs your attention"></span>' : ''}</span>
+      <span class="sb-dot ${statusDot(s)}"></span><span class="sw-t">${esc(titleOf(name))}${needsAttention(s) ? (s.waitingFor ? ' <span class="sb-attn" role="img" aria-label="Needs your attention"></span>' : ` ${DONE_TAG}`) : ''}</span>
       <span class="sw-d">${esc(baseName(s.dir))}</span>
     </div>`;
   }).join('');
