@@ -59,6 +59,8 @@ export const config = {
   // tenant's VM is small, so its init sets one from the VM's RAM. At the cap, src/slots.js
   // closes an idle session Friday started, or queues Friday's start until a slot opens.
   maxSessions: Math.max(0, parseInt(process.env.POLYMUX_MAX_SESSIONS || '', 10) || 0),
+  // Appended to the "at the cap" reply Friday relays (hosted Pro: how to get more slots).
+  capNote: (process.env.POLYMUX_CAP_NOTE || '').trim(),
   // How long a session Friday started must sit idle before it may be closed for a slot.
   slotIdleMs: (Number(process.env.POLYMUX_SLOT_IDLE_SECS) || 300) * 1000,
   // tmux session name prefix for sessions this app manages.

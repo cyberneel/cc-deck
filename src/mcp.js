@@ -29,7 +29,7 @@ const exec = promisify(execFile);
 // caller gets one actionable error instead of looping on a hard reject.
 
 // What a caller hears when its start had to wait for a slot (src/slots.js).
-const FULL = (place) => `this deck is already running its limit of ${config.maxSessions}, so it starts by itself as soon as one closes (number ${place} in line) and reports back when it is done. Don't start it again.`;
+const FULL = (place) => `this deck is already running its limit of ${config.maxSessions}, so it starts by itself as soon as one closes (number ${place} in line) and reports back when it is done. Don't start it again.${config.capNote ? ` ${config.capNote}` : ''}`;
 
 // RUNNING sessions with live status attached (best-effort).
 async function liveSessions() {
