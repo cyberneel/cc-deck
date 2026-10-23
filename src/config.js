@@ -50,7 +50,7 @@ export const config = {
   // is opaque and validated server-to-server). Unset = SSO off (self-host / direct).
   ssoVerifyUrl: (process.env.POLYMUX_SSO_VERIFY_URL || '').trim(),
   // This VM's tenant id (systems injects it); the redeemed token's `tenant` must
-  // match it. Empty = single-tenant / self-host → skip the tenant check.
+  // match it (owner box: `_owner`). Empty = every token is refused.
   tenantId: (process.env.POLYMUX_TENANT_ID || '').trim(),
   // Self-host update check (fetch the upstream branch every few hours → "update"
   // pill). Never on hosted tenants: their Polymux is rolled by image, not git.

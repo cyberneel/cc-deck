@@ -64,7 +64,7 @@ export async function redeemSsoToken(token) {
     if (!res.ok) return false;
     const data = await res.json().catch(() => null);
     if (!data || data.ok !== true || data.app !== 'ccdeck') return false;
-    if (config.tenantId && data.tenant !== config.tenantId) return false; // multi-tenant guard
+    if (!config.tenantId || data.tenant !== config.tenantId) return false; // untenanted = refuse
     return true;
   } catch {
     return false; // network error / timeout / bad JSON → not authenticated
