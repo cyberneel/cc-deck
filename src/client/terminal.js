@@ -699,9 +699,9 @@ function needsAttention(s) {
 }
 function titleOf(name) { return sessions.find((s) => s.name === name)?.title || name; }
 function baseName(p) { if (!p) return ''; return p.replace(/\/$/, '').split('/').slice(-2).join('/'); }
-// Oldest first, so a session keeps its Alt+1–9 number while others get busy. Remotes have no created time.
-function orderedSessions() { return [...sessions].sort((a, b) => (a.created || Infinity) - (b.created || Infinity) || a.name.localeCompare(b.name)); }
-// Sidebar/jump order: native sessions first, then remote — each oldest first.
+// Most recently active first, so the session you just typed in rises to the top.
+function orderedSessions() { return [...sessions].sort((a, b) => (b.lastActivity || 0) - (a.lastActivity || 0)); }
+// Sidebar/jump order: native sessions first, then remote — each activity-sorted.
 // The single source of truth for both the rendered grouping and Alt+1–9 numbering.
 function groupedSessions() { const a = orderedSessions(); return [...a.filter((s) => !s.remote), ...a.filter((s) => s.remote)]; }
 function mruOrderedExisting() {
